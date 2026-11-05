@@ -84,6 +84,13 @@
   #pauseBtn { position: fixed; top: 16px; left: 10px; z-index: 4; width: 44px; height: 44px; padding: 0; border-radius: 10px; font-size: 18px; font-weight: 800; background: rgba(18, 14, 36, 0.8); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; letter-spacing: -1px; }
   #pauseBtn[hidden] { display: none; }
   #speedToggle b { color: var(--accent); }
+  #stageGrid { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); margin-bottom: 8px; }
+  .card.stage { align-items: center; text-align: center; gap: 2px; padding: 8px; border-color: color-mix(in srgb, var(--c) 40%, transparent); }
+  .card.stage b { color: var(--c); font-size: 14px; } .card.stage.sel { border: 2px solid var(--c); box-shadow: 0 0 16px color-mix(in srgb, var(--c) 35%, transparent); }
+  #stageInfo { color: var(--muted); font-size: 13px; margin: 0 0 16px; }
+  .card.up.sock { border-color: rgba(255, 210, 76, 0.35); }
+  .card.lu.fuse.t2 { border-color: #5affd9; box-shadow: 0 0 26px rgba(90, 255, 217, 0.4); } .card.lu.fuse.t2 .tag { color: #5affd9; }
+  .card.lu.fuse.t3 { border-color: #ff4cc3; box-shadow: 0 0 30px rgba(255, 76, 195, 0.45); } .card.lu.fuse.t3 .tag { color: #ff4cc3; }
   @media (max-width: 600px) { .panel { padding: 14px; } .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); } #codexGrid { grid-template-columns: 1fr; } }
 </style>
 </head>
@@ -102,12 +109,15 @@
   </div>
   <div class="stats"></div>
   <div id="account" hidden></div>
-  <div class="help">Move: WASD / arrows (drag on touch) · Dash: Space or Shift (second finger) · Pause: Esc / P or the ❚❚ button<br>Weapons fire automatically. Every item adds its effect to <b>all</b> your bullets. Max two items that share an effect, then fuse them: one absorbs the other and frees its socket.</div>
+  <div class="help">Move: WASD / arrows (drag on touch) · Dash: Space or Shift (second finger) · Pause: Esc / P or the ❚❚ button<br>Weapons fire automatically. Every item adds its effect to <b>all</b> your bullets. Max out two items that share an effect, then fuse them: one absorbs the other, its bullets carry both effects, and a socket frees up. Three level 5 fused items make a Super item, five Supers make a Mega.</div>
   <div class="center" style="margin-top:12px"><button class="link" id="btnReset">Reset save</button></div>
 </div></div>
 
 <div class="screen" id="chars"><div class="panel">
-  <div class="head"><button data-back class="backBtn">← Back</button><h2>Choose your hero</h2><div class="gold-line"></div></div>
+  <div class="head"><button data-back class="backBtn">← Back</button><h2>Choose a level</h2><div class="gold-line"></div></div>
+  <div class="grid" id="stageGrid"></div>
+  <div id="stageInfo"></div>
+  <h2>Choose your hero</h2>
   <div class="grid" id="charGrid"></div>
   <div id="charInfo"></div>
   <div class="head" style="justify-content:flex-end"><button class="primary big" id="btnStart">Start run</button></div>
@@ -116,6 +126,7 @@
 <div class="screen" id="forge"><div class="panel">
   <div class="head"><button data-back class="backBtn">← Back</button><h2>⚒ The Forge</h2><div class="gold-line"></div></div>
   <p style="color:var(--muted);margin-top:0">Permanent upgrades bought with Void Gold. They apply to every hero.</p>
+  <p style="color:var(--muted);margin-top:0" id="forgeSockets"></p>
   <div class="grid" id="forgeGrid"></div>
 </div></div>
 
@@ -133,7 +144,7 @@
 <div class="screen" id="levelup"><div class="panel" style="max-width:900px">
   <h2 class="center" id="luTitle">Level up!</h2>
   <div id="luCards"></div>
-  <div class="center" style="margin-top:14px"><button id="reroll">🎲 Reroll</button> <small style="color:var(--muted)">Press 1–4 to pick</small></div>
+  <div class="center" style="margin-top:14px"><button id="reroll">🎲 Reroll</button> <button id="skip" title="Take nothing: heal 15 and get some gold">⏭ Skip</button> <small style="color:var(--muted)">Press 1–4 to pick, R to reroll, S to skip</small></div>
 </div></div>
 
 <div class="screen" id="pause"><div class="panel" style="max-width:640px">

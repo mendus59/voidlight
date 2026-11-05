@@ -11,14 +11,16 @@ window.VOIDLIGHT_TESTSAVE = !window.VOIDLIGHT_SANDBOX && new URLSearchParams(loc
 
 const VOIDLIGHT_CONTENT = (() => {
   const CACHE_KEY = window.VOIDLIGHT_TESTSAVE ? 'voidlight.testcontent' : 'voidlight.content.v1';
-  const STATS = { totalKills: 'Enemies defeated (lifetime)', bestTime: 'Best survival time (seconds)', bossKills: 'Bosses defeated', evolves: 'Fusions made', wins: 'Runs won', runs: 'Runs played', maxLevel: 'Highest level reached', totalGold: 'Gold earned (lifetime)' };
+  const STATS = { totalKills: 'Enemies defeated (lifetime)', bestTime: 'Best survival time in any level (seconds)', bossKills: 'Bosses defeated', evolves: 'Fusions made', supers: 'Super fusions made', megas: 'Mega fusions made', wins: 'Runs won', runs: 'Runs played', maxLevel: 'Highest character level reached', totalGold: 'Gold earned (lifetime)' };
   const SHAPES = ['orb', 'shard', 'bolt', 'lance', 'missile', 'petal', 'disc', 'glaive', 'blade', 'star', 'prism', 'shield', 'skull', 'flame', 'spore', 'aura'];
-  const MODS = ['might', 'hp', 'armor', 'regen', 'speed', 'area', 'cd', 'projSpd', 'duration', 'amount', 'crit'];
+  const MODS = STAT_KEYS; // hero perks and passive item stats
   const byId = list => Object.fromEntries(list.map(x => [x.id, x]));
   // Every editable table: where it lives and which fields the admin page may change.
   const TABLES = {
-    items:    { get: () => ITEM, fields: ['name', 'icon', 'effect', 'effect2', 'dmg', 'cd', 'pattern', 'trig', 'lock', 'fuseLock', 'color', 'vis', 'disabled'] },
+    items:    { get: () => ITEM, fields: ['name', 'icon', 'effect', 'effect2', 'passive', 'dmg', 'cd', 'pattern', 'trig', 'lock', 'fuseLock', 'color', 'vis', 'disabled'] },
     cats:     { get: () => CATEGORIES, fields: ['lock'] },
+    stages:   { get: () => byId(STAGES), fields: ['name', 'color', 'hp', 'ramp', 'spawn', 'dmg', 'bossHp', 'xp', 'gold', 'start'] },
+    tiers:    { get: () => FUSION, fields: ['name', 'need', 'mul', 'cdMul', 'own', 'pool', 'statMul', 'lock'] },
     difficulty: { get: () => DIFFICULTY, fields: ['hpGrowth', 'hpCurve', 'spawnBase', 'spawnGrowth', 'spawnCurve', 'dmgGrowth', 'eliteEvery', 'eliteHp', 'ringEvery', 'bossHp', 'xpStep', 'xpCurve'] },
     chars:    { get: () => byId(CHARACTERS), fields: ['name', 'title', 'color', 'weapon', 'perk', 'mods', 'lock'] },
     upgrades: { get: () => byId(UPGRADES), fields: ['name', 'icon', 'desc', 'max', 'cost', 'per'] },
@@ -37,10 +39,12 @@ const VOIDLIGHT_CONTENT = (() => {
   const num = v => typeof v === 'number' && isFinite(v);
   const str = v => typeof v === 'string' && v.length < 400;
   const color = v => typeof v === 'string' && /^#[0-9a-f]{3,8}$/i.test(v);
+  // a requirement, plus an optional gold cost paid after it is met. Gold-only locks are not allowed any more.
   function validLock(v) {
     if (!v || typeof v !== 'object') return false;
-    if ('cost' in v) return num(v.cost) && v.cost >= 0;
+    if ('cost' in v && !(num(v.cost) && v.cost >= 0 && v.cost <= 1e6)) return false;
     const lv = num(v.level) && v.level >= 1 && v.level <= 5;
+    if ('stage' in v) return num(v.stage) && v.stage >= 1 && v.stage <= STAGES.length && v.stat in STAGE_STATS && num(v.min) && v.min >= 0 && str(v.text);
     if ('item' in v) return v.item in ITEM && lv && num(v.runs) && v.runs >= 1 && v.runs <= 1000 && str(v.text);
     if ('effect' in v) return v.effect in EFFECTS && lv && str(v.text);
     return v.stat in STATS && num(v.min) && str(v.text);
@@ -55,8 +59,11 @@ const VOIDLIGHT_CONTENT = (() => {
   // Rejects anything that could break the game; null means "remove this field" (e.g. take a lock off).
   function valid(table, f, v) {
     if (v === null) return ['lock', 'fuseLock', 'effect2', 'color', 'vis', 'trig', 'disabled', 'min', 'max', 'value', 'chance', 'elite', 'boss'].includes(f);
+    if (table === 'tiers' && f === 'need') return num(v) && v >= 1 && v <= 8 && Math.round(v) === v;
+    if (table === 'stages' && f === 'start') return num(v) && v >= 1 && v <= 5 && Math.round(v) === v;
     switch (f) {
       case 'name': case 'icon': case 'pattern': case 'trig': case 'title': case 'perk': case 'desc': return str(v);
+      case 'start': return num(v) && v >= 1 && v <= 5;
       case 'effect': case 'effect2': return v in EFFECTS;
       case 'fuseLock': return !!v && typeof v === 'object' && num(v.level) && v.level >= 1 && v.level <= 5 && num(v.runs) && v.runs >= 0 && v.runs <= 1000;
       case 'weapon': return v in ITEM;
@@ -65,7 +72,7 @@ const VOIDLIGHT_CONTENT = (() => {
       case 'lock': return validLock(v);
       case 'vis': return validVis(v);
       case 'disabled': return typeof v === 'boolean';
-      case 'mods': return v && typeof v === 'object' && Object.entries(v).every(([k, x]) => MODS.includes(k) && num(x));
+      case 'mods': case 'passive': return v && typeof v === 'object' && Object.entries(v).every(([k, x]) => MODS.includes(k) && num(x) && Math.abs(x) <= 100);
       case 'max': case 'min': case 'elite': case 'boss': return num(v) && v >= 0 && v <= 1e6;
       default: return num(v) && v >= 0 && v <= 1e7;
     }
