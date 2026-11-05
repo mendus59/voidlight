@@ -27,6 +27,7 @@ const VOIDLIGHT_CONTENT = (() => {
     enemies:  { get: () => ENEMY_TYPES, fields: ['name', 'hp', 'spd', 'r', 'dmg', 'xp', 'color', 'shape'] },
     bosses:   { get: () => BOSSES, fields: ['name', 'hp', 'spd', 'r', 'dmg', 'xp', 'color'] },
     drops:    { get: () => DROPS, fields: ['chance', 'min', 'max', 'value', 'elite', 'boss'] },
+    options:  { get: () => OPTIONS, fields: ['choices'] },
   };
   const clone = v => v === undefined ? undefined : JSON.parse(JSON.stringify(v));
   // Pristine values from items.js, taken once at load so overrides can always be undone.
@@ -40,15 +41,27 @@ const VOIDLIGHT_CONTENT = (() => {
   const str = v => typeof v === 'string' && v.length < 400;
   const color = v => typeof v === 'string' && /^#[0-9a-f]{3,8}$/i.test(v);
   // a requirement, plus an optional gold cost paid after it is met. Gold-only locks are not allowed any more.
-  function validLock(v) {
+  // one requirement (see the list in progress.js); `text` is optional on the parts of an `all` lock
+  function validReq(v) {
     if (!v || typeof v !== 'object') return false;
-    if ('cost' in v && !(num(v.cost) && v.cost >= 0 && v.cost <= 1e6)) return false;
-    const lv = num(v.level) && v.level >= 1 && v.level <= 5;
-    if ('stage' in v) return num(v.stage) && v.stage >= 1 && v.stage <= STAGES.length && v.stat in STAGE_STATS && num(v.min) && v.min >= 0 && str(v.text);
-    if ('item' in v) return v.item in ITEM && lv && num(v.runs) && v.runs >= 1 && v.runs <= 1000 && str(v.text);
-    if ('effect' in v) return v.effect in EFFECTS && lv && str(v.text);
-    return v.stat in STATS && num(v.min) && str(v.text);
+    if ('text' in v && !str(v.text)) return false;
+    const lv = num(v.level) && v.level >= 1 && v.level <= 5, st = num(v.stage) && v.stage >= 1 && v.stage <= STAGES.length && v.stat in STAGE_STATS && num(v.min) && v.min >= 0;
+    if ('char' in v) return CHARACTERS.some(c => c.id === v.char) && st;
+    if ('mastery' in v) return v.mastery in ITEM;
+    if ('cat' in v) return v.cat in EFFECTS;
+    if ('stage' in v) return st;
+    if ('item' in v) return v.item in ITEM && lv && num(v.runs) && v.runs >= 1 && v.runs <= 1000;
+    if ('effect' in v) return v.effect in EFFECTS && lv;
+    return v.stat in STATS && num(v.min);
   }
+  function validLock(v) {
+    if (!v || typeof v !== 'object' || !str(v.text)) return false;
+    if ('cost' in v && !(num(v.cost) && v.cost >= 0 && v.cost <= 1e6)) return false;
+    if ('all' in v) return Array.isArray(v.all) && v.all.length >= 1 && v.all.length <= 6 && v.all.every(p => !('all' in p) && validReq(p));
+    return validReq(v);
+  }
+  // game speeds: 1 to 8 different values from 0.25 to 10
+  const validSpeeds = v => Array.isArray(v) && v.length >= 1 && v.length <= 8 && v.every(x => num(x) && x >= 0.25 && x <= 10) && new Set(v).size === v.length;
   function validVis(v) {
     if (!v || typeof v !== 'object') return false;
     if (v.size !== undefined && !(num(v.size) && v.size > 0 && v.size <= 5)) return false;
@@ -70,6 +83,7 @@ const VOIDLIGHT_CONTENT = (() => {
       case 'color': return color(v);
       case 'shape': return ['circle', 'tri', 'diamond', 'square', 'hex', 'star'].includes(v);
       case 'lock': return validLock(v);
+      case 'choices': return validSpeeds(v);
       case 'vis': return validVis(v);
       case 'disabled': return typeof v === 'boolean';
       case 'mods': case 'passive': return v && typeof v === 'object' && Object.entries(v).every(([k, x]) => MODS.includes(k) && num(x) && Math.abs(x) <= 100);

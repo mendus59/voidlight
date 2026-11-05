@@ -185,13 +185,15 @@ function socketsFor(slot) { return G && G.sandbox ? SLOTS[slot].sockets : slotSo
 function available(def) { return !def.disabled && (itemUnlocked(SAVE, def) || def.id === G.char.weapon); }
 function slotCount(slot) { return G.inv.filter(i => i.def.slot === slot).length; }
 function instEffects(inst) { const out = effectsOf(inst.def).slice(); for (const k of inst.riders || []) if (!out.includes(k)) out.push(k); return out; }
+// No effect works before its category is unlocked (a hero's starting weapon included), outside the admin test canvas.
+const effOpen = k => !G || G.sandbox || catUnlocked(SAVE, k);
 function recomputePool() {
   const p = {}; for (const k of EFFECT_KEYS) p[k] = 0;
   for (const i of G.inv) {
     const T = tierOf(i); i.own = {};
     if (isPassive(i.def)) continue;
-    for (const k of effectsOf(i.def)) { p[k] += i.level * T.pool; i.own[k] = T.own; }
-    for (const k of i.riders) i.own[k] = (i.own[k] || 0) + T.own;
+    for (const k of effectsOf(i.def)) if (effOpen(k)) { p[k] += i.level * T.pool; i.own[k] = T.own; }
+    for (const k of i.riders) if (effOpen(k)) i.own[k] = (i.own[k] || 0) + T.own;
   }
   for (const k of EFFECT_KEYS) p[k] = Math.round(p[k]);
   G.pool = p; G.runners = G.inv.filter(i => !isPassive(i.def));
@@ -387,6 +389,7 @@ function updateEBullets(dt) {
 function newRun(charId, stage) {
   if (window.VOIDLIGHT_CONTENT) VOIDLIGHT_CONTENT.applyPending(); // content published while a run was going
   const ch = CHARACTERS.find(c => c.id === charId) || CHARACTERS[0];
+  if (!charPlayable(SAVE, ch)) { toast('Pick a hero you have unlocked'); return; }
   const n = clamp((stage || SAVE.lastStage || 1) | 0, 1, stageCount()), st = stageUnlocked(SAVE, n) ? n : 1;
   SAVE.lastChar = ch.id; SAVE.lastStage = st; writeSave();
   freshRun(ch, st);
@@ -446,6 +449,9 @@ function endRun(won) {
   s.evolves += G.stats.evolves; s.supers += G.stats.supers; s.megas += G.stats.megas; s.runs++; if (won) s.wins++; s.maxLevel = Math.max(s.maxLevel, G.level);
   const key = String(G.stage), st = SAVE.stages[key] = Object.assign(emptyStage(), SAVE.stages[key]);
   st.kills += G.kills; st.best = Math.max(st.best, Math.floor(G.time)); st.bosses += G.stats.bossKills; st.runs++; if (won) st.wins++;
+  // the same, for this hero only (hero unlocks can ask for a level beaten with another hero)
+  const cs = (SAVE.charStages = SAVE.charStages || {})[G.char.id] = SAVE.charStages[G.char.id] || {}, ct = cs[key] = Object.assign(emptyStage(), cs[key]);
+  ct.kills += G.kills; ct.best = Math.max(ct.best, Math.floor(G.time)); ct.bosses += G.stats.bossKills; ct.runs++; if (won) ct.wins++;
   writeSave();
   const fresh = checkUnlocks();
   fresh.push(...progressDiff(before, progressSnapshot(SAVE)));
@@ -665,10 +671,16 @@ function renderMenu() {
 let selectedChar = null, selectedStage = null;
 // Locked heroes and items: the requirement first, then (in most cases) a gold price once it is met.
 window.lockHtml = lockHtml;
+function partHtml(p) {
+  const [a, b] = lockProgress(p, SAVE), ok = a >= b, n = ok || b <= 1 ? '' : p.stat === 'best' ? ` (${fmtTime(a)} / ${fmtTime(b)})` : ` (${Math.floor(a)} / ${b})`;
+  return `<span class="part${ok ? ' ok' : ''}">${ok ? '✓' : '○'} ${partLabel(p)}${n}</span>`;
+}
 function lockHtml(lock, owned) {
   if (owned || !lock) return '';
   if (lockMet(lock, SAVE)) return `<button class="buy">Buy ● ${lockCost(lock)}</button>`;
-  return `<div class="req">🔒 ${lockLabel(lock)}${lockCost(lock) ? ` · then ● ${lockCost(lock)}` : ''}</div>`;
+  const cost = lockCost(lock) ? ` · then ● ${lockCost(lock)}` : '';
+  if (lock.all) return `<div class="req">🔒 Needs:${lockParts(lock).map(partHtml).join('')}${cost ? `<span class="part">${cost.slice(3)}</span>` : ''}</div>`;
+  return `<div class="req">🔒 ${lockLabel(lock)}${cost}</div>`;
 }
 function buy(lock, list, id, name, after) {
   const cost = lockCost(lock);
@@ -693,12 +705,15 @@ function renderChars() {
     : `Enemies ×${S.hp} HP, rising to ×${+(S.hp * (1 + S.ramp)).toFixed(1)} by 15:00, ×${S.spawn} spawns, ×${S.dmg} damage, bosses ×${S.bossHp}. XP ×${S.xp}, gold ×${S.gold}. New items and fusions arrive at level ${S.start}.`;
   const wrap = $('#charGrid'); wrap.innerHTML = '';
   for (const c of CHARACTERS) {
-    const un = charUnlocked(SAVE, c), w = ITEM[c.weapon];
-    const el = document.createElement('button'); el.className = 'card char' + (un ? '' : ' locked') + (selectedChar === c.id ? ' sel' : '');
+    const un = charUnlocked(SAVE, c), ok = un && charCatsOpen(SAVE, c), w = ITEM[c.weapon], L = charLock(c);
+    const el = document.createElement('button'); el.className = 'card char' + (ok ? '' : ' locked') + (selectedChar === c.id ? ' sel' : '');
     el.style.setProperty('--c', c.color);
-    el.innerHTML = `<div class="avatar">${un ? '◆' : '🔒'}</div><b>${c.name}</b><small>${c.title}</small><div class="wpn">${w.icon} ${w.name}</div><div class="perk">${c.perk}</div>` + lockHtml(c.lock, un);
+    // owned, but the starting weapon's category is still locked: the category requirement is what is left
+    const shut = un && !ok ? `<div class="req">🔒 Needs:${charCats(c).filter(k => !catUnlocked(SAVE, k)).map(k => partHtml({ cat: k }) + `<span class="part">${EFFECTS[k].icon} ${lockLabel(catLock(k))}</span>`).join('')}</div>` : '';
+    el.innerHTML = `<div class="avatar">${ok ? '◆' : '🔒'}</div><b>${c.name}</b><small>${c.title}</small><div class="wpn">${w.icon} ${w.name}</div><div class="perk">${c.perk}</div>` + lockHtml(L, un) + shut;
     el.onclick = () => {
-      if (!un) { buy(c.lock, SAVE.unlockedChars, c.id, c.name); renderChars(); return; }
+      if (!un) { buy(L, SAVE.unlockedChars, c.id, c.name); renderChars(); return; }
+      if (!ok) { toast(`${c.name} needs ${charCats(c).filter(k => !catUnlocked(SAVE, k)).map(k => EFFECTS[k].name).join(' and ')} items unlocked first`); return; }
       selectedChar = c.id; renderChars();
     };
     wrap.appendChild(el);
@@ -753,7 +768,8 @@ function renderCodex() {
 }
 function renderAchievements() {
   const list = achievementList(SAVE), box = $('#achBody'); box.innerHTML = '';
-  const card = a => `<div class="card ach${a.done ? ' done' : ''}"><div class="ico">${a.done ? a.icon : '🔒'}</div><b>${a.name}</b><small>${a.text}</small><small class="rew">Unlocks: ${a.reward}${a.cost ? ` (then ● ${a.cost})` : ''}</small>` +
+  const parts = a => (a.parts && !a.done ? `<div class="parts">${a.parts.map(p => `<small class="part${p.done ? ' ok' : ''}">${p.done ? '✓' : '○'} ${p.text}</small>`).join('')}</div>` : '');
+  const card = a => `<div class="card ach${a.done ? ' done' : ''}"><div class="ico">${a.done ? a.icon : '🔒'}</div><b>${a.name}</b><small>${a.text}</small>${parts(a)}<small class="rew">Unlocks: ${a.reward}${a.cost ? ` (then ● ${a.cost})` : ''}</small>` +
     (a.done ? `<div class="bar"><i style="width:100%"></i></div><small class="ok">${a.owned ? 'Done' : `Done: buy it for ● ${a.cost}`}</small>` : `<div class="bar"><i style="width:${Math.round(100 * a.have / Math.max(1, a.need))}%"></i></div><small>${Math.floor(a.have)} / ${a.need}</small>`) + '</div>';
   const section = (title, note, rows) => {
     if (!rows.length) return;
@@ -762,7 +778,8 @@ function renderAchievements() {
     box.appendChild(sec);
   };
   section('Levels and fusion tiers', 'Beat a level to open the next one. Each level you open also adds one socket you can buy in the Forge.', list.filter(a => a.group === 'stages' || a.group === 'tiers'));
-  for (const S of STAGES) section(`Level ${S.id}: ${S.name}`, stageUnlocked(SAVE, S.id) ? '' : `Opens when you beat Level ${S.id - 1}.`, list.filter(a => a.stage === S.id && a.group !== 'stages' && a.group !== 'tiers'));
+  section('Heroes', 'Each hero is earned with another hero: beat a level with them and master a weapon. A hero also needs the categories of their starting weapon.', list.filter(a => a.group === 'heroes'));
+  for (const S of STAGES) section(`Level ${S.id}: ${S.name}`, stageUnlocked(SAVE, S.id) ? '' : `Opens when you beat Level ${S.id - 1}.`, list.filter(a => a.stage === S.id && a.group !== 'stages' && a.group !== 'tiers' && a.group !== 'heroes'));
   section('Other', '', list.filter(a => !a.stage && (a.group === 'cats' || a.group === 'unlocks')));
   section('Mastery (unlocks fusion)', 'Level an item up to unlock fusing it. Every item in a fusion needs its mastery.', list.filter(a => a.group === 'mastery'));
   $('#achievements .gold-line').innerHTML = `${list.filter(a => a.done).length}/${list.length} done`;
@@ -789,36 +806,122 @@ function describeChoice(o) {
   if (o.type === 'heal') return { icon: '❤️', title: 'Restore', tag: 'HEAL', text: 'Recover 40 HP.' };
   return { icon: '●', title: 'Void Gold', tag: 'GOLD', text: '+25 gold.' };
 }
-let levelChoices = null, luBack = null, luMode = 'level';
+// Level-up: clicking a card (or pressing 1-4) only selects it and shows its stat changes; Confirm takes it.
+// So a key pressed while moving can never pick something unseen. luSel: index of the selected card, 'skip', or null.
+let levelChoices = null, luBack = null, luMode = 'level', luSel = null;
 function openLevelUp() {
-  G.paused = true; luMode = 'level'; luBack = null; levelChoices = buildChoices(); renderLevelUp(); showScreen('levelup');
+  G.paused = true; luMode = 'level'; luBack = null; luSel = null; levelChoices = buildChoices(); renderLevelUp(); showScreen('levelup');
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
 }
 // a fusion from a chest: the player still picks which item stays
 function openFuse(f) {
   if (!f.group.every(i => G.inv.includes(i) && fusable(i) && i.tier === f.tier - 1) || !commonEffects(f.group).length) return;
   f.keeps = keepersOf(f.group); if (!f.keeps.length) return;
-  G.paused = true; luMode = 'chest'; luBack = null; levelChoices = keepChoices(f, false); renderLevelUp(); showScreen('levelup');
+  G.paused = true; luMode = 'chest'; luBack = null; luSel = null; levelChoices = keepChoices(f, false); renderLevelUp(); showScreen('levelup');
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
 }
 function renderLevelUp() {
   const wrap = $('#luCards'); wrap.innerHTML = '';
   levelChoices.forEach((o, idx) => {
     const c = describeChoice(o); const E = c.effs ? EFFECTS[c.effs[0]] : null;
-    const el = document.createElement('button'); el.className = 'card lu' + (c.fuse ? ' fuse' : '') + (c.tier > 1 ? ' t' + c.tier : ''); if (E) el.style.setProperty('--c', E.color);
+    const el = document.createElement('button'); el.className = 'card lu' + (c.fuse ? ' fuse' : '') + (c.tier > 1 ? ' t' + c.tier : '') + (luSel === idx ? ' sel' : ''); if (E) el.style.setProperty('--c', E.color);
     const tags = (c.slot ? `<span>${SLOTS[c.slot].icon} ${SLOTS[c.slot].name}</span>` : '') + (c.effs ? c.effs.map(k => `<span style="color:${EFFECTS[k].color}">${EFFECTS[k].icon} ${EFFECTS[k].name}</span>`).join('') : '');
     el.innerHTML = `<div class="key">${idx + 1}</div><div class="ico">${c.icon}</div><div class="tag">${c.tag}</div><b>${c.title}</b>${tags ? `<div class="tags">${tags}</div>` : ''}<small>${c.text}</small>`;
-    el.onclick = () => chooseLevel(idx);
+    el.onclick = () => selectLevel(idx);
     wrap.appendChild(el);
   });
   const picking = levelChoices.some(o => o.type === 'keep');
+  const cur = luSel === 'skip' ? { type: 'skip' } : luSel !== null ? levelChoices[luSel] : null;
+  $('#luConfirm').disabled = !cur;
+  $('#luConfirm').textContent = !cur ? 'Pick an option first' : cur.type === 'skip' ? 'Confirm: skip' : cur.type === 'fuse' && cur.keeps.length > 1 ? 'Confirm: choose what remains' : 'Confirm: ' + describeChoice(cur).title;
+  $('#skip').classList.toggle('sel', luSel === 'skip');
+  $('#luStats').innerHTML = statsPanel(cur, true);
   $('#luTitle').textContent = picking ? (luMode === 'chest' ? 'Chest fusion! Which item remains?' : 'Fusion: which item remains?') : 'Level ' + G.level + '!';
   const rr = $('#reroll'); rr.textContent = '🎲 Reroll (' + G.player.rerolls + ')'; rr.disabled = G.player.rerolls <= 0; rr.style.visibility = picking ? 'hidden' : '';
   $('#skip').style.visibility = picking || luMode === 'chest' ? 'hidden' : '';
 }
+function selectLevel(idx) {
+  const o = levelChoices && levelChoices[idx]; if (!o) return;
+  if (o.type === 'back') { levelChoices = luBack; luBack = null; luSel = null; renderLevelUp(); return; } // going back takes nothing, so no confirm
+  luSel = idx; renderLevelUp();
+}
+function confirmLevel() {
+  if (!levelChoices || luSel === null) return;
+  if (luSel === 'skip') { skipLevel(); return; }
+  chooseLevel(luSel);
+}
 function chooseLevel(idx) {
   const o = levelChoices && levelChoices[idx]; if (!o) return;
-  if (o.type === 'fuse' && o.keeps.length > 1) { luBack = levelChoices; levelChoices = keepChoices(o, true); renderLevelUp(); return; }
-  if (o.type === 'back') { levelChoices = luBack; luBack = null; renderLevelUp(); return; }
-  applyChoice(o); levelChoices = null; luBack = null; showScreen(null); G.paused = false;
+  if (o.type === 'fuse' && o.keeps.length > 1) { luBack = levelChoices; levelChoices = keepChoices(o, true); luSel = null; renderLevelUp(); return; }
+  if (o.type === 'back') { levelChoices = luBack; luBack = null; luSel = null; renderLevelUp(); return; }
+  applyChoice(o); levelChoices = null; luBack = null; luSel = null; showScreen(null); G.paused = false;
+}
+// skipping keeps sockets free for the items a fusion needs
+function skipLevel() {
+  if (!levelChoices || levelChoices.some(o => o.type === 'keep')) return;
+  heal(15); G.gold += 10 * STAGE().gold; levelChoices = null; luBack = null; luSel = null; showScreen(null); G.paused = false;
+}
+
+// ---------------- stats panel (level-up preview and pause menu) ----------------
+// The inventory as it would be after a level-up choice, as light copies, so nothing in the run changes.
+function virtualInv(o) {
+  const cp = i => ({ def: i.def, level: i.level, tier: i.tier || 0, base: i.base, stats: Object.assign({}, i.stats), riders: i.riders.slice(), src: i });
+  let inv = G.inv.map(cp);
+  const find = i => inv.find(x => x.src === i);
+  if (!o) return { inv, hit: null };
+  if (o.type === 'new') { const x = { def: o.def, level: arrivalLevel(), tier: 0, base: o.def.dmg || 0, stats: Object.assign({}, o.def.passive || {}), riders: [] }; inv.push(x); return { inv, hit: [null, x] }; }
+  if (o.type === 'up') { const x = find(o.inst); x.level = Math.min(MAX_LEVEL, x.level + 1); return { inv, hit: [o.inst, x] }; }
+  if (o.type === 'fuse' || o.type === 'keep') {
+    const keep = o.type === 'keep' ? o.s : o.keeps[0], others = o.type === 'keep' ? o.others : o.group.filter(x => x !== keep), k = find(keep);
+    for (const oi of others) {
+      const x = find(oi); k.base += 0.5 * x.base;
+      for (const [s, v] of Object.entries(x.stats)) k.stats[s] = (k.stats[s] || 0) + 0.5 * v;
+      for (const e of instEffects(x)) if (!effectsOf(k.def).includes(e) && !k.riders.includes(e)) k.riders.push(e);
+    }
+    inv = inv.filter(x => !others.includes(x.src)); k.tier++; k.level = arrivalLevel();
+    return { inv, hit: [keep, k] };
+  }
+  return { inv, hit: null };
+}
+// player stats and effect pool of an inventory, the same sums recomputePool and recomputeStats make
+function statsOf(inv) {
+  const m = Object.assign({}, G.player.baseMods);
+  for (const i of inv) for (const [s, v] of Object.entries(instStats(i))) m[s] = (m[s] || 0) + v;
+  const P = {}; applyStats(P, m);
+  const pool = {}; for (const k of EFFECT_KEYS) pool[k] = 0;
+  for (const i of inv) { if (isPassive(i.def)) continue; const T = tierOf(i); for (const k of effectsOf(i.def)) if (effOpen(k)) pool[k] += i.level * T.pool; }
+  for (const k of EFFECT_KEYS) pool[k] = Math.round(pool[k]);
+  return { P, pool };
+}
+const pctOf = x => (x >= 0 ? '+' : '−') + Math.round(Math.abs(x) * 100) + '%';
+// [label, value from player stats, format]; bigger is always better
+const STAT_ROWS = [
+  ['Max HP', P => P.maxHp, v => String(Math.round(v))], ['Damage', P => P.might - 1, pctOf], ['Armor', P => P.armor, v => String(+v.toFixed(1))],
+  ['Recovery', P => P.regen, v => +v.toFixed(2) + ' HP/s'], ['Move speed', P => P.speed / 200 - 1, pctOf], ['Area', P => P.area - 1, pctOf],
+  ['Cooldowns', P => 1 - P.cdMul, v => (v > 0 ? '−' : v < 0 ? '+' : '') + Math.round(Math.abs(v) * 100) + '%'], ['Projectile speed', P => P.projSpd - 1, pctOf],
+  ['Duration', P => P.duration - 1, pctOf], ['Projectiles', P => P.amount, v => '+' + v], ['Crit chance', P => P.critBonus, pctOf], ['Luck', P => P.luck, pctOf],
+  ['Pickup range', P => P.magnet / 90 - 1, pctOf], ['XP', P => P.growth - 1, pctOf], ['Gold', P => P.greed - 1, pctOf],
+];
+// damage of one hit of an attacking item (before crits and effects)
+const hitDmg = (i, P) => (i && !isPassive(i.def) ? baseDmg(i) * (1 + 0.3 * (i.level - 1)) * P.might : 0);
+// The stats panel. o: a level-up choice to preview (null = just the current stats). With a choice, changed rows show now → after.
+function statsPanel(o, preview) {
+  const now = statsOf(G.inv), P = G.player;
+  const v = o && o.type !== 'skip' && o.type !== 'heal' && o.type !== 'gold' && o.type !== 'back' ? virtualInv(o) : null, aft = v ? statsOf(v.inv) : null;
+  const heal = o && o.type === 'heal' ? 40 : o && o.type === 'skip' ? 15 : 0;
+  const cell = (label, a, b, fmt, cls = '') => {
+    const ch = b !== null && b !== undefined && Math.abs(b - a) > 1e-6;
+    return `<div class="st${ch ? (b > a ? ' up' : ' down') : ''}${cls}"><span>${label}</span><b>${fmt(a)}${ch ? ` <i>→ ${fmt(b)}</i>` : ''}</b></div>`;
+  };
+  const rows = [];
+  // HP now: a bigger max HP adds the difference (as applyStats does), a heal adds its amount
+  const hpNow = Math.ceil(P.hp), hpAft = aft ? Math.min(aft.P.maxHp, hpNow + Math.max(0, aft.P.maxHp - P.maxHp)) : Math.min(P.maxHp, hpNow + heal);
+  rows.push(cell('HP', hpNow, hpAft, x => String(Math.round(x))));
+  for (const [label, f, fmt] of STAT_ROWS) { const a = f(now.P), b = aft ? f(aft.P) : null; if (a || b || label === 'Damage') rows.push(cell(label, a, b, fmt)); }
+  if (v && v.hit) { const [a, b] = v.hit; if (!isPassive(b.def)) rows.push(cell(`${b.def.icon} ${b.def.name} hit`, hitDmg(a, now.P), hitDmg(b, aft.P), x => (x ? String(Math.round(x)) : '—'), ' wide')); }
+  const pool = EFFECT_KEYS.filter(k => now.pool[k] || (aft && aft.pool[k])).map(k => cell(`${EFFECTS[k].icon} ${EFFECTS[k].name}`, now.pool[k], aft ? aft.pool[k] : null, x => '×' + x)).join('');
+  const head = preview ? (o ? (o.type === 'skip' ? 'If you skip: heal 15, +gold' : o.type === 'fuse' && o.keeps.length > 1 ? `Stats if ${o.keeps[0].def.name} remains` : 'Stats with this choice') : 'Your stats (pick an option to see what changes)') : 'Your stats';
+  return `<div class="statsHead">${head}</div><div class="statGrid">${rows.join('')}</div><div class="statsHead">Effect pool <small>(on every bullet)</small></div><div class="statGrid">${pool || '<div class="st"><span>none yet</span></div>'}</div>`;
 }
 const fusedOf = i => (i.gone.length ? ` <small>+ ${i.gone.length} fused in</small>` : '');
 function showGameOver(won, earned, bonus, fresh) {
@@ -834,9 +937,10 @@ function togglePause() {
   if (G.paused) { G.paused = false; showScreen(null); }
   else { G.paused = true; renderPause(); showScreen('pause'); }
 }
-const SPEEDS = [1, 1.25, 1.5, 2];
-function gameSpeed() { const v = SAVE.settings.speed; return SPEEDS.includes(v) ? v : 1; }
-function cycleSpeed() { SAVE.settings.speed = SPEEDS[(SPEEDS.indexOf(gameSpeed()) + 1) % SPEEDS.length]; writeSave(); }
+// game speeds the pause menu cycles through: OPTIONS.speed.choices in items.js, editable in the admin panel
+const speedChoices = () => { const c = ((OPTIONS.speed || {}).choices || []).filter(x => x > 0).sort((a, b) => a - b); return c.length ? c : [1]; };
+function gameSpeed() { const v = SAVE.settings.speed, c = speedChoices(); return c.includes(v) ? v : c.includes(1) ? 1 : c[0]; }
+function cycleSpeed() { const c = speedChoices(); SAVE.settings.speed = c[(c.indexOf(gameSpeed()) + 1) % c.length]; writeSave(); }
 // one held item, for the pause screen: tier, effects its bullets carry, passive stats, what was fused into it
 function invChip(i) {
   const T = i.tier || 0, next = T < TIER_KEYS.length - 1 ? FUSION[TIER_KEYS[T + 1]] : null, st = instStats(i);
@@ -847,12 +951,12 @@ function invChip(i) {
 }
 function renderPause() {
   const inv = G.inv.map(invChip).join('');
-  const pool = EFFECT_KEYS.filter(k => G.pool[k]).map(k => `<span style="color:${EFFECTS[k].color}">${EFFECTS[k].icon} ${EFFECTS[k].name} ×${G.pool[k]}</span>`).join(' · ') || 'none';
   const pas = {}; for (const i of G.inv) for (const [k, v] of Object.entries(instStats(i))) pas[k] = (pas[k] || 0) + v;
-  $('#pauseBody').innerHTML = `<p class="center" style="color:${STAGE().color}">Level ${G.stage}: ${STAGE().name}</p><div class="chips col">${inv}</div><p><b>Effect pool</b> (applies to every bullet): ${pool}</p>` +
+  $('#pauseBody').innerHTML = `<p class="center" style="color:${STAGE().color}">Level ${G.stage}: ${STAGE().name}</p><div class="stats-box">${statsPanel(null, false)}</div><div class="chips col">${inv}</div>` +
     (Object.keys(pas).length ? `<p><b>From passive stats</b>: ${statText(pas)}</p>` : '');
   $('#numToggle').textContent = 'Damage numbers: ' + (SAVE.settings.numbers ? 'on' : 'off');
   $('#speedToggle').innerHTML = 'Game speed: <b>' + gameSpeed() + 'x</b>';
+  $('#speedToggle').title = 'Tap to cycle ' + speedChoices().map(x => x + 'x').join(', ');
 }
 
 // ---------------- input ----------------
@@ -860,7 +964,8 @@ window.addEventListener('keydown', e => {
   keys[e.code] = true;
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
   if (!G || G.over) return;
-  if (currentScreen === 'levelup') { const n = parseInt(e.key, 10); if (n >= 1 && n <= 4) chooseLevel(n - 1); if (e.code === 'KeyR') $('#reroll').click(); if (e.code === 'KeyS') $('#skip').click(); return; }
+  // 1-4 only select; Enter (or the Confirm button) takes it. Letter keys do nothing here, so WASD can't pick or skip.
+  if (currentScreen === 'levelup') { if (e.code === 'Space' || e.code === 'Enter' || e.code === 'NumpadEnter') e.preventDefault(); const n = parseInt(e.key, 10); if (n >= 1 && n <= 4) selectLevel(n - 1); if (e.code === 'Enter' || e.code === 'NumpadEnter') confirmLevel(); return; }
   if (e.code === 'Escape' || e.code === 'KeyP') togglePause();
   if ((e.code === 'Space' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') && !G.paused) dash();
 });
@@ -876,10 +981,10 @@ $('#btnForge').onclick = () => showScreen('forge');
 $('#btnCodex').onclick = () => showScreen('codex');
 $('#btnAch').onclick = () => showScreen('achievements');
 document.querySelectorAll('[data-back]').forEach(b => b.onclick = () => showScreen('menu'));
-$('#btnStart').onclick = () => { const c = CHARACTERS.find(x => x.id === selectedChar); if (c && charUnlocked(SAVE, c)) newRun(c.id, selectedStage); else toast('Pick a hero you have unlocked'); };
-$('#reroll').onclick = () => { if (G.player.rerolls <= 0 || (levelChoices || []).some(o => o.type === 'keep')) return; G.player.rerolls--; levelChoices = buildChoices(); renderLevelUp(); };
-// skipping keeps sockets free for the items a fusion needs
-$('#skip').onclick = () => { if (!levelChoices || levelChoices.some(o => o.type === 'keep')) return; heal(15); G.gold += 10 * STAGE().gold; levelChoices = null; luBack = null; showScreen(null); G.paused = false; };
+$('#btnStart').onclick = () => { const c = CHARACTERS.find(x => x.id === selectedChar); if (c && charPlayable(SAVE, c)) newRun(c.id, selectedStage); else toast('Pick a hero you have unlocked'); };
+$('#reroll').onclick = () => { if (G.player.rerolls <= 0 || (levelChoices || []).some(o => o.type === 'keep')) return; G.player.rerolls--; luSel = null; levelChoices = buildChoices(); renderLevelUp(); };
+$('#skip').onclick = () => { if (!levelChoices || levelChoices.some(o => o.type === 'keep')) return; luSel = 'skip'; renderLevelUp(); };
+$('#luConfirm').onclick = confirmLevel;
 $('#btnResume').onclick = togglePause;
 $('#btnQuit').onclick = () => { G.paused = false; endRun(false); };
 $('#speedToggle').onclick = () => { cycleSpeed(); renderPause(); };
@@ -999,4 +1104,4 @@ if (SANDBOX) sandboxBoot(); else { loadSave(); checkUnlocks(); showScreen('menu'
 requestAnimationFrame(frame);
 
 // debug hooks for testing
-window.VOIDLIGHT = { get G() { return G; }, refresh() { checkUnlocks(); if (!G && SCREENS_WITH_SAVE.includes(currentScreen)) showScreen(currentScreen); }, SAVE: () => SAVE, ITEMS, defaultSave, normalizeSave, mergeSaves, replaceSave, toast, addItem: (id, L) => addItem(ITEM[id], L), update, newRun, levelItem, fuse, fusionGroups, buildChoices, applyChoice, chooseLevel, synthFusion, endRun, get levelChoices() { return levelChoices; } };
+window.VOIDLIGHT = { get G() { return G; }, refresh() { checkUnlocks(); if (!G && SCREENS_WITH_SAVE.includes(currentScreen)) showScreen(currentScreen); }, SAVE: () => SAVE, ITEMS, defaultSave, normalizeSave, mergeSaves, replaceSave, toast, addItem: (id, L) => addItem(ITEM[id], L), update, newRun, levelItem, fuse, fusionGroups, buildChoices, applyChoice, chooseLevel, selectLevel, confirmLevel, statsPanel, speedChoices, gameSpeed, synthFusion, endRun, get levelChoices() { return levelChoices; } };

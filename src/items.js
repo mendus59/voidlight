@@ -5,8 +5,10 @@
 // def(...)'s plain-data properties (dmg, cd, effect2, passive, lock, fuseLock, color, vis, disabled, pattern, trig) on its first line,
 // and each character, category, level, fusion tier, upgrade, enemy, boss, pickup and difficulty entry on a single line.
 // Locks: { stage: 3, stat: 'kills'|'best'|'wins'|'bosses'|'runs', min, text, cost } is an achievement in one level, and cost is the
-// gold the player then pays for it (0 or missing = free once earned). Lifetime { stat, min }, { effect, level } and { item, level, runs }
-// achievements work too. There are no gold-only locks: everything is earned first.
+// gold the player then pays for it (0 or missing = free once earned). Lifetime { stat, min }, { effect, level }, { item, level, runs },
+// { char, stage, stat, min } (a level stat with one hero), { mastery: itemId } (that item's fusion mastery) and { cat } achievements
+// work too, and { all: [req, req, ...], text, cost } needs every one of them. There are no gold-only locks: everything is earned first.
+// A hero is also only playable once every category of their starting weapon is unlocked.
 const ITEMS = [];
 const ITEM = {};
 function def(slot, id, name, effect, icon, props) {
@@ -269,18 +271,18 @@ const CHARACTERS = [
   { id: 'kael',  name: 'Kael',  title: 'Ember Warden',  color: '#ff8a3d', weapon: 'ember_pistol',     perk: '+10% damage',            mods: { might: 0.10 } },
   { id: 'mira',  name: 'Mira',  title: 'Frostweaver',   color: '#7fdcff', weapon: 'frost_fan',        perk: '+15% area',              mods: { area: 0.15 } },
   { id: 'volt',  name: 'Volt',  title: 'Storm Runner',  color: '#fff36b', weapon: 'arc_rifle',        perk: '−8% cooldowns',          mods: { cd: 0.08 } },
-  { id: 'briar', name: 'Briar', title: 'Thornkeeper',   color: '#8cff5a', weapon: 'thorn_spitter',    perk: '+20% max HP, +0.5 regen', mods: { hp: 0.2, regen: 0.5 }, lock: { stage: 1, stat: 'best', min: 300, text: 'Survive 5:00 in Level 1' } },
-  { id: 'juno',  name: 'Juno',  title: 'Trickshot',     color: '#ff6bd5', weapon: 'ricochet_disc',    perk: '+15% projectile speed',  mods: { projSpd: 0.15 }, lock: { stage: 1, stat: 'kills', min: 1500, text: 'Defeat 1500 enemies in Level 1', cost: 500 } },
-  { id: 'orrin', name: 'Orrin', title: 'Tinker',        color: '#b48cff', weapon: 'seeker_swarm',     perk: '+20% duration',          mods: { duration: 0.2 }, lock: { stage: 4, stat: 'best', min: 600, text: 'Survive 10:00 in Level 4', cost: 1200 } },
-  { id: 'sable', name: 'Sable', title: 'Wanderer',      color: '#e8e8ff', weapon: 'boomerang_glaive', perk: '+15% move speed',        mods: { speed: 0.15 }, lock: { stage: 1, stat: 'bosses', min: 1, text: 'Defeat a boss in Level 1', cost: 400 } },
-  { id: 'grim',  name: 'Grim',  title: 'Scrapper',      color: '#ffb86b', weapon: 'scrap_blaster',    perk: '+2 armor',               mods: { armor: 2 }, lock: { stage: 2, stat: 'bosses', min: 1, text: 'Defeat a boss in Level 2', cost: 900 } },
-  { id: 'lyra',  name: 'Lyra',  title: 'Gambler',       color: '#ffe14d', weapon: 'helix_cannon',     perk: '+10% crit chance',       mods: { crit: 0.10 }, lock: { stage: 2, stat: 'best', min: 300, text: 'Survive 5:00 in Level 2', cost: 700 } },
-  { id: 'nyx',   name: 'Nyx',   title: 'Fractured',     color: '#5affd9', weapon: 'splitter_orb',     perk: '+1 projectile, −20% max HP', mods: { amount: 1, hp: -0.2 }, lock: { stage: 6, stat: 'bosses', min: 1, text: 'Defeat a boss in Level 6', cost: 1600 } },
-  { id: 'vesper',name: 'Vesper',title: 'Nightblood',    color: '#ff3b5c', weapon: 'blood_lance',      perk: 'Lance hits heal 2% of damage', mods: {}, lock: { stage: 7, stat: 'best', min: 600, text: 'Survive 10:00 in Level 7', cost: 2200 } },
-  { id: 'corvin', name: 'Corvin', title: 'Rimeguard',   color: '#9fe8ff', weapon: 'rime_lance',       perk: '+10% area, +10% max HP',  mods: { area: 0.1, hp: 0.1 }, lock: { stage: 3, stat: 'best', min: 300, text: 'Survive 5:00 in Level 3', cost: 900 } },
-  { id: 'tamsin', name: 'Tamsin', title: 'Stormcaller', color: '#f4ff6b', weapon: 'arc_halo',         perk: '−10% cooldowns, −10% max HP', mods: { cd: 0.1, hp: -0.1 }, lock: { stage: 5, stat: 'kills', min: 2000, text: 'Defeat 2000 enemies in Level 5', cost: 1500 } },
-  { id: 'wren',   name: 'Wren',   title: 'Shardwright', color: '#6bffe1', weapon: 'shard_cannon',     perk: '+15% damage, +10% XP',    mods: { might: 0.15, growth: 0.1 }, lock: { stage: 8, stat: 'best', min: 600, text: 'Survive 10:00 in Level 8', cost: 2500 } },
-  { id: 'morrow', name: 'Morrow', title: 'Tidecaller',  color: '#ff4c6e', weapon: 'crimson_tide',     perk: '+1 HP/s, +15% duration',  mods: { regen: 1, duration: 0.15 }, lock: { stage: 9, stat: 'bosses', min: 1, text: 'Defeat a boss in Level 9', cost: 3000 } },
+  { id: 'briar', name: 'Briar', title: 'Thornkeeper',   color: '#8cff5a', weapon: 'thorn_spitter',    perk: '+20% max HP, +0.5 regen', mods: { hp: 0.2, regen: 0.5 }, lock: { all: [{ char: 'kael', stage: 1, stat: 'wins', min: 1 }, { mastery: 'ember_pistol' }], text: 'Beat Level 1 with Kael and master Ember Pistol' } },
+  { id: 'juno',  name: 'Juno',  title: 'Trickshot',     color: '#ff6bd5', weapon: 'ricochet_disc',    perk: '+15% projectile speed',  mods: { projSpd: 0.15 }, lock: { all: [{ char: 'sable', stage: 5, stat: 'wins', min: 1 }, { mastery: 'boomerang_glaive' }], text: 'Beat Level 5 with Sable and master Boomerang Glaive', cost: 1200 } },
+  { id: 'orrin', name: 'Orrin', title: 'Tinker',        color: '#b48cff', weapon: 'seeker_swarm',     perk: '+20% duration',          mods: { duration: 0.2 }, lock: { all: [{ char: 'juno', stage: 6, stat: 'wins', min: 1 }, { mastery: 'ricochet_disc' }], text: 'Beat Level 6 with Juno and master Ricochet Disc', cost: 1500 } },
+  { id: 'sable', name: 'Sable', title: 'Wanderer',      color: '#e8e8ff', weapon: 'boomerang_glaive', perk: '+15% move speed',        mods: { speed: 0.15 }, lock: { all: [{ char: 'volt', stage: 3, stat: 'wins', min: 1 }, { mastery: 'arc_rifle' }], text: 'Beat Level 3 with Volt and master Arc Rifle', cost: 800 } },
+  { id: 'grim',  name: 'Grim',  title: 'Scrapper',      color: '#ffb86b', weapon: 'scrap_blaster',    perk: '+2 armor',               mods: { armor: 2 }, lock: { all: [{ char: 'briar', stage: 2, stat: 'wins', min: 1 }, { mastery: 'thorn_spitter' }], text: 'Beat Level 2 with Briar and master Thorn Spitter', cost: 700 } },
+  { id: 'lyra',  name: 'Lyra',  title: 'Gambler',       color: '#ffe14d', weapon: 'helix_cannon',     perk: '+10% crit chance',       mods: { crit: 0.10 }, lock: { all: [{ char: 'grim', stage: 4, stat: 'wins', min: 1 }, { mastery: 'scrap_blaster' }], text: 'Beat Level 4 with Grim and master Scrap Blaster', cost: 1000 } },
+  { id: 'nyx',   name: 'Nyx',   title: 'Fractured',     color: '#5affd9', weapon: 'splitter_orb',     perk: '+1 projectile, −20% max HP', mods: { amount: 1, hp: -0.2 }, lock: { all: [{ char: 'lyra', stage: 7, stat: 'wins', min: 1 }, { mastery: 'helix_cannon' }], text: 'Beat Level 7 with Lyra and master Helix Cannon', cost: 1800 } },
+  { id: 'vesper',name: 'Vesper',title: 'Nightblood',    color: '#ff3b5c', weapon: 'blood_lance',      perk: 'Lance hits heal 2% of damage', mods: {}, lock: { all: [{ char: 'orrin', stage: 8, stat: 'wins', min: 1 }, { mastery: 'seeker_swarm' }], text: 'Beat Level 8 with Orrin and master Seeker Swarm', cost: 2500 } },
+  { id: 'corvin', name: 'Corvin', title: 'Rimeguard',   color: '#9fe8ff', weapon: 'rime_lance',       perk: '+10% area, +10% max HP',  mods: { area: 0.1, hp: 0.1 }, lock: { all: [{ char: 'mira', stage: 2, stat: 'wins', min: 1 }, { mastery: 'frost_fan' }], text: 'Beat Level 2 with Mira and master Frost Fan', cost: 600 } },
+  { id: 'tamsin', name: 'Tamsin', title: 'Stormcaller', color: '#f4ff6b', weapon: 'arc_halo',         perk: '−10% cooldowns, −10% max HP', mods: { cd: 0.1, hp: -0.1 }, lock: { all: [{ char: 'corvin', stage: 4, stat: 'wins', min: 1 }, { mastery: 'rime_lance' }], text: 'Beat Level 4 with Corvin and master Rime Lance', cost: 1200 } },
+  { id: 'wren',   name: 'Wren',   title: 'Shardwright', color: '#6bffe1', weapon: 'shard_cannon',     perk: '+15% damage, +10% XP',    mods: { might: 0.15, growth: 0.1 }, lock: { all: [{ char: 'nyx', stage: 8, stat: 'wins', min: 1 }, { mastery: 'splitter_orb' }], text: 'Beat Level 8 with Nyx and master Splitter Orb', cost: 2500 } },
+  { id: 'morrow', name: 'Morrow', title: 'Tidecaller',  color: '#ff4c6e', weapon: 'crimson_tide',     perk: '+1 HP/s, +15% duration',  mods: { regen: 1, duration: 0.15 }, lock: { all: [{ char: 'vesper', stage: 9, stat: 'wins', min: 1 }, { mastery: 'blood_lance' }], text: 'Beat Level 9 with Vesper and master Blood Lance', cost: 3000 } },
 ];
 
 // ======================= CATEGORIES (effects) =======================
@@ -340,6 +342,12 @@ const tierOf = inst => FUSION[TIER_KEYS[(inst && inst.tier) || 0]];
 // XP for level l: 5 + xpStep·(l−1) + (l−1)^xpCurve. Each level (STAGES) multiplies on top of this.
 const DIFFICULTY = {
   run: { hpGrowth: 0.4, hpCurve: 0.06, spawnBase: 1, spawnGrowth: 0.9, spawnCurve: 0.06, dmgGrowth: 0.1, eliteEvery: 40, eliteHp: 10, ringEvery: 50, bossHp: 1.4, xpStep: 6, xpCurve: 1.8 },
+};
+
+// ======================= OPTIONS =======================
+// speed.choices: the game speeds the pause menu cycles through (1 = normal, up to 10).
+const OPTIONS = {
+  speed: { choices: [1, 1.5, 2, 2.5, 3, 5] },
 };
 
 // ======================= ENEMIES & BOSSES =======================

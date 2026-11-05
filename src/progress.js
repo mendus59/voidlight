@@ -16,11 +16,26 @@ const stageDef = n => STAGES[Math.max(1, Math.min(stageCount(), n | 0)) - 1];
 const emptyStage = () => ({ kills: 0, best: 0, wins: 0, bosses: 0, runs: 0 });
 
 function defaultSave() {
-  return { ver: SAVE_VERSION, gold: 0, upg: {}, unlockedItems: [], unlockedCats: [], unlockedChars: ['kael', 'mira', 'volt'], itemRuns: {}, stages: {}, lastStage: 1,
+  return { ver: SAVE_VERSION, gold: 0, upg: {}, unlockedItems: [], unlockedCats: [], unlockedChars: ['kael', 'mira', 'volt'], itemRuns: {}, stages: {}, charStages: {}, lastStage: 1,
     stats: { totalKills: 0, bestTime: 0, bossKills: 0, evolves: 0, supers: 0, megas: 0, wins: 0, runs: 0, maxLevel: 0, totalGold: 0 }, settings: { numbers: true }, lastChar: 'kael' };
 }
 const strList = v => (Array.isArray(v) ? v.filter(x => typeof x === 'string') : []);
 const cnt = v => Math.max(0, Math.floor(+v || 0));
+// { '3': { kills, best, ... } } with every value cleaned up
+function stageMap(m) {
+  const out = {};
+  for (const [n, st] of Object.entries(m || {})) if (st && typeof st === 'object' && +n >= 1) { const x = emptyStage(); for (const k of Object.keys(x)) x[k] = cnt(st[k]); out[String(+n)] = x; }
+  return out;
+}
+function addStageMaps(a, b) {
+  const out = {};
+  for (const n of new Set([...Object.keys(a || {}), ...Object.keys(b || {})])) {
+    const x = (a || {})[n] || emptyStage(), y = (b || {})[n] || emptyStage(), z = emptyStage();
+    for (const k of Object.keys(z)) z[k] = k === 'best' ? Math.max(x[k], y[k]) : x[k] + y[k];
+    out[n] = z;
+  }
+  return out;
+}
 // Fills in whatever an older or partial save is missing, and upgrades v1 and v2 saves.
 function normalizeSave(s) {
   const d = defaultSave(); if (!s || typeof s !== 'object') return d;
@@ -35,8 +50,10 @@ function normalizeSave(s) {
   // itemRuns[id][L-1] = how many runs reached level L (or higher) with that item
   out.itemRuns = {};
   for (const [id, r] of Object.entries(s.itemRuns || {})) if (Array.isArray(r)) out.itemRuns[id] = [0, 1, 2, 3, 4].map(k => cnt(r[k]));
-  out.stages = {};
-  for (const [n, st] of Object.entries(s.stages || {})) if (st && typeof st === 'object' && +n >= 1) { const x = emptyStage(); for (const k of Object.keys(x)) x[k] = cnt(st[k]); out.stages[String(+n)] = x; }
+  out.stages = stageMap(s.stages);
+  // charStages[heroId][level] = the same per-level stats, counted only for runs played as that hero (tracked since v3.1)
+  out.charStages = {};
+  for (const [c, m] of Object.entries(s.charStages || {})) if (m && typeof m === 'object') out.charStages[c] = stageMap(m);
   out.lastStage = Math.max(1, Math.min(stageCount(), +s.lastStage || 1));
   if (ver < 2) {
     // v1 had no item categories. Anything a player bought with gold stays usable, so its categories open up.
@@ -69,17 +86,16 @@ function mergeSaves(a, b) {
   for (const id of new Set([...Object.keys(a.itemRuns), ...Object.keys(b.itemRuns)])) {
     const x = a.itemRuns[id] || [0, 0, 0, 0, 0], y = b.itemRuns[id] || [0, 0, 0, 0, 0]; m.itemRuns[id] = x.map((v, k) => v + y[k]);
   }
-  for (const n of new Set([...Object.keys(a.stages), ...Object.keys(b.stages)])) {
-    const x = a.stages[n] || emptyStage(), y = b.stages[n] || emptyStage(), z = emptyStage();
-    for (const k of Object.keys(z)) z[k] = k === 'best' ? Math.max(x[k], y[k]) : x[k] + y[k];
-    m.stages[n] = z;
-  }
+  m.stages = addStageMaps(a.stages, b.stages);
+  m.charStages = {};
+  for (const c of new Set([...Object.keys(a.charStages), ...Object.keys(b.charStages)])) m.charStages[c] = addStageMaps(a.charStages[c], b.charStages[c]);
   m.lastStage = Math.max(a.lastStage, b.lastStage);
   return m;
 }
 
 // ---------- levels ----------
 const stageStats = (s, n) => (s.stages || {})[String(n)] || emptyStage();
+const charStageStats = (s, c, n) => ((s.charStages || {})[c] || {})[String(n)] || emptyStage();
 // Level 1 is always open; every other one opens once the level before it has been beaten.
 const stageUnlocked = (s, n) => n <= 1 || (n <= stageCount() && stageStats(s, n - 1).wins > 0);
 const stagesUnlocked = s => { let n = 1; while (n < stageCount() && stageUnlocked(s, n + 1)) n++; return n; };
@@ -94,6 +110,10 @@ const slotSockets = (s, slot) => SLOTS[slot].sockets + ((UPGRADES.find(u => u.so
 //   { stat: 'totalKills', min: 500, text }               a lifetime stat reaches min
 //   { effect: 'burn', level: 5, text }                   reach that level with any item of that category
 //   { item: 'ember_pistol', level: 5, runs: 1, text }    reach that level with that item in that many runs
+//   { char: 'kael', stage: 2, stat: 'wins', min: 1 }     a per-level stat, counting only runs played as that hero
+//   { mastery: 'ember_pistol' }                          that item's mastery (its fusion lock, fuseLock / FUSE_LOCK)
+//   { cat: 'poison' }                                    that category is unlocked
+//   { all: [req, req, ...], text }                       every one of those (any of the kinds above)
 // Items and characters can add cost: once the requirement is met they can be bought for that much gold
 // (no cost = granted for free). Categories and fusion tiers are always free. A lock with only a cost is
 // treated as already earned (old admin overrides); the game no longer has gold-only unlocks.
@@ -103,10 +123,18 @@ function bestEffectLevel(s, k) {
   for (const d of ITEMS) if (effectsOf(d).includes(k)) for (let L = 5; L > best; L--) if (runsAt(s, d.id, L) > 0) { best = L; break; }
   return best;
 }
-const hasReq = l => !!(l && (l.stage || l.stat || l.item || l.effect));
-// [have, need] toward an achievement lock
+const hasReq = l => !!(l && (l.all ? l.all.some(hasReq) : l.stage || l.stat || l.item || l.effect || l.char || l.mastery || l.cat));
+// the single requirements of a lock (one, or the parts of an `all` lock)
+const lockParts = l => (!hasReq(l) ? [] : l.all ? l.all.filter(p => hasReq(p) && !p.all) : [l]);
+// the level a lock belongs to (the highest one any part names), for grouping achievements
+const lockStage = l => Math.max(0, ...lockParts(l).map(p => (p.mastery || p.cat ? 0 : p.stage || 0)));
+// [have, need] toward an achievement lock; for an `all` lock: how many parts are done, of how many
 function lockProgress(lock, s) {
   if (!hasReq(lock)) return [1, 1];
+  if (lock.all) { const ps = lockParts(lock); return [ps.filter(p => lockMet(p, s)).length, ps.length]; }
+  if (lock.char) return [charStageStats(s, lock.char, lock.stage)[lock.stat] || 0, lock.min];
+  if (lock.mastery) { const d = ITEM[lock.mastery]; if (!d) return [0, 1]; const f = fuseLockOf(d); return f.runs <= 0 ? [1, 1] : [runsAt(s, d.id, f.level), f.runs]; }
+  if (lock.cat) return [catUnlocked(s, lock.cat) ? 1 : 0, 1];
   if (lock.stage) return [stageStats(s, lock.stage)[lock.stat] || 0, lock.min];
   if (lock.stat) return [s.stats[lock.stat] || 0, lock.min];
   if (lock.item) return [runsAt(s, lock.item, lock.level), lock.runs || 1];
@@ -118,6 +146,13 @@ const lockCost = l => (l && l.cost > 0 ? l.cost : 0);
 const mmss = n => `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}`;
 function reqText(l) {
   if (!hasReq(l)) return 'Available';
+  if (l.all) return lockParts(l).map(reqText).map((t, i) => (i ? t[0].toLowerCase() + t.slice(1) : t)).join(' and ');
+  if (l.char) {
+    const c = CHARACTERS.find(x => x.id === l.char), nm = c ? c.name : l.char;
+    return reqText({ stage: l.stage, stat: l.stat, min: l.min }) + ' with ' + nm;
+  }
+  if (l.mastery) { const d = ITEM[l.mastery]; if (!d) return 'Master ' + l.mastery; const f = fuseLockOf(d); return `Master ${d.name}` + (f.runs <= 0 ? '' : ` (reach level ${f.level} with it${f.runs > 1 ? ` in ${f.runs} runs` : ''})`); }
+  if (l.cat) return `Unlock ${(EFFECTS[l.cat] || { name: l.cat }).name} items`;
   if (l.stage) {
     const one = l.min === 1, L = `Level ${l.stage}`;
     switch (l.stat) {
@@ -149,6 +184,7 @@ function reqText(l) {
 // the requirement as generated text (admin uses it to keep `text` in sync)
 const lockText = reqText;
 const lockLabel = l => (l ? l.text || reqText(l) : '');
+const partLabel = p => p.text || reqText(p);
 const lockFull = l => lockLabel(l) + (lockCost(l) ? `, then buy for ● ${lockCost(l)}` : '');
 const catLock = k => (CATEGORIES[k] || {}).lock || null;
 const catUnlocked = (s, k) => !catLock(k) || s.unlockedCats.includes(k);
@@ -156,10 +192,23 @@ const startingCats = () => EFFECT_KEYS.filter(k => !catLock(k));
 // an item can show up in runs once every category it belongs to is open and the player owns it (if it has a lock)
 const itemOwned = (s, d) => !d.lock || s.unlockedItems.includes(d.id);
 const itemUnlocked = (s, d) => effectsOf(d).every(k => catUnlocked(s, k)) && itemOwned(s, d);
+// owned: earned (and bought, if it has a price), or a starting hero
 const charUnlocked = (s, c) => !c.lock || s.unlockedChars.includes(c.id);
+// No effect is available before its category: a hero whose starting weapon is in a locked category can't be played
+// (or earned) until that category opens. charLock(c) is the hero's lock with those categories added as parts.
+const charCats = c => { const w = ITEM[c.weapon]; return w ? effectsOf(w).filter(k => catLock(k)) : []; };
+const charCatsOpen = (s, c) => charCats(c).every(k => catUnlocked(s, k));
+function charLock(c) {
+  const cats = charCats(c).filter(k => !lockParts(c.lock).some(p => p.cat === k)).map(k => ({ cat: k }));
+  if (!cats.length) return c.lock || null;
+  const parts = [...lockParts(c.lock), ...cats], out = { all: parts, text: [hasReq(c.lock) ? lockLabel(c.lock) : '', ...cats.map(reqText)].filter(Boolean).map((t, i) => (i ? t[0].toLowerCase() + t.slice(1) : t)).join(' and ') };
+  if (lockCost(c.lock)) out.cost = c.lock.cost;
+  return out;
+}
+const charPlayable = (s, c) => charUnlocked(s, c) && charCatsOpen(s, c);
 // earned but not paid for yet
 const itemBuyable = (s, d) => !!d.lock && !itemOwned(s, d) && lockMet(d.lock, s);
-const charBuyable = (s, c) => !!c.lock && !charUnlocked(s, c) && lockMet(c.lock, s);
+const charBuyable = (s, c) => !!c.lock && !charUnlocked(s, c) && lockMet(charLock(c), s);
 const fuseLockOf = d => Object.assign({}, FUSE_LOCK, d.fuseLock || {});
 const fuseUnlocked = (s, d) => { const f = fuseLockOf(d); return f.runs <= 0 || runsAt(s, d.id, f.level) >= f.runs; };
 const fuseLockText = d => { const f = fuseLockOf(d); return f.runs <= 0 ? 'Can always fuse' : reqText({ item: d.id, level: f.level, runs: f.runs }); };
@@ -175,7 +224,7 @@ function applyUnlocks(s) {
     const shut = effectsOf(d).filter(k => !catUnlocked(s, k));
     fresh.push(d.icon + ' ' + d.name + (shut.length ? ` (once ${shut.map(k => EFFECTS[k].name).join(' and ')} items are unlocked)` : ''));
   }
-  for (const c of CHARACTERS) if (c.lock && !lockCost(c.lock) && lockMet(c.lock, s) && !s.unlockedChars.includes(c.id)) { s.unlockedChars.push(c.id); fresh.push('🧍 ' + c.name + ' (character)'); }
+  for (const c of CHARACTERS) if (c.lock && !lockCost(c.lock) && lockMet(charLock(c), s) && !s.unlockedChars.includes(c.id)) { s.unlockedChars.push(c.id); fresh.push('🧍 ' + c.name + ' (character)'); }
   return fresh;
 }
 // Everything a player could see change at the end of a run: compare a snapshot before and after with progressDiff.
@@ -198,12 +247,13 @@ function progressDiff(a, b) {
 function achievementList(s) {
   const out = [];
   const add = (group, icon, name, lock, reward, done, owned = true) => { const [have, need] = lockProgress(lock, s);
-    out.push({ group, stage: lock.stage || 0, icon, name, text: lockLabel(lock), have: Math.min(have, need), need, done, owned, cost: lockCost(lock), reward }); };
+    const parts = lock.all ? lockParts(lock).map(p => { const [a, b] = lockProgress(p, s); return { text: partLabel(p), have: Math.min(a, b), need: b, done: a >= b }; }) : null;
+    out.push({ group, stage: lockStage(lock), icon, name, text: lockLabel(lock), have: Math.min(have, need), need, done, owned, cost: lockCost(lock), reward, parts }); };
   for (let n = 2; n <= stageCount(); n++) add('stages', '🗺', `Level ${n}: ${stageDef(n).name}`, { stage: n - 1, stat: 'wins', min: 1 }, `Level ${n} and a Forge socket`, stageUnlocked(s, n));
   for (const k of TIER_KEYS) { const l = FUSION[k].lock; if (l) add('tiers', '✦', `${FUSION[k].name} fusion`, l, `${FUSION[k].name} fusion (${FUSION[k].need} items → 1)`, tierUnlocked(s, k)); }
   for (const k of EFFECT_KEYS) { const l = catLock(k); if (l) add('cats', EFFECTS[k].icon, `${EFFECTS[k].name} awakened`, l, `${EFFECTS[k].name} items`, catUnlocked(s, k)); }
   for (const d of ITEMS) if (!d.disabled) { const f = fuseLockOf(d); if (f.runs > 0) add('mastery', d.icon, `${d.name} mastery`, { item: d.id, level: f.level, runs: f.runs }, `Fusing ${d.name}`, fuseUnlocked(s, d)); }
   for (const d of ITEMS) if (!d.disabled && hasReq(d.lock)) add('unlocks', d.icon, d.name, d.lock, d.name, lockMet(d.lock, s), itemOwned(s, d));
-  for (const c of CHARACTERS) if (hasReq(c.lock)) add('unlocks', '🧍', c.name, c.lock, `${c.name}, ${c.title}`, lockMet(c.lock, s), charUnlocked(s, c));
+  for (const c of CHARACTERS) { const l = charLock(c); if (hasReq(l)) add('heroes', '🧍', c.name, l, `${c.name}, ${c.title}`, lockMet(l, s) || (charUnlocked(s, c) && charCatsOpen(s, c)), charUnlocked(s, c)); }
   return out;
 }

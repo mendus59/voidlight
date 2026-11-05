@@ -33,7 +33,7 @@ let ov = {};                                   // what you are editing
 let live = { ov: {}, updatedAt: 0, by: '' };   // content/live, what players get
 let draft = null;                              // content/draft
 let history = [];
-const TABLE_NAMES = { items: 'Item', chars: 'Character', cats: 'Category', stages: 'Level', tiers: 'Fusion tier', difficulty: 'Difficulty', upgrades: 'Forge upgrade', enemies: 'Enemy', bosses: 'Boss', drops: 'Pickup' };
+const TABLE_NAMES = { items: 'Item', chars: 'Character', cats: 'Category', stages: 'Level', tiers: 'Fusion tier', difficulty: 'Difficulty', upgrades: 'Forge upgrade', enemies: 'Enemy', bosses: 'Boss', drops: 'Pickup', options: 'Game option' };
 
 // current value of one entry: items.js default with the overrides on top
 function get(t, id) {
@@ -164,6 +164,7 @@ function lit(v) {
   if (v === null || v === undefined) return 'null';
   if (typeof v === 'string') return q(v);
   if (typeof v !== 'object') return String(v);
+  if (Array.isArray(v)) return '[' + v.map(lit).join(', ') + ']';
   const keys = Object.keys(v); if (!keys.length) return '{}';
   return '{ ' + keys.map(k => (/^[A-Za-z_$][\w$]*$/.test(k) ? k : q(k)) + ': ' + lit(v[k])).join(', ') + ' }';
 }
@@ -198,7 +199,8 @@ function exportItemsJs(src, o) {
     ['upgrades', 'UPGRADES', id => UPGRADES.find(u => u.id === id), (id, x) => `  ${lit(x)},`, id => new RegExp(`^\\s*\\{ id: '${id}',`)],
     ['enemies', 'ENEMY_TYPES', id => ENEMY_TYPES[id], (id, x) => `  ${id}: ${lit(x)},`, id => new RegExp(`^\\s*${id}:\\s*\\{`)],
     ['bosses', 'BOSSES', id => BOSSES[id], (id, x) => `  ${id}: ${lit(x)},`, id => new RegExp(`^\\s*${id}:\\s*\\{`)],
-    ['drops', 'DROPS', id => DROPS[id], (id, x) => `  ${id}: ${lit(x)},`, id => new RegExp(`^\\s*${id}:\\s*\\{`)]];
+    ['drops', 'DROPS', id => DROPS[id], (id, x) => `  ${id}: ${lit(x)},`, id => new RegExp(`^\\s*${id}:\\s*\\{`)],
+    ['options', 'OPTIONS', id => OPTIONS[id], (id, x) => `  ${id}: ${lit(x)},`, id => new RegExp(`^\\s*${id}:\\s*\\{`)]];
   for (const [t, name, orig, fmt, re] of tables) {
     const range = block(name);
     for (const id of Object.keys(o[t] || {})) replaceLine(range, re(id), fmt(id, keepOrder(orig(id), get(t, id), C.TABLES[t].fields)));
@@ -243,15 +245,43 @@ function colorIn(value, onset) { return h('input', { type: 'color', value: /^#[0
 function sel(options, value, onset) { return h('select', { onchange: e => onset(e.target.value) }, options.map(([v, l]) => h('option', { value: v, selected: v === value }, l))); }
 
 // lock kinds and their texts live in progress.js (shared with the game)
-const LOCK_MODES = [['none', 'Available from the start'], ['stage', 'Achievement: a stat in one level'], ['stat', 'Achievement: a lifetime stat'], ['effect', 'Achievement: level any item of a category'], ['item', 'Achievement: level one specific item']];
-const lockMode = l => !l || !hasReq(l) ? 'none' : l.stage ? 'stage' : l.item ? 'item' : l.effect ? 'effect' : 'stat';
+const LOCK_MODES = [['none', 'Available from the start'], ['stage', 'Achievement: a stat in one level'], ['stat', 'Achievement: a lifetime stat'], ['effect', 'Achievement: level any item of a category'], ['item', 'Achievement: level one specific item'],
+  ['char', 'Achievement: a stat in one level, with one hero'], ['mastery', 'Achievement: master one item (its fusion unlock)'], ['cat', 'A category is unlocked'], ['all', 'Several requirements (all of them)']];
+const PART_MODES = LOCK_MODES.filter(([m]) => m !== 'none' && m !== 'all');
+const reqMode = l => (l.char ? 'char' : l.mastery ? 'mastery' : l.cat ? 'cat' : l.stage ? 'stage' : l.item ? 'item' : l.effect ? 'effect' : 'stat');
+const lockMode = l => (!l || !hasReq(l) ? 'none' : l.all ? 'all' : reqMode(l));
+function defaultReq(m) {
+  switch (m) {
+    case 'stage': return { stage: 1, stat: 'kills', min: 500 };
+    case 'stat': return { stat: 'totalKills', min: 500 };
+    case 'effect': return { effect: 'burn', level: 5 };
+    case 'char': return { char: CHARACTERS[0].id, stage: 1, stat: 'wins', min: 1 };
+    case 'mastery': return { mastery: ITEMS[0].id };
+    case 'cat': return { cat: EFFECT_KEYS[0] };
+    default: return { item: ITEMS[0].id, level: 5, runs: 1 };
+  }
+}
 function defaultLock(m, cost) {
-  const l = m === 'stage' ? { stage: 1, stat: 'kills', min: 500 } : m === 'stat' ? { stat: 'totalKills', min: 500 } : m === 'effect' ? { effect: 'burn', level: 5 } : { item: ITEMS[0].id, level: 5, runs: 1 };
+  const l = m === 'all' ? { all: [defaultReq('char'), defaultReq('mastery')] } : defaultReq(m);
   l.text = lockText(l); if (cost) l.cost = cost; return l;
 }
 const effectOptions = () => EFFECT_KEYS.map(k => [k, `${EFFECTS[k].icon} ${EFFECTS[k].name}`]);
 const itemOptions = () => ITEMS.map(d => [d.id, `${get('items', d.id).icon} ${get('items', d.id).name}`]);
 const stageOptions = () => STAGES.map(x => [String(x.id), `Level ${x.id}: ${get('stages', String(x.id)).name}`]);
+const charOptions = () => CHARACTERS.map(c => [c.id, '◆ ' + get('chars', c.id).name]);
+// the inputs of one requirement; upd(patch) changes it
+function reqInputs(r, upd) {
+  const n = (k, min, max) => h('input', { type: 'number', min, max, style: 'width:72px', value: r[k], onchange: e => { const v = parseInt(e.target.value, 10); if (v >= min && v <= max) upd({ [k]: v }); } });
+  switch (reqMode(r)) {
+    case 'stage': return h('div', { class: 'inline' }, sel(stageOptions(), String(r.stage), x => upd({ stage: +x })), sel(Object.entries(STAGE_STATS), r.stat, x => upd({ stat: x })), h('span', {}, '≥'), n('min', 0, 1e6));
+    case 'stat': return h('div', { class: 'inline' }, sel(Object.entries(C.STATS), r.stat, x => upd({ stat: x })), h('span', {}, '≥'), n('min', 0, 1e6));
+    case 'effect': return h('div', { class: 'inline' }, h('span', {}, 'Level'), n('level', 1, 5), h('span', {}, 'with any'), sel(effectOptions(), r.effect, x => upd({ effect: x })), h('span', {}, 'item'));
+    case 'char': return h('div', { class: 'inline' }, h('span', {}, 'As'), sel(charOptions(), r.char, x => upd({ char: x })), h('span', {}, 'in'), sel(stageOptions(), String(r.stage), x => upd({ stage: +x })), sel(Object.entries(STAGE_STATS), r.stat, x => upd({ stat: x })), h('span', {}, '≥'), n('min', 0, 1e6));
+    case 'mastery': return h('div', { class: 'inline' }, h('span', {}, 'Master'), sel(itemOptions(), r.mastery, x => upd({ mastery: x })), h('span', { class: 'hint' }, ITEM[r.mastery] ? fuseLockText(ITEM[r.mastery]) : ''));
+    case 'cat': return h('div', { class: 'inline' }, sel(effectOptions(), r.cat, x => upd({ cat: x })), h('span', {}, 'items unlocked'));
+    default: return h('div', { class: 'inline' }, h('span', {}, 'Level'), n('level', 1, 5), h('span', {}, 'with'), sel(itemOptions(), r.item, x => upd({ item: x })), h('span', {}, 'in'), n('runs', 1, 1000), h('span', {}, 'runs'));
+  }
+}
 // buyable: items and characters can carry a gold price that the player pays once the requirement is met
 function lockFields(t, id, { buyable = false } = {}) {
   const lock = get(t, id).lock, mode = lockMode(lock);
@@ -259,14 +289,18 @@ function lockFields(t, id, { buyable = false } = {}) {
   if (mode === 'none') { if (lock && lockCost(lock)) out.push(h('div', { class: 'f wide note' }, `This lock only has a gold price (● ${lock.cost}). Gold-only unlocks are gone: players get it as if it were unlocked. Pick an achievement for it.`)); return out; }
   // the text follows the requirement unless it was written by hand
   const upd = patch => { const cur = get(t, id).lock; const next = Object.assign({}, cur, patch); if (cur.text === lockText(cur)) next.text = lockText(next); set(t, id, 'lock', next, { rerender: true }); };
-  const n = (k, min, max) => h('input', { type: 'number', min, max, style: 'width:72px', value: lock[k], onchange: e => { const v = parseInt(e.target.value, 10); if (v >= min && v <= max) upd({ [k]: v }); } });
   let req;
-  if (mode === 'stage') req = h('div', { class: 'inline' }, sel(stageOptions(), String(lock.stage), x => upd({ stage: +x })), sel(Object.entries(STAGE_STATS), lock.stat, x => upd({ stat: x })), h('span', {}, '≥'), n('min', 0, 1e6));
-  if (mode === 'stat') req = h('div', { class: 'inline' }, sel(Object.entries(C.STATS), lock.stat, x => upd({ stat: x })), h('span', {}, '≥'), n('min', 0, 1e6));
-  if (mode === 'effect') req = h('div', { class: 'inline' }, h('span', {}, 'Level'), n('level', 1, 5), h('span', {}, 'with any'), sel(effectOptions(), lock.effect, x => upd({ effect: x })), h('span', {}, 'item'));
-  if (mode === 'item') req = h('div', { class: 'inline' }, h('span', {}, 'Level'), n('level', 1, 5), h('span', {}, 'with'), sel(itemOptions(), lock.item, x => upd({ item: x })), h('span', {}, 'in'), n('runs', 1, 1000), h('span', {}, 'runs'));
-  const timeHint = (mode === 'stage' && lock.stat === 'best') || (mode === 'stat' && lock.stat === 'bestTime') ? 'In seconds: 300 is 5:00.' : '';
-  out.push(field('Requirement', req, t, id, 'lock', { wide: true, hint: timeHint || (mode === 'stage' || mode === 'stat' ? 'Counted when a run ends.' : 'Counted when a run ends. Two-effect items count for both of their categories.') }));
+  if (mode === 'all') {
+    const parts = lock.all.slice(), setParts = ps => upd({ all: ps });
+    req = h('div', { class: 'parts' }, parts.map((p, i) => h('div', { class: 'inline part' },
+      sel(PART_MODES, reqMode(p), m => { const ps = parts.slice(); ps[i] = defaultReq(m); setParts(ps); }),
+      reqInputs(p, patch => { const ps = parts.slice(); ps[i] = Object.assign({}, p, patch); setParts(ps); }),
+      parts.length > 1 ? h('button', { class: 'small', title: 'Remove this requirement', onclick: () => setParts(parts.filter((_, j) => j !== i)) }, '✕') : null)),
+      parts.length < 6 ? h('button', { class: 'small', onclick: () => setParts([...parts, defaultReq('mastery')]) }, '+ Add requirement') : null);
+  } else req = reqInputs(lock, upd);
+  const best = lockParts(lock).some(p => (p.stage && p.stat === 'best') || p.stat === 'bestTime');
+  const hint = [best ? 'Times are in seconds: 300 is 5:00.' : '', 'Counted when a run ends.', lockParts(lock).some(p => p.effect) ? 'Two-effect items count for both of their categories.' : '', lockParts(lock).some(p => p.mastery) ? 'Mastery follows that item’s fusion unlock (Progression tab).' : ''].filter(Boolean).join(' ');
+  out.push(field('Requirement', req, t, id, 'lock', { wide: true, hint }));
   out.push(field('Text players see', h('input', { type: 'text', value: lock.text, oninput: e => set(t, id, 'lock', Object.assign({}, get(t, id).lock, { text: e.target.value })) }), t, id, 'lock', { wide: true }));
   if (buyable) out.push(field('Then buy for (gold)', h('input', { type: 'number', min: 0, step: 50, value: lockCost(lock), oninput: e => { const v = parseInt(e.target.value, 10); if (v >= 0) { const nx = Object.assign({}, get(t, id).lock); if (v) nx.cost = v; else delete nx.cost; set(t, id, 'lock', nx); } } }), t, id, 'lock', { hint: '0 = free as soon as it is earned' }));
   return out;
@@ -351,7 +385,7 @@ function staticShapes(def) {
 
 // ---------- views ----------
 const SLOT_TABS = { weapon: 'Weapons', spell: 'Spells', orbit: 'Orbitals', trap: 'Deployables', relic: 'Relics' };
-const TABS = [['overview', 'Overview'], ['progress', 'Progression'], ...Object.entries(SLOT_TABS), ['chars', 'Characters'], ['enemies', 'Enemies & difficulty'], ['drops', 'Pickups'], ['upgrades', 'Forge']];
+const TABS = [['overview', 'Overview'], ['progress', 'Progression'], ...Object.entries(SLOT_TABS), ['chars', 'Characters'], ['enemies', 'Enemies & difficulty'], ['drops', 'Pickups'], ['upgrades', 'Forge'], ['options', 'Options']];
 let tab = 'overview';
 const pickId = {};
 let ed = null; const other = h('div');
@@ -370,6 +404,7 @@ function render() {
   else if (tab === 'drops') other.replaceChildren(dropView());
   else if (tab === 'upgrades') other.replaceChildren(upgradeView());
   else if (tab === 'progress') other.replaceChildren(progressView());
+  else if (tab === 'options') other.replaceChildren(optionsView());
   else other.replaceChildren(overview());
 }
 let relist = () => {};
@@ -380,7 +415,7 @@ function listPane(rows, current, onpick) {
   draw(); relist = draw;
   return el;
 }
-const lockTag = l => !l ? '' : (hasReq(l) ? (l.stage ? 'L' + l.stage + ' ' : '🔒') : '') + (lockCost(l) ? '● ' + l.cost : '');
+const lockTag = l => !l ? '' : (hasReq(l) ? (lockStage(l) ? 'L' + lockStage(l) + ' ' : '🔒') : '') + (lockCost(l) ? '● ' + l.cost : '');
 
 function itemView(slot) {
   const ids = ITEMS.filter(d => d.slot === slot).map(d => d.id);
@@ -476,9 +511,10 @@ function charView() {
     h('h3', {}, 'Stat bonuses'),
     h('div', { class: 'fields' }, field('Bonuses', h('div', { class: 'fields' }, C.MODS.map(k => h('div', { class: 'f' }, h('label', {}, k), h('input', { type: 'number', step: 'any', value: mods[k] ?? '', placeholder: '0', oninput: e => { const x = parseFloat(e.target.value); setMod(k, isFinite(x) ? x : 0); } }), h('div', { class: 'hint' }, MOD_HINT[k])))), T, id, 'mods', { wide: true })),
     h('h3', {}, 'Unlock'),
-    h('div', { class: 'fields' }, lockFields(T, id, { buyable: true })),
+    h('div', { class: 'fields' }, lockFields(T, id, { buyable: true }),
+      charCats(CHARACTERS.find(c => c.id === id)).length ? h('div', { class: 'f wide note' }, `Also needs the ${charCats(CHARACTERS.find(c => c.id === id)).map(k => EFFECTS[k].name).join(' and ')} category of ${w.name} (added automatically, players see it on the hero card): ${charCats(CHARACTERS.find(c => c.id === id)).map(k => lockLabel(catLock(k))).join('; ')}.`) : null),
     h('h3', {}, 'Preview'),
-    h('div', { class: 'preview', style: `--c:${v.color}` }, h('div', { class: 'avatar' }, '◆'), h('b', {}, v.name), h('small', {}, v.title), h('div', {}, `${w.icon} ${w.name}`), h('div', { class: 'perk' }, v.perk), v.lock ? h('small', { style: 'color:#ff9e4c' }, lockFull(v.lock)) : null));
+    h('div', { class: 'preview', style: `--c:${v.color}` }, h('div', { class: 'avatar' }, '◆'), h('b', {}, v.name), h('small', {}, v.title), h('div', {}, `${w.icon} ${w.name}`), h('div', { class: 'perk' }, v.perk), charLock(CHARACTERS.find(c => c.id === id)) ? h('small', { style: 'color:#ff9e4c' }, lockFull(charLock(CHARACTERS.find(c => c.id === id)))) : null));
   return h('div', { class: 'editor', style: 'grid-template-columns: 220px minmax(300px, 760px)' }, list, form);
 }
 
@@ -592,6 +628,7 @@ function simulatorCard() {
     const x = normalizeSave(null); x.gold = 99999; x.unlockedCats = EFFECT_KEYS.slice(); x.unlockedItems = ITEMS.filter(d => d.lock).map(d => d.id); x.unlockedChars = CHARACTERS.map(c => c.id);
     for (const d of ITEMS) x.itemRuns[d.id] = [9, 9, 9, 9, 9];
     for (const S of STAGES) x.stages[String(S.id)] = { kills: 9999, best: 900, wins: 1, bosses: 3, runs: 1 };
+    for (const c of CHARACTERS) { x.charStages[c.id] = {}; for (const S of STAGES) x.charStages[c.id][String(S.id)] = { kills: 999, best: 900, wins: 1, bosses: 3, runs: 1 }; }
     for (const u of UPGRADES) x.upg[u.id] = u.max; x.lastStage = stageCount(); setSim(x, 'Everything unlocked, every level beaten, the Forge maxed.');
   }
   function play() {
@@ -610,6 +647,17 @@ function simulatorCard() {
       sel([0, 1, 2, 3, 4, 5].map(L => [String(L), L ? 'Lv ' + L : '—']), String(best), x => write(+x, Math.max(1, runs))),
       h('input', { type: 'number', min: 0, style: 'width:56px', value: runs, title: 'Runs that reached that level', onchange: e => write(best || 5, Math.max(0, parseInt(e.target.value, 10) || 0)) }),
       h('span', { class: 'tag', title: fuseLockText(d) }, fuseUnlocked(s, d) ? '✦' : ''));
+  };
+  // a hero: the highest level beaten while playing them (sets wins in every level up to it), owned or not, and where their unlock stands
+  const heroRow = c => {
+    const m = s.charStages[c.id] || {}, beat = STAGES.reduce((b, S) => ((m[String(S.id)] || {}).wins > 0 ? S.id : b), 0);
+    const write = N => { const x = s.charStages[c.id] = Object.assign({}, m); for (const S of STAGES) { const k = String(S.id), st = Object.assign(emptyStage(), x[k]); st.wins = S.id <= N ? Math.max(1, st.wins) : 0; st.runs = Math.max(st.runs, st.wins); x[k] = st; } redo(); };
+    const own = charUnlocked(s, c), L = charLock(c), ok = charPlayable(s, c);
+    const state = ok ? '✓' : own ? 'needs category' : L && lockMet(L, s) ? (lockCost(L) ? '● ' + lockCost(L) : 'earned') : lockParts(L).filter(p => lockMet(p, s)).length + '/' + lockParts(L).length;
+    return h('div', { class: 'simrow' + (ok ? '' : ' off'), title: L ? lockFull(L) : 'Starting hero' }, h('span', { class: 'nm' }, '◆ ' + get('chars', c.id).name),
+      sel([['0', '—'], ...STAGES.map(S => [String(S.id), 'Beat L' + S.id])], String(beat), x => write(+x)),
+      h('label', { class: 'check', title: c.lock ? 'Owned (earned and bought)' : 'Starting hero' }, h('input', { type: 'checkbox', checked: own, disabled: !c.lock, onchange: e => { s.unlockedChars = s.unlockedChars.filter(x => x !== c.id); if (e.target.checked) s.unlockedChars.push(c.id); redo(); } }), 'owned'),
+      h('span', { class: 'note', style: 'min-width:70px;text-align:right' }, state));
   };
   return h('div', { class: 'card' }, h('h2', {}, 'Test a player’s progress'),
     h('p', { class: 'note', style: 'margin-top:-6px' }, 'A pretend save, separate from every real one. Set where a player is, see what they get, then play the real game with it in a new tab (with your unpublished edits). Progress in that tab stays in the test save.'),
@@ -633,16 +681,33 @@ function simulatorCard() {
         (() => { const b = [...ITEMS.filter(d => !get('items', d.id).disabled && itemBuyable(s, d)).map(d => `${d.icon} ${d.name} ● ${lockCost(d.lock)}`), ...CHARACTERS.filter(c => charBuyable(s, c)).map(c => `🧍 ${c.name} ● ${lockCost(c.lock)}`)];
           return h('p', { class: 'note' }, b.length ? `Earned, waiting to be bought: ${b.join(', ')}.` : 'Nothing earned and waiting to be bought.'); })(),
         h('div', { class: 'chipbox' }, avail.map(d => h('span', { class: 'chip', title: effectsOf(d).map(k => EFFECTS[k].name).join(' + ') + (fuseUnlocked(s, d) ? ' · can fuse' : ' · fusion locked') }, `${get('items', d.id).icon} ${get('items', d.id).name}${fuseUnlocked(s, d) ? ' ✦' : ''}`)))),
-      h('div', {}, h('h3', {}, 'Best level reached per item, and in how many runs'), h('div', { class: 'simlist' }, ITEMS.map(masteryRow)),
+      h('div', {}, h('h3', {}, 'Heroes: highest level beaten with each one'), h('p', { class: 'note' }, 'Hero unlocks ask for a level beaten with another hero plus a weapon mastery (set below). Hover a hero for its unlock. Right column: ✓ playable, ● earned and waiting to be bought, n/m parts done.'),
+        h('div', { class: 'simlist', style: 'max-height:none;margin-bottom:12px' }, CHARACTERS.map(heroRow)),
+        h('h3', {}, 'Best level reached per item, and in how many runs'), h('div', { class: 'simlist' }, ITEMS.map(masteryRow)),
         h('p', { class: 'note' }, 'Greyed items are not available with these unlocks. ✦ = fusion unlocked.'))));
+}
+
+// ---------- game options: the speeds the pause menu offers ----------
+function optionsView() {
+  const T = 'options', cur = (get(T, 'speed').choices || []).slice();
+  const parse = txt => String(txt).split(/[\s,x×]+/i).filter(Boolean).map(Number).sort((a, b) => a - b);
+  const input = h('input', { type: 'text', value: cur.join(', '), onchange: e => {
+    const v = parse(e.target.value);
+    if (C.valid(T, 'choices', v)) set(T, 'speed', 'choices', v, { rerender: true }); else toast('Use 1 to 8 different speeds from 0.25 to 10, separated by commas, e.g. 1, 1.5, 2, 3', true);
+  } });
+  return h('div', { class: 'card', style: 'max-width:760px' }, h('h2', {}, 'Game options', h('span', { class: 'spacer' }), entryChanged(T, 'speed') ? h('button', { class: 'small', onclick: () => resetEntry(T, 'speed') }, 'Reset') : null),
+    h('div', { class: 'fields' }, field('Game speeds (pause menu)', input, T, 'speed', 'choices', { wide: true, hint: 'Comma separated, 0.25 to 10, up to 8. The pause menu button cycles through them in order; 1 = normal speed. A player whose saved speed is no longer listed goes back to 1x.' })),
+    h('p', { class: 'note' }, 'Players get: ', ...cur.map(x => h('span', { class: 'chip', style: 'margin-right:4px' }, x + 'x'))),
+    h('p', { class: 'note' }, 'To try it before publishing: Progression tab → "Play with this save" opens the real game with your unpublished edits; pause a run there and tap Game speed.'));
 }
 
 function overview() {
   const all = ITEMS.map(d => get('items', d.id)), chars = CHARACTERS.map(c => ({ id: c.id, ...get('chars', c.id) }));
   const stat = (n, label, sub) => h('div', { class: 'card stat' }, h('b', {}, n), label, sub ? h('small', { style: 'display:block' }, sub) : null);
   const go = (t, id) => { if (t === 'items') { tab = ITEM[id].slot; pickId[tab] = id; } else if (t === 'chars') { tab = 'chars'; pickId.chars = id; } else tab = { bosses: 'enemies', difficulty: 'enemies', cats: 'progress', stages: 'progress', tiers: 'progress' }[t] || t; render(); window.scrollTo(0, 0); };
-  const unlockRows = [...TIER_KEYS.map(k => ['tiers', k, get('tiers', k)]), ...EFFECT_KEYS.map(k => ['cats', k, get('cats', k)]), ...ITEMS.map(d => ['items', d.id, get('items', d.id)]), ...CHARACTERS.map(c => ['chars', c.id, get('chars', c.id)])].filter(r => r[2].lock)
-    .sort((a, b) => (a[2].lock.stage || 0) - (b[2].lock.stage || 0));
+  const unlockRows = [...TIER_KEYS.map(k => ['tiers', k, get('tiers', k)]), ...EFFECT_KEYS.map(k => ['cats', k, get('cats', k)]), ...ITEMS.map(d => ['items', d.id, get('items', d.id)]), ...CHARACTERS.map(c => ['chars', c.id, { lock: charLock(c) }])].filter(r => r[2].lock)
+    .sort((a, b) => lockStage(a[2].lock) - lockStage(b[2].lock));
+  const reqCode = p => (p.char ? `${p.char} L${p.stage} ${p.stat} ≥ ${p.min}` : p.mastery ? `mastery ${p.mastery}` : p.cat ? `${p.cat} category` : p.stage ? `L${p.stage} ${p.stat} ≥ ${p.min}` : p.stat ? `${p.stat} ≥ ${p.min}` : p.item ? `${p.item} Lv${p.level} × ${p.runs} runs` : p.effect ? `any ${p.effect} item Lv${p.level}` : '');
   const edits = [];
   for (const t of Object.keys(BASE)) for (const id of Object.keys(BASE[t])) {
     const a = (ov[t] || {})[id] || {}, b = (live.ov[t] || {})[id] || {};
@@ -667,7 +732,7 @@ function overview() {
     h('div', { class: 'card' }, h('h2', {}, 'Unlocks and achievements'),
       h('div', { class: 'tablewrap' }, h('table', {}, h('tr', {}, h('th', {}, 'What'), h('th', {}, 'Type'), h('th', {}, 'How players unlock it')),
         unlockRows.map(([t, id, v]) => h('tr', {}, h('td', {}, h('button', { class: 'link', onclick: () => go(t, id) }, nameOf(t, id))), h('td', {}, t === 'items' ? SLOTS[ITEM[id].slot].name : t === 'cats' ? 'Category' : t === 'tiers' ? 'Fusion tier' : 'Character'),
-          h('td', {}, `${lockFull(v.lock)}  `, h('code', {}, v.lock.stage ? `L${v.lock.stage} ${v.lock.stat} ≥ ${v.lock.min}` : v.lock.stat ? `${v.lock.stat} ≥ ${v.lock.min}` : v.lock.item ? `${v.lock.item} Lv${v.lock.level} × ${v.lock.runs} runs` : v.lock.effect ? `any ${v.lock.effect} item Lv${v.lock.level}` : '')))))),
+          h('td', {}, `${lockFull(v.lock)}  `, h('code', {}, lockParts(v.lock).map(reqCode).join(' + '))))))),
       h('p', { class: 'note' }, 'Fusion locks (one per item) are on the Progression tab.')),
     h('div', { class: 'card' }, h('h2', {}, 'Publish history'),
       history.length ? h('table', {}, history.map(x => h('tr', {}, h('td', {}, new Date(x.updatedAt).toLocaleString()), h('td', {}, x.by), h('td', {}, `${countEdits(prune(x.ov), {})} edited entries`),
