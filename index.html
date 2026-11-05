@@ -57,6 +57,16 @@
   .card.lu .tag { font-size: 11px; font-weight: 800; letter-spacing: 0.08em; color: var(--c, #fff); }
   .card.lu.fuse { border: 2px solid #ffe14d; box-shadow: 0 0 24px rgba(255, 225, 77, 0.35); }
   .card.lu.fuse .tag { color: #ffe14d; }
+  .card.lu.sel, #skip.sel { outline: 3px solid #fff; outline-offset: 2px; box-shadow: 0 0 26px color-mix(in srgb, var(--c, #a55cff) 60%, transparent); transform: translateY(-3px); }
+  #luConfirm { min-width: 200px; }
+  .stats-box { margin-top: 14px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,0.03); }
+  .statsHead { font-size: 12px; font-weight: 800; letter-spacing: 0.06em; color: var(--muted); margin: 4px 0 6px; text-transform: uppercase; }
+  .statsHead small { text-transform: none; letter-spacing: 0; font-weight: 400; }
+  .statGrid { display: grid; gap: 4px 12px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); margin-bottom: 6px; }
+  .statGrid .st { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; padding: 2px 0; border-bottom: 1px dotted rgba(160,130,255,0.15); }
+  .statGrid .st span { color: var(--muted); } .statGrid .st.wide { grid-column: 1 / -1; }
+  .statGrid .st b i { font-style: normal; } .statGrid .st.up b i { color: #6bff8f; } .statGrid .st.down b i { color: #ff6b81; }
+  .req .part { display: block; } .req .part.ok, .parts .part.ok { color: #6bff8f; } .parts { display: flex; flex-direction: column; }
   .center { text-align: center; } .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin: 10px 0; }
   .row > div { background: rgba(255,255,255,0.05); border-radius: 10px; padding: 10px 16px; display: flex; flex-direction: column; align-items: center; min-width: 90px; }
   .row small { color: var(--muted); } .row b { font-size: 20px; }
@@ -144,13 +154,15 @@
 <div class="screen" id="levelup"><div class="panel" style="max-width:900px">
   <h2 class="center" id="luTitle">Level up!</h2>
   <div id="luCards"></div>
-  <div class="center" style="margin-top:14px"><button id="reroll">🎲 Reroll</button> <button id="skip" title="Take nothing: heal 15 and get some gold">⏭ Skip</button> <small style="color:var(--muted)">Press 1–4 to pick, R to reroll, S to skip</small></div>
+  <div class="center" style="margin-top:14px"><button id="reroll">🎲 Reroll</button> <button id="skip" title="Take nothing: heal 15 and get some gold">⏭ Skip</button> <button class="primary" id="luConfirm" disabled>Pick an option first</button></div>
+  <div class="center"><small style="color:var(--muted)">Click an option (or press 1–4), then Confirm (or Enter)</small></div>
+  <div class="stats-box" id="luStats"></div>
 </div></div>
 
 <div class="screen" id="pause"><div class="panel" style="max-width:640px">
   <h2 class="center">Paused</h2>
   <div id="pauseBody"></div>
-  <div class="row"><button class="primary" id="btnResume">Resume</button><button id="speedToggle" title="Tap to cycle 1x, 1.25x, 1.5x, 2x">Game speed</button><button id="numToggle">Damage numbers</button><button id="btnQuit">End run</button></div>
+  <div class="row"><button class="primary" id="btnResume">Resume</button><button id="speedToggle" title="Tap to cycle the game speed">Game speed</button><button id="numToggle">Damage numbers</button><button id="btnQuit">End run</button></div>
 </div></div>
 
 <div class="screen" id="gameover"><div class="panel" style="max-width:640px">

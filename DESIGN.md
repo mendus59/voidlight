@@ -84,7 +84,7 @@ Fusion needs several **level 5 items of the same tier that share at least one ef
 | Mega | 5 super items | ×16 | ×0.55 | 12 | 12 | ×2 | Beat Level 6 |
 
 A Mega is 30 base items deep, so **items consumed by a fusion can be offered again later in the run** (only items held right now are
-excluded), and offers favour items that share an effect with what you hold. The level-up screen has **Skip** (S) for when no card helps.
+excluded), and offers favour items that share an effect with what you hold. The level-up screen has **Skip** for when no card helps. Picking is two steps: select a card (click or 1–4), then Confirm (or Enter), so movement keys can never take a card unseen. A stats panel under the cards shows every player stat and the effect pool, with the selected card's changes as now → after; the pause menu shows the same panel.
 Chests from elites and bosses offer an available fusion first. All tiers are editable in the admin panel (Progression > Fusion tiers).
 
 **How many Megas fit in a run?** Sockets are not the limit (19 with everything bought). Level-ups are: one Mega takes about 51 picks
@@ -209,27 +209,33 @@ Legend: 🔒 = locked at start. The conditions listed below are from before leve
 | 55 | Vampire Fang | Vampiric | On kill (chance) → homing blood drop that heals on hit | 🔒 600 gold |
 
 Item locks shown here apply on top of the category locks in section 3b. A character's starting weapon is
-always available to that character even if it's still locked for others.
+always available to that character even if the item is still locked for others, but never before its category:
+no effect works in a run until its category is unlocked.
 
 ## 6. Characters (15, one per weapon)
+
+Each locked hero is earned with another hero: beat a level while playing them, and master a weapon (that item's fusion
+mastery, section 3). A hero is also only playable (or earned) once every category of their starting weapon is unlocked;
+that requirement is added automatically and shows on the hero card. Per-hero level stats are tracked from this version on
+(`charStages` in the save), so earlier runs don't count toward them; heroes already owned stay owned.
 
 | Character | Starting weapon | Perk | Achievement | Price |
 |---|---|---|---|---|
 | Kael, Ember Warden | Ember Pistol | +10% damage | Start | |
 | Mira, Frostweaver | Frost Fan | +15% area | Start | |
 | Volt, Storm Runner | Arc Rifle | −8% cooldowns | Start | |
-| Briar, Thornkeeper | Thorn Spitter | +20% max HP, +0.5 regen | Survive 5:00 in Level 1 | free |
-| Juno, Trickshot | Ricochet Disc | +15% projectile speed | 1500 kills in Level 1 | ● 500 |
-| Sable, Wanderer | Boomerang Glaive | +15% move speed | Boss in Level 1 | ● 400 |
-| Grim, Scrapper | Scrap Blaster | +2 armor | Boss in Level 2 | ● 900 |
-| Lyra, Gambler | Helix Cannon | +10% crit chance | Survive 5:00 in Level 2 | ● 700 |
-| Corvin, Rimeguard | Rime Lance | +10% area, +10% max HP | Survive 5:00 in Level 3 | ● 900 |
-| Orrin, Tinker | Seeker Swarm | +20% duration | Survive 10:00 in Level 4 | ● 1200 |
-| Tamsin, Stormcaller | Arc Halo | −10% cooldowns, −10% max HP | 2000 kills in Level 5 | ● 1500 |
-| Nyx, Fractured | Splitter Orb | +1 projectile, −20% max HP | Boss in Level 6 | ● 1600 |
-| Vesper, Nightblood | Blood Lance | Lance hits heal 2% of damage | Survive 10:00 in Level 7 | ● 2200 |
-| Wren, Shardwright | Shard Cannon | +15% damage, +10% XP | Survive 10:00 in Level 8 | ● 2500 |
-| Morrow, Tidecaller | Crimson Tide | +1 HP/s, +15% duration | Boss in Level 9 | ● 3000 |
+| Briar, Thornkeeper | Thorn Spitter | +20% max HP, +0.5 regen | Beat Level 1 with Kael, master Ember Pistol (+ Poison) | free |
+| Corvin, Rimeguard | Rime Lance | +10% area, +10% max HP | Beat Level 2 with Mira, master Frost Fan | ● 600 |
+| Grim, Scrapper | Scrap Blaster | +2 armor | Beat Level 2 with Briar, master Thorn Spitter (+ Knockback) | ● 700 |
+| Sable, Wanderer | Boomerang Glaive | +15% move speed | Beat Level 3 with Volt, master Arc Rifle (+ Pierce) | ● 800 |
+| Tamsin, Stormcaller | Arc Halo | −10% cooldowns, −10% max HP | Beat Level 4 with Corvin, master Rime Lance | ● 1200 |
+| Lyra, Gambler | Helix Cannon | +10% crit chance | Beat Level 4 with Grim, master Scrap Blaster (+ Crit) | ● 1000 |
+| Juno, Trickshot | Ricochet Disc | +15% projectile speed | Beat Level 5 with Sable, master Boomerang Glaive (+ Ricochet) | ● 1200 |
+| Orrin, Tinker | Seeker Swarm | +20% duration | Beat Level 6 with Juno, master Ricochet Disc (+ Homing) | ● 1500 |
+| Nyx, Fractured | Splitter Orb | +1 projectile, −20% max HP | Beat Level 7 with Lyra, master Helix Cannon (+ Split) | ● 1800 |
+| Wren, Shardwright | Shard Cannon | +15% damage, +10% XP | Beat Level 8 with Nyx, master Splitter Orb (+ Split) | ● 2500 |
+| Vesper, Nightblood | Blood Lance | Lance hits heal 2% of damage | Beat Level 8 with Orrin, master Seeker Swarm (+ Vampiric) | ● 2500 |
+| Morrow, Tidecaller | Crimson Tide | +1 HP/s, +15% duration | Beat Level 9 with Vesper, master Blood Lance (+ Vampiric) | ● 3000 |
 
 ## 7. Permanent upgrades (the Forge)
 

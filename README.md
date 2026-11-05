@@ -33,7 +33,7 @@ https://mendus59.github.io/voidlight/admin.html (or `localhost:8000/admin.html`)
 * **Progression tab**: which categories are open at the start and the achievement that opens each other one, every item's fusion lock (mastery), and a **progress simulator**: set a pretend save (stats, categories, best level per item, or copy your own save), see which items and fusions that player gets and which achievements are waiting, then **Play with this save** opens the real game (`index.html?testsave`) on that pretend save with your unpublished edits. Progress there stays in the test save and can be loaded back.
 * **Item editor**: a second effect (two-effect items), and the fusion lock. Under the test canvas, **Fuse with** picks a partner and shows the real fusion (the selected item remains).
 * **Enemies & difficulty**: the run difficulty curve, with a table of what it means at 0, 3, 5, 10 and 15 minutes.
-* **Tabs** for Weapons, Spells, Orbitals, Deployables, Relics, Characters, Enemies and bosses, Pickups (drop rates) and Forge upgrades, plus an **Overview** with counts, every unlock and its requirement, the edits not yet published, and the publish history.
+* **Tabs** for Weapons, Spells, Orbitals, Deployables, Relics, Characters, Enemies and bosses, Pickups (drop rates), Forge upgrades and Options (the game speeds the pause menu offers), plus an **Overview** with counts, every unlock and its requirement, the edits not yet published, and the publish history.
 * **Items**: name, icon, effect, description, damage, cooldown, unlock (gold cost or achievement), on/off in level-ups, and a **visual style**: color, bullet size, bullet speed, fading trail, and a replacement shape for each kind of bullet the item fires.
 * **Test canvas**: the real game engine (`index.html?sandbox`) in a frame with only the selected item, at any level or fused, firing at training targets (ring, line, scattered or a walking swarm, killable or not). Relics get buttons for their triggers (kill, get hit, level up, crit, pickup). Every edit shows up on it right away, with a damage-per-second readout.
 * **Save draft** stores your edits in Firestore without touching the game. **Publish to game** writes them to `content/live`, which every player loads on start (cached in their browser, applied after their current run). Your unsaved edits are also kept in this browser.
@@ -42,7 +42,7 @@ https://mendus59.github.io/voidlight/admin.html (or `localhost:8000/admin.html`)
 How it fits together: `src/content.js` lists what is editable, keeps the items.js values, and applies the published overrides on top; `src/cloud.js` downloads `content/live`; `src/admin.js` is the panel. Changing `firestore.rules` means pasting them into **Firestore > Rules** again and clicking **Publish**.
 
 ## Controls
-WASD / arrow keys to move, Space or Shift to dash (brief invulnerability), Esc or P to pause, 1–4 to pick level-up cards, R to reroll, S to skip.
+WASD / arrow keys to move, Space or Shift to dash (brief invulnerability), Esc or P to pause, 1–4 or a click to select a level-up card, then Confirm or Enter to take it (Reroll and Skip are buttons). Game speed (1x, 1.5x, 2x, 2.5x, 3x, 5x by default, set on the admin Options tab) is in the pause menu.
 On touch screens, drag to move and tap with a second finger to dash.
 
 ## Files
