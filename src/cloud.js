@@ -79,7 +79,14 @@ async function signOut() {
   V.toast('Signed out. Your progress is safe in your Google account.');
 }
 
+// Content published from admin.html (content/live) is public: every player loads it, signed in or not.
+async function loadContent() {
+  try { const snap = await fb.getDoc(fb.doc(fb.db, 'content', 'live')); if (snap.exists() && window.VOIDLIGHT_CONTENT) window.VOIDLIGHT_CONTENT.receive(snap.data().data); }
+  catch (e) { console.warn('Voidlight content unavailable, using built-in content', e); }
+}
+
 async function start() {
+  if (window.VOIDLIGHT_SANDBOX) return; // admin test canvas: no sign-in, no saves
   if (!configured) { render(); return; }
   try {
     const [app, auth, fs] = await Promise.all([import(SDK + 'firebase-app.js'), import(SDK + 'firebase-auth.js'), import(SDK + 'firebase-firestore.js')]);
@@ -87,6 +94,7 @@ async function start() {
     fb = { auth: auth.getAuth(a), db: fs.getFirestore(a), doc: fs.doc, getDoc: fs.getDoc, setDoc: fs.setDoc,
       GoogleAuthProvider: auth.GoogleAuthProvider, signInWithPopup: auth.signInWithPopup, signInWithRedirect: auth.signInWithRedirect, signOut: auth.signOut };
     render();
+    loadContent();
     auth.onAuthStateChanged(fb.auth, u => { user = u; ready = false; status = ''; render(); if (u) syncIn(u); });
   } catch (e) { console.warn('Voidlight cloud saves unavailable', e); fb = null; render(); }
 }

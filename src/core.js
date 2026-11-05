@@ -200,6 +200,7 @@ function updateBullet(b, dt) {
     }
   }
   if (b.beam && b.beam.follow) { b.x = P.x; b.y = P.y; }
+  if (b.trail) { b.trail.push(b.x, b.y); if (b.trail.length > 16) b.trail.splice(0, 2); }
   if (b.t >= b.life) { b.dead = true; if (b.onExpire && !b.expired) { b.expired = true; b.onExpire(b); } }
 }
 
@@ -307,6 +308,6 @@ function trigger(name, arg) {
 // ---------- item instance ctx ----------
 function ctxOf(inst) {
   const P = G.player, L = inst.level, E = inst.evo ? 1 : 0;
-  return { L, E, P, x: P.x, y: P.y, d: inst.def.dmg * (1 + 0.3 * (L - 1)) * (E ? 1.8 : 1) * P.might, n: P.amount + E, aim: aimAngle(), face: P.face, col: EFFECTS[inst.def.effect].color, eff: inst.def.effect, inst };
+  return { L, E, P, x: P.x, y: P.y, d: inst.def.dmg * (1 + 0.3 * (L - 1)) * (E ? 1.8 : 1) * P.might, n: P.amount + E, aim: aimAngle(), face: P.face, col: inst.def.color || EFFECTS[inst.def.effect].color, eff: inst.def.effect, inst };
 }
 function itemName(inst) { return inst.evo ? FUSE_PREFIX[inst.def.effect] + ' ' + inst.def.name : inst.def.name; }
