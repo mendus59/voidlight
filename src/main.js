@@ -786,12 +786,24 @@ function renderAchievements() {
 }
 const effNames = ks => ks.map(k => EFFECTS[k].icon + ' ' + EFFECTS[k].name).join(' + ');
 const tierLine = T => (T ? `${tierName(T)}: ×${FUSION[TIER_KEYS[T]].mul} damage, +${T} projectile${T > 1 ? 's' : ''}, ${Math.round(100 * (1 - FUSION[TIER_KEYS[T]].cdMul))}% faster` : '');
+// Mastery badge for a level-up card about a base item: ★ when its fusion mastery is earned, else runs so far.
+// A run in progress that already reached the mastery level counts once it ends.
+function masteryBadge(d, tier) {
+  if (!d || tier) return '';
+  const f = fuseLockOf(d); if (f.runs <= 0) return '';
+  if (fuseUnlocked(SAVE, d)) return `<div class="mast done" title="${d.name} mastery earned: it can fuse">★ Mastered</div>`;
+  const have = runsAt(SAVE, d.id, f.level), now = ((G && G.reached) || {})[d.id] >= f.level;
+  const tip = `${d.name} mastery: reach level ${f.level} with it in ${f.runs} run${f.runs > 1 ? 's' : ''} to unlock fusing it`;
+  if (now && have + 1 >= f.runs) return `<div class="mast soon" title="${tip}">✓ Mastered when this run ends</div>`;
+  const prog = f.runs > 1 ? ` · ${have + (now ? 1 : 0)}/${f.runs} runs` : '';
+  return `<div class="mast" title="${tip}">☆ Not mastered (reach Lv ${f.level}${prog})</div>`;
+}
 function describeChoice(o) {
   if (o.type === 'new') { const d = o.def, effs = effectsOf(d), L = arrivalLevel();
-    return { icon: d.icon, title: d.name, tag: 'NEW' + (L > 1 ? ' · Lv ' + L : ''), slot: d.slot, effs,
+    return { icon: d.icon, title: d.name, tag: 'NEW' + (L > 1 ? ' · Lv ' + L : ''), slot: d.slot, effs, mast: masteryBadge(d, 0),
       text: isPassive(d) ? `Passive: ${statText(d.passive)} per level. No attack; its two effects let it fuse with items of either.` : d.pattern }; }
   if (o.type === 'up') { const i = o.inst, d = i.def, effs = instEffects(i);
-    return { icon: d.icon, title: itemName(i), tag: 'Lv ' + i.level + ' → ' + (i.level + 1), slot: d.slot, effs,
+    return { icon: d.icon, title: itemName(i), tag: 'Lv ' + i.level + ' → ' + (i.level + 1), slot: d.slot, effs, mast: masteryBadge(d, i.tier),
       text: (isPassive(d) && !Object.keys(i.stats).length ? '' : isPassive(d) ? `Now ${statText(instStats(i))}; next level ${statText(i.stats, (i.level + 1) * tierOf(i).statMul)}.` : `+30% damage, faster, more projectiles. Adds to ${EFFECTS[d.effect].name} on every bullet.`) +
         (i.level + 1 === MAX_LEVEL && !i.tier && !fuseUnlocked(SAVE, d) ? ` Fusing it is still locked (${d.name} mastery).` : '') }; }
   if (o.type === 'fuse') { const effs = [...new Set(o.group.flatMap(instEffects))], T = o.tier;
@@ -826,7 +838,7 @@ function renderLevelUp() {
     const c = describeChoice(o); const E = c.effs ? EFFECTS[c.effs[0]] : null;
     const el = document.createElement('button'); el.className = 'card lu' + (c.fuse ? ' fuse' : '') + (c.tier > 1 ? ' t' + c.tier : '') + (luSel === idx ? ' sel' : ''); if (E) el.style.setProperty('--c', E.color);
     const tags = (c.slot ? `<span>${SLOTS[c.slot].icon} ${SLOTS[c.slot].name}</span>` : '') + (c.effs ? c.effs.map(k => `<span style="color:${EFFECTS[k].color}">${EFFECTS[k].icon} ${EFFECTS[k].name}</span>`).join('') : '');
-    el.innerHTML = `<div class="key">${idx + 1}</div><div class="ico">${c.icon}</div><div class="tag">${c.tag}</div><b>${c.title}</b>${tags ? `<div class="tags">${tags}</div>` : ''}<small>${c.text}</small>`;
+    el.innerHTML = `<div class="key">${idx + 1}</div><div class="ico">${c.icon}</div><div class="tag">${c.tag}</div><b>${c.title}</b>${tags ? `<div class="tags">${tags}</div>` : ''}${c.mast || ''}<small>${c.text}</small>`;
     el.onclick = () => selectLevel(idx);
     wrap.appendChild(el);
   });
