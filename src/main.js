@@ -20,10 +20,12 @@ function normalizeSave(s) {
   return out;
 }
 function loadSave() {
+  if (SANDBOX) return; // the admin test canvas never touches the player's save
   try { const raw = localStorage.getItem(SAVE_KEY); if (raw) SAVE = normalizeSave(JSON.parse(raw)); } catch (e) { SAVE = defaultSave(); }
 }
 // Every change goes through here: localStorage first, then the cloud hook (src/cloud.js) when signed in.
 function writeSave() {
+  if (SANDBOX) return;
   SAVE.updatedAt = Date.now();
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(SAVE)); } catch (e) { /* storage unavailable */ }
   if (window.VOIDLIGHT_CLOUD) try { window.VOIDLIGHT_CLOUD.saved(SAVE); } catch (e) { /* cloud is best effort */ }
@@ -49,39 +51,27 @@ function replaceSave(s, { persist = true } = {}) {
   checkUnlocks();
   if (!G && ['menu', 'chars', 'forge', 'codex'].includes(currentScreen)) showScreen(currentScreen);
 }
+const SANDBOX = !!window.VOIDLIGHT_SANDBOX;
 const itemUnlocked = d => !d.lock || SAVE.unlockedItems.includes(d.id);
+// Achievement locks are data: { stat, min, text } unlocks once SAVE.stats[stat] >= min. Gold locks are { cost }.
+const lockMet = (lock, stats) => !!(lock && lock.stat && (stats[lock.stat] || 0) >= lock.min);
 const charUnlocked = c => !c.lock || SAVE.unlockedChars.includes(c.id);
 function checkUnlocks() {
   const fresh = [];
-  for (const d of ITEMS) if (d.lock && d.lock.cond && !SAVE.unlockedItems.includes(d.id) && d.lock.cond(SAVE.stats)) { SAVE.unlockedItems.push(d.id); fresh.push(d.icon + ' ' + d.name); }
-  for (const c of CHARACTERS) if (c.lock && c.lock.cond && !SAVE.unlockedChars.includes(c.id) && c.lock.cond(SAVE.stats)) { SAVE.unlockedChars.push(c.id); fresh.push('🧍 ' + c.name + ' (character)'); }
+  for (const d of ITEMS) if (lockMet(d.lock, SAVE.stats) && !SAVE.unlockedItems.includes(d.id)) { SAVE.unlockedItems.push(d.id); fresh.push(d.icon + ' ' + d.name); }
+  for (const c of CHARACTERS) if (lockMet(c.lock, SAVE.stats) && !SAVE.unlockedChars.includes(c.id)) { SAVE.unlockedChars.push(c.id); fresh.push('🧍 ' + c.name + ' (character)'); }
   if (fresh.length) writeSave();
   return fresh;
 }
 
 // ---------------- enemies ----------------
-const ENEMY_TYPES = {
-  drone:   { name: 'Drone',     hp: 12, spd: 70,  r: 12, dmg: 8,  xp: 1, color: '#a55cff', shape: 'circle' },
-  swarm:   { name: 'Swarmling', hp: 5,  spd: 100, r: 7,  dmg: 5,  xp: 1, color: '#ff9e4c', shape: 'circle' },
-  darter:  { name: 'Darter',    hp: 9,  spd: 140, r: 9,  dmg: 6,  xp: 1, color: '#ff4c8b', shape: 'tri' },
-  spitter: { name: 'Spitter',   hp: 22, spd: 60,  r: 13, dmg: 8,  xp: 2, color: '#4cffd2', shape: 'diamond', ranged: { range: 280, cd: 2.4, pat: 'aim' } },
-  brute:   { name: 'Brute',     hp: 80, spd: 45,  r: 22, dmg: 15, xp: 5, color: '#7d5cff', shape: 'square', mass: 4 },
-  bomber:  { name: 'Bomber',    hp: 26, spd: 72,  r: 14, dmg: 10, xp: 3, color: '#ffd24c', shape: 'hex', deathRing: 8 },
-  warlock: { name: 'Warlock',   hp: 45, spd: 52,  r: 15, dmg: 10, xp: 5, color: '#4c9bff', shape: 'star', ranged: { range: 320, cd: 3, pat: 'spread' } },
-  wraith:  { name: 'Wraith',    hp: 55, spd: 115, r: 13, dmg: 12, xp: 4, color: '#d0d6ff', shape: 'tri' },
-};
-const BOSSES = {
-  matriarch: { name: 'Hollow Matriarch', hp: 1800,  spd: 55, r: 46, dmg: 20, xp: 80,  color: '#ff4cc3', shape: 'hex' },
-  seraph:    { name: 'Clockwork Seraph', hp: 5500,  spd: 62, r: 44, dmg: 25, xp: 160, color: '#ffd24c', shape: 'star' },
-  eclipse:   { name: 'The Eclipse',      hp: 14000, spd: 50, r: 58, dmg: 30, xp: 300, color: '#ff3b5c', shape: 'circle' },
-};
 const SPAWN_TABLE = [['drone', 0, 10], ['swarm', 0, 4], ['darter', 60, 5], ['spitter', 120, 3], ['brute', 210, 3], ['bomber', 270, 3], ['warlock', 390, 2], ['wraith', 480, 4]];
 const RUN_LENGTH = 900;
 const BOSS_TIMES = [[300, 'matriarch'], [600, 'seraph'], [900, 'eclipse']];
 const hpMul = t => 1 + (t / 60) * 0.3 + Math.pow(t / 60, 2) * 0.04;
 
 function spawnEnemy(type, x, y, o = {}) {
-  const T = ENEMY_TYPES[type] || BOSSES[type];
+  const T = ENEMY_TYPES[type] || BOSSES[type] || SANDBOX_TYPES[type];
   const m = o.boss ? 1 : hpMul(G.time) * (o.elite ? 8 : 1);
   const e = { id: G.nextId++, type, T, x, y, r: T.r * (o.elite ? 1.6 : 1), hp: T.hp * m, maxHp: T.hp * m, spd: T.spd * (o.elite ? 0.9 : 1) * (1 + Math.min(0.35, G.time / 2400)),
     dmg: T.dmg * (1 + G.time / 900), xp: T.xp * (o.elite ? 10 : 1), color: T.color, mass: T.mass || (o.boss ? 50 : o.elite ? 6 : 1), elite: !!o.elite, boss: !!o.boss,
@@ -171,12 +161,14 @@ function updateEnemies(dt) {
 function killEnemy(e) {
   if (e.dead) return; e.dead = true; G.kills++;
   const P = G.player;
-  dropGem(e.x, e.y, e.xp);
-  if (Math.random() < 0.035 * (1 + P.luck * 2)) drop('coin', e.x + rand(-8, 8), e.y + rand(-8, 8), randi(1, 3));
-  if (Math.random() < 0.0015 * (1 + P.luck)) drop('heart', e.x, e.y, 25);
-  if (Math.random() < 0.0008) drop('magnet', e.x, e.y, 0);
-  if (e.elite) { drop('chest', e.x, e.y, 1); for (let k = 0; k < 6; k++) drop('coin', e.x + rand(-30, 30), e.y + rand(-30, 30), 3); }
-  if (e.boss) { G.stats.bossKills++; drop('chest', e.x, e.y, 3); for (let k = 0; k < 15; k++) drop('coin', e.x + rand(-60, 60), e.y + rand(-60, 60), 5); fxRing(e.x, e.y, 200, e.color, 0.8, 8); banner(e.T.name + ' defeated!', '#6bff8f', 2.5);
+  if (G.sandbox) { fxSpark(e.x, e.y, e.color, 4, 110); trigger('kill', e); return; } // admin test canvas: no drops or rewards
+  const D = DROPS;
+  dropGem(e.x, e.y, e.xp * D.gem.value);
+  if (Math.random() < D.coin.chance * (1 + P.luck * 2)) drop('coin', e.x + rand(-8, 8), e.y + rand(-8, 8), randi(D.coin.min, D.coin.max));
+  if (Math.random() < D.heart.chance * (1 + P.luck)) drop('heart', e.x, e.y, D.heart.value);
+  if (Math.random() < D.magnet.chance) drop('magnet', e.x, e.y, 0);
+  if (e.elite) { drop('chest', e.x, e.y, D.chest.elite); for (let k = 0; k < 6; k++) drop('coin', e.x + rand(-30, 30), e.y + rand(-30, 30), 3); }
+  if (e.boss) { G.stats.bossKills++; drop('chest', e.x, e.y, D.chest.boss); for (let k = 0; k < 15; k++) drop('coin', e.x + rand(-60, 60), e.y + rand(-60, 60), 5); fxRing(e.x, e.y, 200, e.color, 0.8, 8); banner(e.T.name + ' defeated!', '#6bff8f', 2.5);
     if (e.type === 'eclipse') later(1.5, () => endRun(true)); }
   if (e.T.deathRing) for (let k = 0; k < e.T.deathRing; k++) ebullet(e.x, e.y, k * TAU / e.T.deathRing + rand(0, 0.3), 130, 6, 8, '#ffd24c');
   if (e.burnT > 0 && e.poisonT > 0) { fxText(e.x, e.y - 14, 'COMBUST', '#ffb86b', 12); later(0, () => strike(e.x, e.y, 55, 8 + e.maxHp * 0.15, 'burn', { color: '#ffb86b' })); }
@@ -213,7 +205,7 @@ function xpFor(l) { return Math.floor(5 + (l - 1) * 5 + Math.pow(l - 1, 1.75)); 
 function gainXp(v) { G.xp += v; while (G.xp >= G.xpNext) { G.xp -= G.xpNext; G.level++; G.xpNext = xpFor(G.level); G.pendingLevels++; } }
 
 // ---------------- inventory ----------------
-function available(def) { return itemUnlocked(def) || def.id === G.char.weapon; }
+function available(def) { return !def.disabled && (itemUnlocked(def) || def.id === G.char.weapon); }
 function slotCount(slot) { return G.inv.filter(i => i.def.slot === slot).length; }
 function recomputePool() { const p = {}; for (const k of EFFECT_KEYS) p[k] = 0; for (const i of G.inv) p[i.def.effect] += i.level * (i.evo ? 2 : 1); G.pool = p; }
 function rebuild(inst) {
@@ -285,6 +277,7 @@ function updatePlayer(dt) {
   if (keys.KeyW || keys.ArrowUp) my -= 1; if (keys.KeyS || keys.ArrowDown) my += 1;
   if (keys.KeyA || keys.ArrowLeft) mx -= 1; if (keys.KeyD || keys.ArrowRight) mx += 1;
   if (touch.active) { const dx = touch.x - touch.ox, dy = touch.y - touch.oy, l = Math.hypot(dx, dy); if (l > 8) { mx = dx / Math.max(l, 50); my = dy / Math.max(l, 50); } }
+  if (G.sandbox && SB.move && !mx && !my) { const a = G.time * 1.4 + Math.PI / 2; mx = Math.cos(a); my = Math.sin(a); } // test canvas: walk in a circle
   const l = Math.hypot(mx, my);
   P.moving = l > 0.05;
   if (P.moving) { if (l > 1) { mx /= l; my /= l; } P.moveAng = Math.atan2(my, mx); P.face = P.moveAng; P.stillT = 0; } else P.stillT += dt;
@@ -299,7 +292,7 @@ function updatePlayer(dt) {
 }
 function dash() { const P = G.player; if (!G || P.dashCd > 0 || G.paused) return; P.dashT = 0.16; P.dashCd = 1.1; P.dashA = P.moving ? P.moveAng : P.face; P.inv = Math.max(P.inv, 0.3); }
 function hurtPlayer(dmg) {
-  const P = G.player; if (P.inv > 0 || G.over) return;
+  const P = G.player; if (P.inv > 0 || G.over || G.sandbox) return;
   dmg = Math.max(1, dmg - P.armor); P.hp -= dmg; P.inv = 0.7; P.hurtFlash = 0.2; G.shake = 6;
   fxText(P.x, P.y - 18, '-' + Math.round(dmg), '#ff3b5c', 14);
   trigger('hurt', dmg);
@@ -320,15 +313,20 @@ function updateEBullets(dt) {
 
 // ---------------- run lifecycle ----------------
 function newRun(charId) {
+  if (window.VOIDLIGHT_CONTENT) VOIDLIGHT_CONTENT.applyPending(); // content published while a run was going
   const ch = CHARACTERS.find(c => c.id === charId) || CHARACTERS[0];
   SAVE.lastChar = ch.id; writeSave();
-  G = { time: 0, char: ch, player: null, cam: { x: 0, y: 0 }, enemies: [], bullets: [], ebullets: [], fx: [], texts: [], pickups: [], deploys: [], sched: [], inv: [], pool: {},
-    kills: 0, level: 1, xp: 0, xpNext: xpFor(1), gold: 0, pendingLevels: 0, paused: false, over: false, nextId: 1, spawnAcc: 0, nextRing: 90, nextElite: 60, bossSpawned: {},
-    stats: { evolves: 0, bossKills: 0, crits: 0, healed: 0, damage: 0 }, settings: SAVE.settings, banners: [], shake: 0 };
-  G.player = buildPlayer(ch);
-  recomputePool();
+  freshRun(ch);
   addItem(ITEM[ch.weapon]);
   showScreen(null);
+}
+function freshRun(ch) {
+  const g = { time: 0, char: ch, player: null, cam: { x: 0, y: 0 }, enemies: [], bullets: [], ebullets: [], fx: [], texts: [], pickups: [], deploys: [], sched: [], inv: [], pool: {},
+    kills: 0, level: 1, xp: 0, xpNext: xpFor(1), gold: 0, pendingLevels: 0, paused: false, over: false, nextId: 1, spawnAcc: 0, nextRing: 90, nextElite: 60, bossSpawned: {},
+    stats: { evolves: 0, bossKills: 0, crits: 0, healed: 0, damage: 0 }, settings: SAVE.settings, banners: [], shake: 0 };
+  g.player = buildPlayer(ch);
+  G = g; recomputePool();
+  return g;
 }
 function update(dt) {
   G.time += dt;
@@ -336,7 +334,7 @@ function update(dt) {
   if (G.sched.length) { const due = G.sched.filter(s => s.t <= G.time); if (due.length) { G.sched = G.sched.filter(s => s.t > G.time); for (const s of due) s.fn(); } }
   updatePlayer(dt);
   G.cam.x = G.player.x; G.cam.y = G.player.y;
-  director(dt);
+  if (G.sandbox) sandboxTick(dt); else director(dt);
   gridBuild();
   // items
   for (const inst of G.inv) {
@@ -400,6 +398,11 @@ function drawBullet(b, x, y) {
   if (b.orbit) ang = b.orbit.a + Math.PI / 2 * Math.sign(b.orbit.w);
   if (b.lob) { const h = Math.sin(Math.PI * clamp(b.t / b.life, 0, 1)) * b.lob; ctx.fillStyle = 'rgba(0,0,0,0.4)'; circle(x, y, b.r); y -= h; }
   const r = b.r;
+  if (b.trail && b.trail.length > 2) { // optional fading trail (item vis.trail)
+    const dx = x - b.x, dy = y - b.y, n = b.trail.length / 2; ctx.fillStyle = col;
+    for (let k = 0; k < n; k++) { ctx.globalAlpha = 0.35 * (k + 1) / n; circle(b.trail[k * 2] + dx, b.trail[k * 2 + 1] + dy, r * (0.35 + 0.55 * (k + 1) / n)); }
+    ctx.globalAlpha = 1;
+  }
   switch (b.shape) {
     case 'aura': { ctx.fillStyle = col; ctx.globalAlpha = 0.09; circle(x, y, r); ctx.globalAlpha = 0.45; ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.stroke();
       ctx.globalAlpha = 0.8; for (let k = 0; k < 6; k++) { const a = G.time * 0.8 + k * TAU / 6; circle(x + Math.cos(a) * r * 0.85, y + Math.sin(a) * r * 0.85, 2.5); } ctx.globalAlpha = 1; break; }
@@ -511,6 +514,7 @@ function render() {
 function fmtTime(t) { t = Math.floor(t); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); }
 function drawHUD() {
   const W = VIEW.w, H = VIEW.h, P = G.player; const small = W < 640;
+  if (G.sandbox) { drawSandboxHUD(); return; }
   // xp bar
   ctx.fillStyle = 'rgba(20,16,40,0.9)'; ctx.fillRect(0, 0, W, 10); ctx.fillStyle = '#5ab8ff'; ctx.fillRect(0, 0, W * clamp(G.xp / G.xpNext, 0, 1), 10);
   ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.font = 'bold 14px system-ui,sans-serif'; ctx.fillStyle = '#fff';
@@ -560,7 +564,7 @@ function showScreen(id) {
 function goldPill() { return `<span class="gold">● ${Math.floor(SAVE.gold)}</span>`; }
 function renderMenu() {
   const s = SAVE.stats;
-  $('#menu .stats').innerHTML = `${goldPill()} &nbsp; Best ${fmtTime(s.bestTime)} · ${s.totalKills} kills · ${s.wins} wins · ${SAVE.unlockedItems.length + ITEMS.filter(d => !d.lock).length}/55 items · ${CHARACTERS.filter(charUnlocked).length}/11 heroes`;
+  $('#menu .stats').innerHTML = `${goldPill()} &nbsp; Best ${fmtTime(s.bestTime)} · ${s.totalKills} kills · ${s.wins} wins · ${ITEMS.filter(d => !d.disabled && itemUnlocked(d)).length}/${ITEMS.filter(d => !d.disabled).length} items · ${CHARACTERS.filter(charUnlocked).length}/${CHARACTERS.length} heroes`;
 }
 let selectedChar = null;
 function renderChars() {
@@ -597,10 +601,10 @@ function renderForge() {
 let codexFilter = 'all';
 function renderCodex() {
   const tabs = $('#codexTabs'); tabs.innerHTML = '';
-  for (const k of ['all', ...SLOT_KEYS]) { const b = document.createElement('button'); b.className = 'tab' + (codexFilter === k ? ' sel' : ''); b.textContent = k === 'all' ? 'All 55' : SLOTS[k].icon + ' ' + SLOTS[k].name; b.onclick = () => { codexFilter = k; renderCodex(); }; tabs.appendChild(b); }
+  for (const k of ['all', ...SLOT_KEYS]) { const b = document.createElement('button'); b.className = 'tab' + (codexFilter === k ? ' sel' : ''); b.textContent = k === 'all' ? 'All ' + ITEMS.filter(d => !d.disabled).length : SLOTS[k].icon + ' ' + SLOTS[k].name; b.onclick = () => { codexFilter = k; renderCodex(); }; tabs.appendChild(b); }
   const wrap = $('#codexGrid'); wrap.innerHTML = '';
   for (const d of ITEMS) {
-    if (codexFilter !== 'all' && d.slot !== codexFilter) continue;
+    if (d.disabled || (codexFilter !== 'all' && d.slot !== codexFilter)) continue;
     const un = itemUnlocked(d), E = EFFECTS[d.effect];
     const el = document.createElement('div'); el.className = 'card item' + (un ? '' : ' locked'); el.style.setProperty('--c', E.color);
     let lockHtml = '';
@@ -645,7 +649,7 @@ function showGameOver(won, earned, bonus, fresh) {
   showScreen('gameover');
 }
 function togglePause() {
-  if (!G || G.over || currentScreen === 'levelup') return;
+  if (!G || G.sandbox || G.over || currentScreen === 'levelup') return;
   if (G.paused) { G.paused = false; showScreen(null); }
   else { G.paused = true; renderPause(); showScreen('pause'); }
 }
@@ -666,7 +670,7 @@ window.addEventListener('keydown', e => {
   if ((e.code === 'Space' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') && !G.paused) dash();
 });
 window.addEventListener('keyup', e => { keys[e.code] = false; });
-window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; if (G && !G.paused && !G.over) togglePause(); });
+window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; if (G && !G.sandbox && !G.paused && !G.over) togglePause(); });
 canvas.addEventListener('touchstart', e => { if (!G || G.paused) return; e.preventDefault(); const t = e.changedTouches[0]; if (touch.active) { dash(); return; } touch.active = true; touch.id = t.identifier; touch.ox = touch.x = t.clientX; touch.oy = touch.y = t.clientY; }, { passive: false });
 canvas.addEventListener('touchmove', e => { e.preventDefault(); for (const t of e.changedTouches) if (t.identifier === touch.id) { touch.x = t.clientX; touch.y = t.clientY; } }, { passive: false });
 canvas.addEventListener('touchend', e => { for (const t of e.changedTouches) if (t.identifier === touch.id) touch.active = false; });
@@ -690,6 +694,76 @@ $('#btnReset').onclick = () => {
   resetArmed = Date.now(); b.textContent = 'Click again to erase all progress'; setTimeout(() => { if (resetArmed && Date.now() - resetArmed >= 4000) b.textContent = 'Reset save'; }, 4100);
 };
 
+// ---------------- admin test canvas (index.html?sandbox) ----------------
+// admin.html embeds the game in an iframe in this mode to preview one item against training targets.
+// Nothing is saved, nothing drops, the player cannot be hurt. The admin page drives it with postMessage.
+const SB = { item: ITEMS[0].id, level: 1, evo: false, layout: 'ring', tough: true, move: false };
+const SANDBOX_TYPES = {
+  target: { name: 'Target', hp: 60, spd: 0, r: 13, dmg: 0, xp: 0, color: '#77729a', shape: 'circle', mass: 3 },
+  walker: { name: 'Walker', hp: 60, spd: 55, r: 12, dmg: 0, xp: 0, color: '#8a6fd0', shape: 'tri' },
+};
+function sandboxSlots() {
+  const out = [];
+  if (SB.layout === 'ring') for (let k = 0; k < 10; k++) out.push({ x: Math.cos(k * TAU / 10) * 190, y: Math.sin(k * TAU / 10) * 190 });
+  else if (SB.layout === 'line') for (let k = 0; k < 7; k++) out.push({ x: 110 + k * 50, y: 0 });
+  else if (SB.layout === 'scatter') for (let k = 0; k < 14; k++) { const a = k * 2.399, r = 110 + ((k * 73) % 270); out.push({ x: Math.cos(a) * r, y: Math.sin(a) * r }); }
+  else if (SB.layout === 'swarm') for (let k = 0; k < 16; k++) out.push({ x: Math.cos(k * TAU / 16) * 380, y: Math.sin(k * TAU / 16) * 380, walk: true });
+  return out;
+}
+function sandboxStart() {
+  const def = ITEM[SB.item] || ITEMS[0];
+  const ch = Object.assign({}, CHARACTERS.find(c => c.weapon === def.id) || CHARACTERS[0], { mods: {} }); // neutral stats
+  freshRun(ch);
+  Object.assign(G, { sandbox: true, seen: new Set(), sbTargets: [], sbWait: [], sbLog: [], sbDps: 0, sbPost: 0 });
+  const inst = addItem(def); inst.level = clamp(SB.level | 0, 1, MAX_LEVEL); inst.evo = !!SB.evo; recomputePool(); rebuild(inst);
+  showScreen(null);
+}
+function sandboxTick(dt) {
+  const slots = sandboxSlots();
+  for (let k = 0; k < slots.length; k++) {
+    const s = slots[k], e = G.sbTargets[k];
+    if (e && !e.dead) { if (!s.walk) { const f = Math.min(1, dt * 1.5); e.x = lerp(e.x, s.x, f); e.y = lerp(e.y, s.y, f); } continue; }
+    if (e) { G.sbTargets[k] = null; G.sbWait[k] = 0.8; continue; }
+    if ((G.sbWait[k] = (G.sbWait[k] || 0) - dt) > 0) continue;
+    const n = spawnEnemy(s.walk ? 'walker' : 'target', s.x, s.y);
+    if (SB.tough) n.hp = n.maxHp = 1e9;
+    G.sbTargets[k] = n;
+  }
+  // rolling 5 s damage per second, and the bullet shapes this item uses, reported to the admin page
+  G.sbPost -= dt; if (G.sbPost > 0) return; G.sbPost = 0.5;
+  G.sbLog.push([G.time, G.stats.damage]); while (G.sbLog.length > 11) G.sbLog.shift();
+  const [t0, d0] = G.sbLog[0]; G.sbDps = G.time > t0 ? (G.stats.damage - d0) / (G.time - t0) : 0;
+  if (window.parent !== window) window.parent.postMessage({ vl: 'sandbox-stats', dps: G.sbDps, shapes: [...G.seen], bullets: G.bullets.length }, location.origin);
+}
+function sandboxTrigger(name) {
+  const live = G.enemies.filter(e => !e.dead && !e.boss), P = G.player;
+  if (name === 'kill') { const e = pick(live); if (e) killEnemy(e); }
+  else if (name === 'crit') { const e = pick(live); if (e) trigger('crit', e); }
+  else if (name === 'hurt') { fxText(P.x, P.y - 18, '-10', '#ff3b5c', 14); P.hurtFlash = 0.2; G.shake = 4; trigger('hurt', 10); }
+  else if (name === 'levelup' || name === 'pickup') trigger(name, { x: P.x, y: P.y });
+}
+function drawSandboxHUD() {
+  const inst = G.inv[0]; if (!inst) return;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.font = 'bold 13px system-ui,sans-serif'; ctx.fillStyle = '#fff';
+  ctx.fillText(`${inst.def.icon} ${itemName(inst)} · Lv ${inst.level}`, 10, 10);
+  ctx.font = '12px system-ui,sans-serif'; ctx.fillStyle = '#9a93c0';
+  ctx.fillText(`${Math.round(G.sbDps)} dmg/s · ${G.bullets.length} bullets`, 10, 28);
+}
+function sandboxBoot() {
+  SAVE = defaultSave(); G = null;
+  window.addEventListener('message', e => {
+    const m = e.data; if (e.origin !== location.origin || !m || m.vl !== 'sandbox') return;
+    if (m.overrides && window.VOIDLIGHT_CONTENT) { VOIDLIGHT_CONTENT.apply(m.overrides); if (G) for (const i of G.inv) rebuild(i); }
+    let restart = !!m.restart || !G;
+    if (m.config) { for (const k of ['item', 'level', 'evo', 'layout', 'tough']) if (k in m.config && m.config[k] !== SB[k]) restart = true; Object.assign(SB, m.config); }
+    if ('numbers' in m) SAVE.settings.numbers = !!m.numbers;
+    if (restart) sandboxStart();
+    if (m.trigger && G) sandboxTrigger(m.trigger);
+  });
+  sandboxStart();
+  if (window.parent !== window) window.parent.postMessage({ vl: 'sandbox-ready' }, location.origin);
+}
+
 // ---------------- main loop ----------------
 let last = performance.now();
 function frame(now) {
@@ -698,7 +772,9 @@ function frame(now) {
   render();
   requestAnimationFrame(frame);
 }
-loadSave(); checkUnlocks(); showScreen('menu'); requestAnimationFrame(frame);
+if (window.VOIDLIGHT_CONTENT) VOIDLIGHT_CONTENT.applyCached(); // last published admin content, before unlocks are checked
+if (SANDBOX) sandboxBoot(); else { loadSave(); checkUnlocks(); showScreen('menu'); }
+requestAnimationFrame(frame);
 
 // debug hooks for testing
-window.VOIDLIGHT = { get G() { return G; }, SAVE: () => SAVE, ITEMS, defaultSave, normalizeSave, mergeSaves, replaceSave, toast, addItem: id => addItem(ITEM[id]), update, newRun, levelItem, fuseItem };
+window.VOIDLIGHT = { get G() { return G; }, refresh() { checkUnlocks(); if (!G && ['menu', 'chars', 'forge', 'codex'].includes(currentScreen)) showScreen(currentScreen); }, SAVE: () => SAVE, ITEMS, defaultSave, normalizeSave, mergeSaves, replaceSave, toast, addItem: id => addItem(ITEM[id]), update, newRun, levelItem, fuseItem };

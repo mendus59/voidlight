@@ -1,13 +1,27 @@
 'use strict';
-// ===== VOIDLIGHT content: 55 items, 11 characters, meta upgrades =====
+// ===== VOIDLIGHT content: 55 items, 11 characters, enemies, pickups, meta upgrades =====
+// admin.html edits this content and can export a new copy of this file. For that to work, keep each
+// def(...)'s plain-data properties (dmg, cd, lock, color, vis, disabled, pattern, trig) on its first line,
+// and each character, upgrade, enemy, boss and pickup on a single line.
 const ITEMS = [];
 const ITEM = {};
 function def(slot, id, name, effect, icon, props) {
   const d = Object.assign({ slot, id, name, effect, icon, dmg: 8, cd: 0 }, props);
   ITEMS.push(d); ITEM[id] = d; return d;
 }
-// fire a bullet owned by an item, inheriting its effect/color/damage
-function B(c, o) { return shoot(Object.assign({ owner: c.inst, effect: c.eff, color: c.col, dmg: c.d, x: G.player.x, y: G.player.y }, o)); }
+// fire a bullet owned by an item, inheriting its effect/color/damage and the item's visual style (vis, set from the admin page)
+function B(c, o) {
+  const b = Object.assign({ owner: c.inst, effect: c.eff, color: c.col, dmg: c.d, x: G.player.x, y: G.player.y }, o);
+  const shape = b.shape || 'orb', v = c.inst.def.vis;
+  if (G.seen) G.seen.add(shape);
+  if (v) {
+    if (v.shapes && v.shapes[shape] && !b.beam) b.shape = v.shapes[shape];
+    if (v.size) { b.r = (b.r || 5) * v.size; if (b.beam) b.beam.w *= v.size; }
+    if (v.speed && b.spd) { b.spd *= v.speed; if (b.maxSpd) b.maxSpd *= v.speed; }
+    if (v.trail && !b.beam && !b.follow) b.trail = [];
+  }
+  return shoot(b);
+}
 function lob(c, tx, ty, o) {
   const P = G.player; const T = o.T || 0.6;
   const b = B(c, Object.assign({ x: P.x, y: P.y, noMods: true, lob: 70, shape: 'orb', r: 7 }, o)); if (!b) return null;
@@ -43,7 +57,7 @@ def('weapon', 'scrap_blaster', 'Scrap Blaster', 'knockback', '💥', { dmg: 6, c
   fire(i, c) { const n = 6 + 2 * c.L + c.n * 2; for (let k = 0; k < n; k++) B(c, { ang: c.aim + rand(-0.45, 0.45), spd: rand(380, 560), drag: 2.5, r: 4, life: 0.6, kb: 14, shape: 'pellet' }); } });
 def('weapon', 'helix_cannon', 'Helix Cannon', 'crit', '🧬', { dmg: 9, cd: 0.9, pattern: 'Twin bullets braided into a double helix.',
   fire(i, c) { const p = 1 + (c.L >= 3 ? 1 : 0) + c.n; for (let k = 0; k < p; k++) { const a = c.aim + (k - (p - 1) / 2) * 0.25; B(c, { ang: a, spd: 420, r: 5, life: 1.3, wave: { a: 18, f: 11, ph: 0 } }); B(c, { ang: a, spd: 420, r: 5, life: 1.3, wave: { a: 18, f: 11, ph: Math.PI } }); } } });
-def('weapon', 'splitter_orb', 'Splitter Orb', 'split', '🔷', { dmg: 16, cd: 1.7, lock: { cond: s => s.totalKills >= 500, text: 'Defeat 500 enemies (lifetime)' }, pattern: 'Heavy orb that shatters into a radial burst.',
+def('weapon', 'splitter_orb', 'Splitter Orb', 'split', '🔷', { dmg: 16, cd: 1.7, lock: { stat: 'totalKills', min: 500, text: 'Defeat 500 enemies (lifetime)' }, pattern: 'Heavy orb that shatters into a radial burst.',
   fire(i, c) { const n = 1 + c.n; for (let k = 0; k < n; k++) B(c, { ang: c.aim + (k - (n - 1) / 2) * 0.3, spd: 230, r: 11, life: 1.2, shape: 'orb',
     onExpire: b => { const m = 5 + c.L; for (let j = 0; j < m; j++) B(c, { x: b.x, y: b.y, ang: j * TAU / m + rand(0, 0.3), spd: 320, r: 4, life: 0.55, dmg: c.d * 0.45, shape: 'shard',
       onExpire: (c.L >= 5 || c.E) ? bb => { for (let q = -1; q <= 1; q += 2) B(c, { x: bb.x, y: bb.y, ang: Math.atan2(bb.vy, bb.vx) + q * 0.6, spd: 280, r: 3, life: 0.35, dmg: c.d * 0.25, shape: 'shard', noMods: true }); } : null }); } }); } });
@@ -65,7 +79,7 @@ def('spell', 'plague_cloud', 'Plague Cloud', 'poison', '☁️', { dmg: 4, cd: 3
     deploy({ x: t.x, y: t.y, life: 4, r: R, kind: 'cloud', color: c.col, update(d, dt) { d.tick -= dt; if (d.tick <= 0) { d.tick = 0.4; strike(d.x, d.y, d.r, c.d, 'poison', { noFx: true, raw: true, owner: i }); } } }); } } });
 def('spell', 'prism_shard', 'Prism Shard', 'bounce', '🔺', { dmg: 9, cd: 2.2, pattern: 'Rainbow shards that ricochet enemy-to-enemy.',
   fire(i, c) { const m = 1 + Math.floor(c.L / 2) + c.n; for (let k = 0; k < m; k++) B(c, { ang: c.aim + rand(-0.5, 0.5), spd: 520, r: 5, life: 2, bounces: 4 + c.L, shape: 'prism', rainbow: true }); } });
-def('spell', 'star_fall', 'Star Fall', 'homing', '🌠', { dmg: 11, cd: 2.5, lock: { cond: s => s.bestTime >= 180, text: 'Survive 3:00' }, pattern: 'Stars summoned above you that dive onto targets.',
+def('spell', 'star_fall', 'Star Fall', 'homing', '🌠', { dmg: 11, cd: 2.5, lock: { stat: 'bestTime', min: 180, text: 'Survive 3:00' }, pattern: 'Stars summoned above you that dive onto targets.',
   fire(i, c) { const m = 4 + c.L + c.n; for (let k = 0; k < m; k++) later(k * 0.07, () => { const P = G.player; B(c, { x: P.x + rand(-140, 140), y: P.y - rand(220, 300), ang: Math.PI / 2 + rand(-0.3, 0.3), spd: 300, home: 6, r: 6, life: 2, shape: 'star' }); }); } });
 def('spell', 'spiral_sigil', 'Spiral Sigil', 'pierce', '🌀', { dmg: 7, cd: 4, pattern: 'Multi-arm rotating spiral stream.',
   fire(i, c) { const arms = 2 + Math.floor(c.L / 2) + c.n, base = rand(0, TAU); for (let s = 0; s < 25; s++) later(s * 0.06, () => { for (let a = 0; a < arms; a++) B(c, { ang: base + s * 0.32 + a * TAU / arms, spd: 300, r: 4.5, life: 1.2, pierce: 2, shape: 'shard' }); }); } });
@@ -81,7 +95,7 @@ def('spell', 'fractal_bloom', 'Fractal Bloom', 'split', '🌸', { dmg: 8, cd: 3,
     const petal = (x, y, ang, depth, dmg) => B(c, { x, y, ang, spd: 260 - depth * 40, r: 6 - depth * 1.5, life: 0.7, curve: 1.4 * (depth % 2 ? -1 : 1), dmg, shape: 'petal', noMods: depth > 0,
       onExpire: depth < maxD ? b => { for (let j = 0; j < 3; j++) petal(b.x, b.y, Math.atan2(b.vy, b.vx) + (j - 1) * 0.7, depth + 1, dmg * 0.6); } : null });
     const m = 5 + c.n, a0 = rand(0, TAU); for (let k = 0; k < m; k++) petal(c.x, c.y, a0 + k * TAU / m, 0, c.d); } });
-def('spell', 'soul_leech', 'Soul Leech', 'vampiric', '💀', { dmg: 9, cd: 3.5, lock: { cond: s => s.totalKills >= 3000, text: 'Defeat 3000 enemies (lifetime)' }, pattern: 'Ring of skulls that fly out and return to heal you.',
+def('spell', 'soul_leech', 'Soul Leech', 'vampiric', '💀', { dmg: 9, cd: 3.5, lock: { stat: 'totalKills', min: 3000, text: 'Defeat 3000 enemies (lifetime)' }, pattern: 'Ring of skulls that fly out and return to heal you.',
   fire(i, c) { const m = 8 + c.L + c.n; for (let k = 0; k < m; k++) B(c, { ang: k * TAU / m, spd: 300, r: 6, life: 1.4, boomer: true, pierce: 999, shape: 'skull',
     onHit: b => { b.scored = true; }, onReturn: b => { if (b.scored) heal(0.4 + 0.1 * c.L); } }); } });
 
@@ -101,7 +115,7 @@ def('orbit', 'pinball_wisp', 'Pinball Wisp', 'bounce', '✨', { dmg: 9, pattern:
 def('orbit', 'owl_familiar', 'Owl Familiar', 'homing', '🦉', { dmg: 7, pattern: 'Owl perched behind you firing homing feathers.',
   spawn(i, c) { deploy({ owner: i, persist: true, life: Infinity, kind: 'pet', icon: '🦉', color: c.col, cdT: 0.5, update(d, dt) { const P = G.player; petFollow(d, dt, P.x - Math.cos(P.face) * 40, P.y - Math.sin(P.face) * 40 - 12, 5);
     d.cdT -= dt; if (d.cdT <= 0) { d.cdT = cdFor(i, 1.3); const cc = ctxOf(i); const n = 2 + Math.floor(cc.L / 2) + cc.n; for (let k = 0; k < n; k++) B(cc, { x: d.x, y: d.y, ang: cc.aim + rand(-0.8, 0.8), spd: 340, home: 5, r: 4, life: 1.8, shape: 'feather' }); } } }); } });
-def('orbit', 'blade_wheel', 'Blade Wheel', 'pierce', '⚙️', { dmg: 10, lock: { cond: s => s.totalKills >= 2000, text: 'Defeat 2000 enemies (lifetime)' }, pattern: 'Large blades on a wide elliptical orbit.',
+def('orbit', 'blade_wheel', 'Blade Wheel', 'pierce', '⚙️', { dmg: 10, lock: { stat: 'totalKills', min: 2000, text: 'Defeat 2000 enemies (lifetime)' }, pattern: 'Large blades on a wide elliptical orbit.',
   spawn(i, c) { const m = 2 + Math.floor(c.L / 2) + c.n; for (let k = 0; k < m; k++) B(c, Object.assign(persistBase(), { orbit: { r: 135, ry: 0.65, w: 1.9, a: k * TAU / m }, r: 12, hitCd: 0.35, shape: 'blade' })); } });
 def('orbit', 'guardian_shield', 'Guardian Shield', 'knockback', '🛡️', { dmg: 5, pattern: 'Close shield plates that shove enemies away.',
   spawn(i, c) { const m = 2 + Math.floor(c.L / 2) + c.n; for (let k = 0; k < m; k++) B(c, Object.assign(persistBase(), { orbit: { r: 42, w: 3.6, a: k * TAU / m }, r: 11, kb: 40, hitCd: 0.3, shape: 'shield' })); } });
@@ -142,13 +156,13 @@ def('trap', 'gravity_well', 'Gravity Well', 'knockback', '🕳️', { dmg: 4, cd
     deploy({ x, y, life: 2.5, kind: 'well', color: c.col, r: R, update(d, dt) { for (const e of enemiesNear(d.x, d.y, d.r)) { if (e.boss) continue; const a = angTo(e.x, e.y, d.x, d.y); e.x += Math.cos(a) * 130 * dt; e.y += Math.sin(a) * 130 * dt; }
       d.tick -= dt; if (d.tick <= 0) { d.tick = 0.35; strike(d.x, d.y, 70, c.d, 'knockback', { noFx: true, owner: i }); } },
       onEnd(d) { strike(d.x, d.y, 130, c.d * 4, 'knockback', { kb: 80, owner: i }); fxRing(d.x, d.y, 160, c.col, 0.5, 6); } }); } });
-def('trap', 'sniper_nest', 'Sniper Nest', 'crit', '🔭', { dmg: 40, cd: 7, lock: { cond: s => s.evolves >= 1, text: 'Fuse any item' }, pattern: 'Turret sniping the toughest enemy around.',
+def('trap', 'sniper_nest', 'Sniper Nest', 'crit', '🔭', { dmg: 40, cd: 7, lock: { stat: 'evolves', min: 1, text: 'Fuse any item' }, pattern: 'Turret sniping the toughest enemy around.',
   fire(i, c) { deploy({ x: c.x, y: c.y, life: 7, kind: 'nest', color: c.col, update(d, dt) { d.tick -= dt; if (d.tick > 0) return; d.tick = c.E ? 0.6 : 1.0;
     const e = toughest(d.x, d.y, 650); if (e) B(c, { x: d.x, y: d.y, ang: angTo(d.x, d.y, e.x, e.y), spd: 1000, r: 4, life: 0.8, pierce: 3, shape: 'bolt' }); } }); } });
-def('trap', 'cluster_bomb', 'Cluster Bomb', 'split', '💣', { dmg: 18, cd: 3.2, lock: { cond: s => s.maxLevel >= 15, text: 'Reach level 15' }, pattern: 'Lobbed bomb that scatters bomblets.',
+def('trap', 'cluster_bomb', 'Cluster Bomb', 'split', '💣', { dmg: 18, cd: 3.2, lock: { stat: 'maxLevel', min: 15, text: 'Reach level 15' }, pattern: 'Lobbed bomb that scatters bomblets.',
   fire(i, c) { const m = 1 + c.n; for (let k = 0; k < m; k++) { const t = targetPoint(360); lob(c, t.x, t.y, { shape: 'bomb', r: 8, T: 0.7, onExpire: b => { strike(b.x, b.y, 55, c.d, 'split', { owner: i });
     const q = 6 + c.L; for (let j = 0; j < q; j++) B(c, { x: b.x, y: b.y, ang: rand(0, TAU), spd: rand(150, 320), drag: 3, r: 4, life: 0.6, dmg: c.d * 0.4, shape: 'pellet', noMods: true, onExpire: bb => strike(bb.x, bb.y, 26, c.d * 0.5, 'split', { owner: i }) }); } }); } } });
-def('trap', 'blood_altar', 'Blood Altar', 'vampiric', '⛩️', { dmg: 7, cd: 8, lock: { cond: s => s.bestTime >= 600, text: 'Survive 10:00' }, pattern: 'Altar spraying a 3-arm spiral; heals you while near it.',
+def('trap', 'blood_altar', 'Blood Altar', 'vampiric', '⛩️', { dmg: 7, cd: 8, lock: { stat: 'bestTime', min: 600, text: 'Survive 10:00' }, pattern: 'Altar spraying a 3-arm spiral; heals you while near it.',
   fire(i, c) { deploy({ x: c.x, y: c.y, life: 6, kind: 'altar', color: c.col, a: 0, healT: 1, update(d, dt) { d.healT -= dt; if (d.healT <= 0) { d.healT = 1; if (d2(d.x, d.y, G.player.x, G.player.y) < 100 * 100) heal(1 + 0.25 * c.L); }
     d.tick -= dt; if (d.tick > 0) return; d.tick = 0.08; d.a += 0.21; for (let k = 0; k < 3; k++) B(c, { x: d.x, y: d.y, ang: d.a + k * TAU / 3, spd: 220, r: 5, life: 1.6 }); } }); } });
 
@@ -175,7 +189,7 @@ def('relic', 'repulsor_plate', 'Repulsor Plate', 'knockback', '🧲', { dmg: 10,
     i.state.t = cdFor(i, 3); const c = ctxOf(i); strike(P.x, P.y, 95, c.d, 'knockback', { kb: 60, owner: i }); fxRing(P.x, P.y, 110, c.col, 0.4, 5); } });
 def('relic', 'assassins_mark', "Assassin's Mark", 'crit', '🗡️', { dmg: 14, lock: { cost: 400 }, pattern: 'On crit (chance): a dagger is thrown at another enemy.', trig: 'On critical hit',
   on: { crit(i, c, e) { if (Math.random() > 0.25 + 0.05 * c.L) return; const n = nearest(e.x, e.y, 400, new Set([e.id])); if (n) B(c, { ang: angTo(c.x, c.y, n.x, n.y), spd: 700, r: 4, life: 0.8, shape: 'dagger' }); } } });
-def('relic', 'hydra_scale', 'Hydra Scale', 'split', '🐉', { dmg: 8, lock: { cond: s => s.bossKills >= 1, text: 'Defeat a boss' }, pattern: 'On level-up and every 25 kills: cascading splitting rings.', trig: 'Level-up / 25 kills',
+def('relic', 'hydra_scale', 'Hydra Scale', 'split', '🐉', { dmg: 8, lock: { stat: 'bossKills', min: 1, text: 'Defeat a boss' }, pattern: 'On level-up and every 25 kills: cascading splitting rings.', trig: 'Level-up / 25 kills',
   on: { levelup(i, c) { hydra(c); }, kill(i, c) { i.state.k = (i.state.k || 0) + 1; if (i.state.k >= 25) { i.state.k = 0; hydra(c); } } } });
 function hydra(c) { for (let k = 0; k < 3; k++) later(k * 0.15, () => { const P = G.player; radial(c, P.x, P.y, 10 + c.L, { spd: 260, r: 4.5, life: 0.6, shape: 'shard',
   onExpire: b => { for (const q of [-0.4, 0.4]) B(c, { x: b.x, y: b.y, ang: Math.atan2(b.vy, b.vx) + q, spd: 240, r: 3, life: 0.4, dmg: c.d * 0.5, shape: 'shard', noMods: true }); } }, k * 0.3); }); }
@@ -187,15 +201,41 @@ const CHARACTERS = [
   { id: 'kael',  name: 'Kael',  title: 'Ember Warden',  color: '#ff8a3d', weapon: 'ember_pistol',     perk: '+10% damage',            mods: { might: 0.10 } },
   { id: 'mira',  name: 'Mira',  title: 'Frostweaver',   color: '#7fdcff', weapon: 'frost_fan',        perk: '+15% area',              mods: { area: 0.15 } },
   { id: 'volt',  name: 'Volt',  title: 'Storm Runner',  color: '#fff36b', weapon: 'arc_rifle',        perk: '−8% cooldowns',          mods: { cd: 0.08 } },
-  { id: 'briar', name: 'Briar', title: 'Thornkeeper',   color: '#8cff5a', weapon: 'thorn_spitter',    perk: '+20% max HP, +0.5 regen', mods: { hp: 0.2, regen: 0.5 }, lock: { cond: s => s.bestTime >= 300, text: 'Survive 5:00' } },
-  { id: 'juno',  name: 'Juno',  title: 'Trickshot',     color: '#ff6bd5', weapon: 'ricochet_disc',    perk: '+15% projectile speed',  mods: { projSpd: 0.15 }, lock: { cond: s => s.totalKills >= 1000, text: 'Defeat 1000 enemies (lifetime)' } },
-  { id: 'orrin', name: 'Orrin', title: 'Tinker',        color: '#b48cff', weapon: 'seeker_swarm',     perk: '+20% duration',          mods: { duration: 0.2 }, lock: { cond: s => s.maxLevel >= 20, text: 'Reach level 20' } },
-  { id: 'sable', name: 'Sable', title: 'Wanderer',      color: '#e8e8ff', weapon: 'boomerang_glaive', perk: '+15% move speed',        mods: { speed: 0.15 }, lock: { cond: s => s.bossKills >= 1, text: 'Defeat a boss' } },
+  { id: 'briar', name: 'Briar', title: 'Thornkeeper',   color: '#8cff5a', weapon: 'thorn_spitter',    perk: '+20% max HP, +0.5 regen', mods: { hp: 0.2, regen: 0.5 }, lock: { stat: 'bestTime', min: 300, text: 'Survive 5:00' } },
+  { id: 'juno',  name: 'Juno',  title: 'Trickshot',     color: '#ff6bd5', weapon: 'ricochet_disc',    perk: '+15% projectile speed',  mods: { projSpd: 0.15 }, lock: { stat: 'totalKills', min: 1000, text: 'Defeat 1000 enemies (lifetime)' } },
+  { id: 'orrin', name: 'Orrin', title: 'Tinker',        color: '#b48cff', weapon: 'seeker_swarm',     perk: '+20% duration',          mods: { duration: 0.2 }, lock: { stat: 'maxLevel', min: 20, text: 'Reach level 20' } },
+  { id: 'sable', name: 'Sable', title: 'Wanderer',      color: '#e8e8ff', weapon: 'boomerang_glaive', perk: '+15% move speed',        mods: { speed: 0.15 }, lock: { stat: 'bossKills', min: 1, text: 'Defeat a boss' } },
   { id: 'grim',  name: 'Grim',  title: 'Scrapper',      color: '#ffb86b', weapon: 'scrap_blaster',    perk: '+2 armor',               mods: { armor: 2 }, lock: { cost: 1500 } },
-  { id: 'lyra',  name: 'Lyra',  title: 'Gambler',       color: '#ffe14d', weapon: 'helix_cannon',     perk: '+10% crit chance',       mods: { crit: 0.10 }, lock: { cond: s => s.evolves >= 1, text: 'Fuse an item' } },
-  { id: 'nyx',   name: 'Nyx',   title: 'Fractured',     color: '#5affd9', weapon: 'splitter_orb',     perk: '+1 projectile, −20% max HP', mods: { amount: 1, hp: -0.2 }, lock: { cond: s => s.wins >= 1, text: 'Win a run' } },
+  { id: 'lyra',  name: 'Lyra',  title: 'Gambler',       color: '#ffe14d', weapon: 'helix_cannon',     perk: '+10% crit chance',       mods: { crit: 0.10 }, lock: { stat: 'evolves', min: 1, text: 'Fuse an item' } },
+  { id: 'nyx',   name: 'Nyx',   title: 'Fractured',     color: '#5affd9', weapon: 'splitter_orb',     perk: '+1 projectile, −20% max HP', mods: { amount: 1, hp: -0.2 }, lock: { stat: 'wins', min: 1, text: 'Win a run' } },
   { id: 'vesper',name: 'Vesper',title: 'Nightblood',    color: '#ff3b5c', weapon: 'blood_lance',      perk: 'Lance hits heal 2% of damage', mods: {}, lock: { cost: 3000 } },
 ];
+
+// ======================= ENEMIES & BOSSES =======================
+const ENEMY_TYPES = {
+  drone:   { name: 'Drone',     hp: 12, spd: 70,  r: 12, dmg: 8,  xp: 1, color: '#a55cff', shape: 'circle' },
+  swarm:   { name: 'Swarmling', hp: 5,  spd: 100, r: 7,  dmg: 5,  xp: 1, color: '#ff9e4c', shape: 'circle' },
+  darter:  { name: 'Darter',    hp: 9,  spd: 140, r: 9,  dmg: 6,  xp: 1, color: '#ff4c8b', shape: 'tri' },
+  spitter: { name: 'Spitter',   hp: 22, spd: 60,  r: 13, dmg: 8,  xp: 2, color: '#4cffd2', shape: 'diamond', ranged: { range: 280, cd: 2.4, pat: 'aim' } },
+  brute:   { name: 'Brute',     hp: 80, spd: 45,  r: 22, dmg: 15, xp: 5, color: '#7d5cff', shape: 'square', mass: 4 },
+  bomber:  { name: 'Bomber',    hp: 26, spd: 72,  r: 14, dmg: 10, xp: 3, color: '#ffd24c', shape: 'hex', deathRing: 8 },
+  warlock: { name: 'Warlock',   hp: 45, spd: 52,  r: 15, dmg: 10, xp: 5, color: '#4c9bff', shape: 'star', ranged: { range: 320, cd: 3, pat: 'spread' } },
+  wraith:  { name: 'Wraith',    hp: 55, spd: 115, r: 13, dmg: 12, xp: 4, color: '#d0d6ff', shape: 'tri' },
+};
+const BOSSES = {
+  matriarch: { name: 'Hollow Matriarch', hp: 1800,  spd: 55, r: 46, dmg: 20, xp: 80,  color: '#ff4cc3', shape: 'hex' },
+  seraph:    { name: 'Clockwork Seraph', hp: 5500,  spd: 62, r: 44, dmg: 25, xp: 160, color: '#ffd24c', shape: 'star' },
+  eclipse:   { name: 'The Eclipse',      hp: 14000, spd: 50, r: 58, dmg: 30, xp: 300, color: '#ff3b5c', shape: 'circle' },
+};
+// ======================= PICKUPS (enemy drops) =======================
+// chance is per normal kill. Elites and bosses drop chests and coin piles on top of this.
+const DROPS = {
+  gem:    { name: 'XP crystal', icon: '💎', value: 1, desc: 'Always dropped. XP = enemy XP × value' },
+  coin:   { name: 'Void Gold',  icon: '🪙', chance: 0.035, min: 1, max: 3, desc: 'Gold kept between runs' },
+  heart:  { name: 'Heart',      icon: '❤️', chance: 0.0015, value: 25, desc: 'Restores HP' },
+  magnet: { name: 'Magnet',     icon: '🧲', chance: 0.0008, desc: 'Pulls every XP crystal to you' },
+  chest:  { name: 'Chest',      icon: '📦', elite: 1, boss: 3, desc: 'Free upgrades: count per elite and per boss' },
+};
 
 // ======================= FORGE (meta upgrades) =======================
 const UPGRADES = [
