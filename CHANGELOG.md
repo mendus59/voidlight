@@ -6,6 +6,9 @@ Voidlight is in beta, so versions are `0.MINOR.PATCH`. The version lives in one 
 - Bump **PATCH** (0.11.0 → 0.11.1) for a bug fix or balance tweak.
 - Add a line here in the same PR.
 
+## 0.11.1 (2026-11-05)
+- Fix: title card no longer shows a horizontal scrollbar (VOIDLIGHT heading was wider than the card).
+
 ## 0.11.0 (2026-11-05)
 - Version number shown on the title screen.
 

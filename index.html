@@ -11,8 +11,8 @@
   canvas { display: block; position: fixed; inset: 0; touch-action: none; }
   .screen { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; padding: 16px; background: rgba(5, 4, 12, 0.72); backdrop-filter: blur(3px); z-index: 5; overflow-y: auto; }
   .screen.show { display: flex; }
-  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 22px; width: min(1000px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; box-shadow: 0 0 60px rgba(165, 92, 255, 0.15); }
-  h1 { font-size: clamp(42px, 9vw, 84px); margin: 0; letter-spacing: 0.12em; background: linear-gradient(90deg, #ff8a3d, #ff4cc3, #7fdcff); -webkit-background-clip: text; background-clip: text; color: transparent; text-align: center; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 22px; width: min(1000px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; overflow-x: hidden; box-shadow: 0 0 60px rgba(165, 92, 255, 0.15); }
+  h1 { font-size: clamp(34px, 9vw, 72px); margin: 0; letter-spacing: 0.12em; text-indent: 0.12em; overflow-wrap: anywhere; background: linear-gradient(90deg, #ff8a3d, #ff4cc3, #7fdcff); -webkit-background-clip: text; background-clip: text; color: transparent; text-align: center; }
   h2 { margin: 0 0 12px; font-size: 22px; }
   #version { text-align: center; color: var(--muted); font-size: 12px; opacity: 0.75; margin: -16px 0 18px; letter-spacing: 0.05em; }
   .sub { text-align: center; color: var(--muted); margin: 6px 0 22px; }
