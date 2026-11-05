@@ -16,7 +16,7 @@ const stageDef = n => STAGES[Math.max(1, Math.min(stageCount(), n | 0)) - 1];
 const emptyStage = () => ({ kills: 0, best: 0, wins: 0, bosses: 0, runs: 0 });
 
 function defaultSave() {
-  return { ver: SAVE_VERSION, gold: 0, upg: {}, unlockedItems: [], unlockedCats: [], unlockedChars: ['kael', 'mira', 'volt'], itemRuns: {}, stages: {}, charStages: {}, lastStage: 1,
+  return { ver: SAVE_VERSION, gold: 0, upg: {}, unlockedItems: [], unlockedCats: [], unlockedChars: ['kael', 'mira', 'volt'], itemRuns: {}, fuseLog: {}, stages: {}, charStages: {}, lastStage: 1,
     stats: { totalKills: 0, bestTime: 0, bossKills: 0, evolves: 0, supers: 0, megas: 0, wins: 0, runs: 0, maxLevel: 0, totalGold: 0 }, settings: { numbers: true }, lastChar: 'kael' };
 }
 const strList = v => (Array.isArray(v) ? v.filter(x => typeof x === 'string') : []);
@@ -36,6 +36,51 @@ function addStageMaps(a, b) {
   }
   return out;
 }
+// Fusion history, kept across runs: fuseLog[itemId][tierKey] = the distinct partner sets that item has fused with into that tier.
+// A partner set is the ids of the other items in the fusion, sorted and joined with '+' (one id for a 2-item Fused fusion).
+// Every item in a fusion is credited, the one kept and the ones consumed. FUSION[tier].hist (items.js) asks for that many
+// distinct partner sets one tier below: Super needs 3 different Fused partners, Mega needs 5 different Super combinations.
+const FUSE_LOG_CAP = 300;
+function fuseLogMap(m) {
+  const out = {};
+  for (const [id, e] of Object.entries(m || {})) {
+    if (!e || typeof e !== 'object') continue;
+    const x = {};
+    for (const k of TIER_KEYS.slice(1)) { const l = [...new Set(strList(e[k]))].slice(0, FUSE_LOG_CAP); if (l.length) x[k] = l; }
+    if (Object.keys(x).length) out[id] = x;
+  }
+  return out;
+}
+const fuseKey = ids => ids.slice().sort().join('+');
+const fuseLogOf = (s, id) => ((s.fuseLog || {})[id]) || {};
+// the distinct partner sets item `id` has fused with into tier `key`, each as a list of item ids
+const fusedSets = (s, id, key) => (fuseLogOf(s, id)[key] || []).map(k => k.split('+'));
+// every item it has ever fused with, at any tier
+const fusedPartners = (s, id) => [...new Set(TIER_KEYS.slice(1).flatMap(k => fusedSets(s, id, k).flat()))];
+// Records one fusion into tier `key`. ids: the base item id of every item in the group. Returns the ids that just became
+// eligible for the next tier through it.
+function recordFusion(s, key, ids) {
+  const t = TIER_KEYS.indexOf(key), next = TIER_KEYS[t + 1], fresh = [];
+  s.fuseLog = s.fuseLog || {};
+  ids.forEach((id, n) => {
+    const was = next ? histMet(s, id, t + 1) : true;
+    const e = s.fuseLog[id] = s.fuseLog[id] || {}, l = e[key] = e[key] || [], k = fuseKey(ids.filter((_, m) => m !== n));
+    if (k && !l.includes(k) && l.length < FUSE_LOG_CAP) l.push(k);
+    if (!was && histMet(s, id, t + 1) && !fresh.includes(id)) fresh.push(id);
+  });
+  return fresh;
+}
+// History requirement for fusing item `id` into tier index t: [have, need]. Only Super and above have one.
+function histProgress(s, id, t) {
+  const f = FUSION[TIER_KEYS[t]], need = t >= 2 && f ? Math.max(0, f.hist | 0) : 0;
+  return [need ? (fuseLogOf(s, id)[TIER_KEYS[t - 1]] || []).length : 0, need];
+}
+const histMet = (s, id, t) => { const [a, b] = histProgress(s, id, t); return a >= b; };
+function histText(t) {
+  const f = FUSION[TIER_KEYS[t]], n = (f && f.hist) | 0, below = FUSION[TIER_KEYS[t - 1]];
+  if (!n || t < 2) return '';
+  return below.need <= 2 ? `fused with ${n} different item${n > 1 ? 's' : ''}` : `made ${n} different ${below.name} fusion${n > 1 ? 's' : ''}`;
+}
 // Fills in whatever an older or partial save is missing, and upgrades v1 and v2 saves.
 function normalizeSave(s) {
   const d = defaultSave(); if (!s || typeof s !== 'object') return d;
@@ -50,6 +95,7 @@ function normalizeSave(s) {
   // itemRuns[id][L-1] = how many runs reached level L (or higher) with that item
   out.itemRuns = {};
   for (const [id, r] of Object.entries(s.itemRuns || {})) if (Array.isArray(r)) out.itemRuns[id] = [0, 1, 2, 3, 4].map(k => cnt(r[k]));
+  out.fuseLog = fuseLogMap(s.fuseLog);
   out.stages = stageMap(s.stages);
   // charStages[heroId][level] = the same per-level stats, counted only for runs played as that hero (tracked since v3.1)
   out.charStages = {};
@@ -85,6 +131,12 @@ function mergeSaves(a, b) {
   for (const k of ['bestTime', 'maxLevel']) m.stats[k] = Math.max(a.stats[k] || 0, b.stats[k] || 0);
   for (const id of new Set([...Object.keys(a.itemRuns), ...Object.keys(b.itemRuns)])) {
     const x = a.itemRuns[id] || [0, 0, 0, 0, 0], y = b.itemRuns[id] || [0, 0, 0, 0, 0]; m.itemRuns[id] = x.map((v, k) => v + y[k]);
+  }
+  m.fuseLog = {};
+  for (const id of new Set([...Object.keys(a.fuseLog), ...Object.keys(b.fuseLog)])) {
+    const x = a.fuseLog[id] || {}, y = b.fuseLog[id] || {}, z = {};
+    for (const k of new Set([...Object.keys(x), ...Object.keys(y)])) z[k] = [...new Set([...(x[k] || []), ...(y[k] || [])])].slice(0, FUSE_LOG_CAP);
+    m.fuseLog[id] = z;
   }
   m.stages = addStageMaps(a.stages, b.stages);
   m.charStages = {};

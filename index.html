@@ -105,6 +105,21 @@
   .card.up.sock { border-color: rgba(255, 210, 76, 0.35); }
   .card.lu.fuse.t2 { border-color: #5affd9; box-shadow: 0 0 26px rgba(90, 255, 217, 0.4); } .card.lu.fuse.t2 .tag { color: #5affd9; }
   .card.lu.fuse.t3 { border-color: #ff4cc3; box-shadow: 0 0 30px rgba(255, 76, 195, 0.45); } .card.lu.fuse.t3 .tag { color: #ff4cc3; }
+  .card.item.open { cursor: pointer; } .card.item.open:hover { border-color: var(--c); background: rgba(255,255,255,0.07); }
+  .card .hist { color: var(--muted); } .card .hist .ok, .dSec .ok { color: #6bff8f; } .card .hist i { color: var(--accent); font-style: normal; }
+  .tags .held { background: rgba(107, 255, 143, 0.15); color: #6bff8f; }
+  #itemDetail { position: fixed; inset: 0; z-index: 8; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(5, 4, 12, 0.7); }
+  #itemDetail[hidden] { display: none; }
+  #itemDetail .dPanel { width: min(640px, 100%); display: flex; flex-direction: column; gap: 6px; }
+  #itemDetail small { color: var(--muted); font-size: 12px; } #itemDetail .req { font-size: 13px; color: #ff9e4c; }
+  .dHead { display: flex; gap: 12px; align-items: flex-start; } .dHead > div:nth-child(2) { flex: 1; min-width: 0; } .dHead .ico { font-size: 34px; } .dHead h3 { margin: 0 0 4px; }
+  .dHead .close { padding: 4px 10px; }
+  .dSec { border: 1px solid color-mix(in srgb, var(--c) 40%, transparent); border-radius: 10px; padding: 8px 10px; margin-top: 6px; }
+  .dSec h4 { margin: 0 0 4px; color: var(--c); font-size: 14px; } .dSec h4 small { font-weight: 400; }
+  .dSec .note { color: var(--muted); font-size: 12px; margin: 6px 0 2px; }
+  .dSec .bar { height: 4px; background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden; margin: 4px 0; } .dSec .bar i { display: block; height: 100%; }
+  .chips.left { justify-content: flex-start; margin: 4px 0; } .chip.dim { opacity: 0.5; border-style: dashed; } .chip i { font-style: normal; font-size: 11px; } .chip b { color: #6bff8f; }
+  .chip.combo { --c: var(--line); }
   @media (max-width: 600px) { .panel { padding: 14px; } .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); } #codexGrid { grid-template-columns: 1fr; } }
 </style>
 </head>
@@ -167,7 +182,7 @@
 <div class="screen" id="pause"><div class="panel" style="max-width:640px">
   <h2 class="center">Paused</h2>
   <div id="pauseBody"></div>
-  <div class="row"><button class="primary" id="btnResume">Resume</button><button id="speedToggle" title="Tap to cycle the game speed">Game speed</button><button id="numToggle">Damage numbers</button><button id="btnQuit">End run</button></div>
+  <div class="row"><button class="primary" id="btnResume">Resume</button><button id="speedToggle" title="Tap to cycle the game speed">Game speed</button><button id="numToggle">Damage numbers</button><button id="btnPauseCodex" title="Fusion history of every item, to plan this run">📖 Codex</button><button id="btnQuit">End run</button></div>
 </div></div>
 
 <div class="screen" id="gameover"><div class="panel" style="max-width:640px">
@@ -175,6 +190,8 @@
   <div id="goBody"></div>
   <div class="row"><button class="primary" id="btnAgain">Run again</button><button id="btnMenu">Main menu</button></div>
 </div></div>
+
+<div id="itemDetail" hidden><div class="dPanel panel"></div></div>
 
 <div id="toasts"></div>
 <script src="src/firebase-config.js"></script>

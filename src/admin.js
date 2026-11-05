@@ -582,7 +582,8 @@ function tiersCard() {
   const made = k => TIER_KEYS.slice(1, TIER_KEYS.indexOf(k) + 1).reduce((n, x) => n * get(T, x).need, 1);
   return h('div', { class: 'card' }, h('h2', {}, 'Fusion tiers'),
     h('p', { class: 'note', style: 'margin-top:-6px' }, '“Needs” level 5 items of the tier below that all share an effect become one. The one the player keeps takes 50% of the others’ base damage and passive stats and carries all their effects. Damage ×, cooldown ×, own stacks (of each carried effect, on its own bullets), pool (its own effect per level, for every bullet) and stats × apply to the new tier.'),
-    tableView('', '', T, keys, [{ f: 'name', label: 'Name', kind: 'text' }, { f: 'need', label: 'Needs', step: 1 }, { f: 'mul', label: 'Damage ×' }, { f: 'cdMul', label: 'Cooldown ×' }, { f: 'own', label: 'Own stacks', step: 1 }, { f: 'pool', label: 'Pool / level' }, { f: 'statMul', label: 'Stats ×' }]),
+    tableView('', '', T, keys, [{ f: 'name', label: 'Name', kind: 'text' }, { f: 'need', label: 'Needs', step: 1 }, { f: 'mul', label: 'Damage ×' }, { f: 'cdMul', label: 'Cooldown ×' }, { f: 'own', label: 'Own stacks', step: 1 }, { f: 'pool', label: 'Pool / level' }, { f: 'statMul', label: 'Stats ×' }, { f: 'hist', label: 'History needed', step: 1 }]),
+    h('p', { class: 'note' }, 'History needed (Super and above, kept across runs): every item in the fusion must already have fused into the tier below with that many different partner sets. Default: Super needs an item to have fused with 3 different items, Mega needs it to have made 5 different Super fusions. 0 turns it off. Ignored for Fused. Players see it on each item’s Codex page.'),
     h('p', { class: 'note' }, keys.map(k => `${get(T, k).name} = ${made(k)} base items`).join(' · ') + '. An item fused into something else can be offered again later in the run, so the limits are sockets and level-ups. ' +
       (() => { const S = get('stages', String(STAGES.length)), up = 5 - S.start; const cost = t => t === 0 ? 1 + up : get(T, TIER_KEYS[t]).need * cost(t - 1) + 1 + up;
         return `On Level ${STAGES.length} (items arrive at level ${S.start}) one Mega costs about ${cost(TIER_KEYS.length - 1)} level-up picks.`; })()),
@@ -615,6 +616,19 @@ function fusionCard() {
           h('td', {}, h('small', {}, `${partnersOf(d.id).length} items`)));
       }))));
 }
+// Fills a pretend save's fusion history for one item (id) or every item (null): `a` different Fused partners and `b` different
+// Super partner sets, all made of real items that share an effect with it. Capped by how many such partners exist.
+function fakeHistory(s, id, a, b) {
+  const log = Object.assign({}, s.fuseLog || {});
+  for (const d of id ? [ITEM[id]] : ITEMS) {
+    const p = partnersOf(d.id).map(x => x.id), e = {};
+    if (a > 0) e.fused = p.slice(0, a);
+    const sup = []; for (let i = 0; i < p.length && sup.length < b; i++) for (let j = i + 1; j < p.length && sup.length < b; j++) sup.push([p[i], p[j]].sort().join('+'));
+    if (sup.length) e.super = sup;
+    if (Object.keys(e).length) log[d.id] = e; else delete log[d.id];
+  }
+  return log;
+}
 function simulatorCard() {
   const s = simSave(), redo = () => render();
   const setSim = (x, msg) => { sim = normalizeSave(x); redo(); if (msg) toast(msg); };
@@ -627,6 +641,7 @@ function simulatorCard() {
   function everything() {
     const x = normalizeSave(null); x.gold = 99999; x.unlockedCats = EFFECT_KEYS.slice(); x.unlockedItems = ITEMS.filter(d => d.lock).map(d => d.id); x.unlockedChars = CHARACTERS.map(c => c.id);
     for (const d of ITEMS) x.itemRuns[d.id] = [9, 9, 9, 9, 9];
+    x.fuseLog = fakeHistory(x, null, 99, 99);
     for (const S of STAGES) x.stages[String(S.id)] = { kills: 9999, best: 900, wins: 1, bosses: 3, runs: 1 };
     for (const c of CHARACTERS) { x.charStages[c.id] = {}; for (const S of STAGES) x.charStages[c.id][String(S.id)] = { kills: 999, best: 900, wins: 1, bosses: 3, runs: 1 }; }
     for (const u of UPGRADES) x.upg[u.id] = u.max; x.lastStage = stageCount(); setSim(x, 'Everything unlocked, every level beaten, the Forge maxed.');
@@ -647,6 +662,16 @@ function simulatorCard() {
       sel([0, 1, 2, 3, 4, 5].map(L => [String(L), L ? 'Lv ' + L : '—']), String(best), x => write(+x, Math.max(1, runs))),
       h('input', { type: 'number', min: 0, style: 'width:56px', value: runs, title: 'Runs that reached that level', onchange: e => write(best || 5, Math.max(0, parseInt(e.target.value, 10) || 0)) }),
       h('span', { class: 'tag', title: fuseLockText(d) }, fuseUnlocked(s, d) ? '✦' : ''));
+  };
+  // fusion history: different Fused partners and different Super fusions, the counts Super and Mega fusion ask for
+  const histRow = d => {
+    const e = s.fuseLog[d.id] || {}, a = (e.fused || []).length, b = (e.super || []).length, max = partnersOf(d.id).length;
+    const write = (x, y) => { s.fuseLog = fakeHistory(s, d.id, x, y); redo(); };
+    const okS = histMet(s, d.id, 2), okM = histMet(s, d.id, 3);
+    return h('div', { class: 'simrow' }, h('span', { class: 'nm', title: (e.fused || []).map(x => (ITEM[x] || {}).name).join(', ') }, `${get('items', d.id).icon} ${get('items', d.id).name}`),
+      h('input', { type: 'number', min: 0, max, style: 'width:56px', value: a, title: `Different items it has fused with (of ${max} it can fuse with)`, onchange: e2 => write(Math.max(0, parseInt(e2.target.value, 10) || 0), b) }),
+      h('input', { type: 'number', min: 0, style: 'width:56px', value: b, title: 'Different Super fusions it was part of', onchange: e2 => write(a, Math.max(0, parseInt(e2.target.value, 10) || 0)) }),
+      h('span', { class: 'tag', title: 'S = can Super fuse, M = can Mega fuse (fusion history only)' }, (okS ? 'S' : '') + (okM ? 'M' : '')));
   };
   // a hero: the highest level beaten while playing them (sets wins in every level up to it), owned or not, and where their unlock stands
   const heroRow = c => {
@@ -684,7 +709,13 @@ function simulatorCard() {
       h('div', {}, h('h3', {}, 'Heroes: highest level beaten with each one'), h('p', { class: 'note' }, 'Hero unlocks ask for a level beaten with another hero plus a weapon mastery (set below). Hover a hero for its unlock. Right column: ✓ playable, ● earned and waiting to be bought, n/m parts done.'),
         h('div', { class: 'simlist', style: 'max-height:none;margin-bottom:12px' }, CHARACTERS.map(heroRow)),
         h('h3', {}, 'Best level reached per item, and in how many runs'), h('div', { class: 'simlist' }, ITEMS.map(masteryRow)),
-        h('p', { class: 'note' }, 'Greyed items are not available with these unlocks. ✦ = fusion unlocked.'))));
+        h('p', { class: 'note' }, 'Greyed items are not available with these unlocks. ✦ = fusion unlocked.'),
+        h('h3', {}, 'Fusion history per item'),
+        h('p', { class: 'note' }, `First box: different items it has fused with (${get('tiers', 'super').name} needs ${get('tiers', 'super').hist | 0}). Second: different ${get('tiers', 'super').name} fusions it was part of (${get('tiers', 'mega').name} needs ${get('tiers', 'mega').hist | 0}). Filled with real partners that share an effect. S / M = history done for Super / Mega. Every item in a fusion needs it.`),
+        h('div', { class: 'controls' }, h('button', { class: 'small', onclick: () => { s.fuseLog = fakeHistory(s, null, 99, 99); redo(); toast('Every item has full fusion history.'); } }, 'Fill all'),
+          h('button', { class: 'small', onclick: () => { s.fuseLog = fakeHistory(s, null, get('tiers', 'super').hist | 0, 0); redo(); toast('Every item can Super fuse (history), none can Mega fuse.'); } }, 'Super only'),
+          h('button', { class: 'small', onclick: () => { s.fuseLog = {}; redo(); toast('Fusion history cleared.'); } }, 'Clear')),
+        h('div', { class: 'simlist' }, ITEMS.filter(d => !get('items', d.id).disabled).map(histRow)))));
 }
 
 // ---------- game options: the speeds the pause menu offers ----------

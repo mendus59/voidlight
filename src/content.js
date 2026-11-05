@@ -20,7 +20,7 @@ const VOIDLIGHT_CONTENT = (() => {
     items:    { get: () => ITEM, fields: ['name', 'icon', 'effect', 'effect2', 'passive', 'dmg', 'cd', 'pattern', 'trig', 'lock', 'fuseLock', 'color', 'vis', 'disabled'] },
     cats:     { get: () => CATEGORIES, fields: ['lock'] },
     stages:   { get: () => byId(STAGES), fields: ['name', 'color', 'hp', 'ramp', 'spawn', 'dmg', 'bossHp', 'xp', 'gold', 'start'] },
-    tiers:    { get: () => FUSION, fields: ['name', 'need', 'mul', 'cdMul', 'own', 'pool', 'statMul', 'lock'] },
+    tiers:    { get: () => FUSION, fields: ['name', 'need', 'mul', 'cdMul', 'own', 'pool', 'statMul', 'hist', 'lock'] },
     difficulty: { get: () => DIFFICULTY, fields: ['hpGrowth', 'hpCurve', 'spawnBase', 'spawnGrowth', 'spawnCurve', 'dmgGrowth', 'eliteEvery', 'eliteHp', 'ringEvery', 'bossHp', 'xpStep', 'xpCurve'] },
     chars:    { get: () => byId(CHARACTERS), fields: ['name', 'title', 'color', 'weapon', 'perk', 'mods', 'lock'] },
     upgrades: { get: () => byId(UPGRADES), fields: ['name', 'icon', 'desc', 'max', 'cost', 'per'] },
@@ -72,6 +72,7 @@ const VOIDLIGHT_CONTENT = (() => {
   // Rejects anything that could break the game; null means "remove this field" (e.g. take a lock off).
   function valid(table, f, v) {
     if (v === null) return ['lock', 'fuseLock', 'effect2', 'color', 'vis', 'trig', 'disabled', 'min', 'max', 'value', 'chance', 'elite', 'boss'].includes(f);
+    if (table === 'tiers' && f === 'hist') return num(v) && v >= 0 && v <= 50 && Math.round(v) === v;
     if (table === 'tiers' && f === 'need') return num(v) && v >= 1 && v <= 8 && Math.round(v) === v;
     if (table === 'stages' && f === 'start') return num(v) && v >= 1 && v <= 5 && Math.round(v) === v;
     switch (f) {
