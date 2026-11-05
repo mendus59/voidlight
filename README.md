@@ -1,5 +1,16 @@
 # Voidlight
 
+<!-- site-summary:start -->
+<!-- This section is this project's card on https://mendus59.github.io and is copied there daily.
+     Keep it true of what's on main: one plain-text summary line (max 160 characters), then 1-6 short bullets.
+     See CLAUDE.md ("Site summary"). -->
+An original survivor-style bullet hell for the browser.
+
+- Survive 15 minutes of escalating swarms and three bosses while your gear fires on its own.
+- 55 items across five slots, each with its own bullet pattern; every item adds its effect to all your bullets, and some effect pairs trigger reactions.
+- Fuse maxed items, unlock 11 characters, and spend gold in the Forge on permanent upgrades, saved in your browser or, if you sign in with Google, in the cloud.
+<!-- site-summary:end -->
+
 An original survivor-style bullet hell for the browser. No build step and no dependencies: plain HTML, CSS and JavaScript on a 2D canvas.
 
 ## Run it
