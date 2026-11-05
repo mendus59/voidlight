@@ -41,6 +41,10 @@ https://mendus59.github.io/voidlight/admin.html (or `localhost:8000/admin.html`)
 
 How it fits together: `src/content.js` lists what is editable, keeps the items.js values, and applies the published overrides on top; `src/cloud.js` downloads `content/live`; `src/admin.js` is the panel. Changing `firestore.rules` means pasting them into **Firestore > Rules** again and clicking **Publish**.
 
+## Versioning
+
+The game is in beta (`0.MINOR.PATCH`). The version is the `VERSION` constant at the top of `src/core.js` and shows on the title screen. Every PR bumps it (MINOR for features, PATCH for fixes/tweaks) and adds a line to [CHANGELOG.md](CHANGELOG.md).
+
 ## Controls
 WASD / arrow keys to move, Space or Shift to dash (brief invulnerability), Esc or P to pause, 1–4 or a click to select a level-up card, then Confirm or Enter to take it (Reroll and Skip are buttons). Game speed (1x, 1.5x, 2x, 2.5x, 3x, 5x by default, set on the admin Options tab) is in the pause menu.
 On touch screens, drag to move and tap with a second finger to dash.

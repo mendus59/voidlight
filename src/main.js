@@ -1101,6 +1101,7 @@ function frame(now) {
 }
 if (window.VOIDLIGHT_CONTENT) VOIDLIGHT_CONTENT.applyCached(); // last published admin content, before unlocks are checked
 if (SANDBOX) sandboxBoot(); else { loadSave(); checkUnlocks(); showScreen('menu'); }
+$('#version').textContent = 'v' + VERSION + ' beta';
 requestAnimationFrame(frame);
 
 // debug hooks for testing
