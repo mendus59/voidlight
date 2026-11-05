@@ -62,6 +62,10 @@
   .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; justify-content: center; } .chips.col { flex-direction: column; align-items: stretch; }
   .chip { border: 1px solid var(--c); border-radius: 8px; padding: 4px 8px; font-size: 13px; } .chip small { display: block; color: var(--muted); font-size: 11px; }
   .unlocks { background: rgba(107, 255, 143, 0.08); border: 1px solid rgba(107, 255, 143, 0.4); border-radius: 10px; padding: 10px; text-align: center; margin: 10px 0; }
+  #account { display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; margin-top: 16px; font-size: 13px; color: var(--muted); }
+  #account[hidden] { display: none; }
+  #account .google { background: #fff; color: #1f1f1f; border: none; font-weight: 600; font-size: 14px; padding: 8px 14px; }
+  #account .google:hover { background: #e8e8ee; }
   .help { color: var(--muted); font-size: 13px; text-align: center; margin-top: 16px; line-height: 1.5; }
   #toasts { position: fixed; bottom: 70px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; z-index: 10; pointer-events: none; width: min(560px, calc(100% - 32px)); }
   .toast { background: rgba(18, 14, 36, 0.95); border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; font-size: 14px; text-align: center; animation: fade 3.5s forwards; }
@@ -81,6 +85,7 @@
     <button class="big" id="btnCodex">📖 Codex &amp; Armory</button>
   </div>
   <div class="stats"></div>
+  <div id="account" hidden></div>
   <div class="help">Move: WASD / arrows (drag on touch) · Dash: Space or Shift (second finger) · Pause: Esc / P<br>Weapons fire automatically. Every item adds its effect to <b>all</b> your bullets. Max two same-effect items to fuse.</div>
   <div class="center" style="margin-top:12px"><button class="link" id="btnReset">Reset save</button></div>
 </div></div>
@@ -125,8 +130,10 @@
 </div></div>
 
 <div id="toasts"></div>
+<script src="src/firebase-config.js"></script>
 <script src="src/core.js"></script>
 <script src="src/items.js"></script>
 <script src="src/main.js"></script>
+<script type="module" src="src/cloud.js"></script>
 </body>
 </html>
