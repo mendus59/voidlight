@@ -83,6 +83,14 @@ Fusion needs several **level 5 items of the same tier that share at least one ef
 | Super | 3 fused items | ×3.2 | ×0.65 | 6 | 4 | ×1.5 | Beat Level 3 |
 | Mega | 5 super items | ×16 | ×0.55 | 12 | 12 | ×2 | Beat Level 6 |
 
+**Fusion history (across runs).** Each item remembers what it has fused with (`fuseLog` in the save; the item kept and the ones
+consumed are all credited). Super and Mega fusion ask for it on top of their tier unlock, for **every item in the fusion**:
+* **Super:** the item has fused with **3 different items** before (any runs, the current one included).
+* **Mega:** the item has been in **5 different Super fusions** (different sets of partners).
+The counts are the `hist` field of each tier (admin: Fusion tiers, "History needed"; 0 turns it off). Clicking an item in the Codex
+& Armory shows its history: items it has fused with, items it can still fuse with, its Super combinations and progress bars. The
+pause menu opens the same Codex (with a "This run" tab), so a run can be steered toward new partners.
+
 A Mega is 30 base items deep, so **items consumed by a fusion can be offered again later in the run** (only items held right now are
 excluded), and offers favour items that share an effect with what you hold. The level-up screen has **Skip** for when no card helps. Picking is two steps: select a card (click or 1–4), then Confirm (or Enter), so movement keys can never take a card unseen. A stats panel under the cards shows every player stat and the effect pool, with the selected card's changes as now → after; the pause menu shows the same panel.
 Chests from elites and bosses offer an available fusion first. All tiers are editable in the admin panel (Progression > Fusion tiers).

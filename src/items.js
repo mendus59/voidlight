@@ -327,11 +327,13 @@ const STAGES = [
 // effects on its own bullets, and starts this tier at the level's start level. The others' sockets free up.
 // mul = damage ×, cdMul = cooldown ×, own = stacks of each carried effect on its own bullets, pool = its own effect
 // added to the shared pool per item level, statMul = passive stats ×. Base and Fused tiers have no lock beyond item mastery.
+// hist = fusion history every item in the group needs, across runs (fuseLog in progress.js): how many different partner sets
+// it has fused with into the tier below. Super: fused with 3 different items. Mega: 5 different Super fusions. 0 = none.
 const FUSION = {
   base:  { name: 'Base',  need: 1, mul: 1,   cdMul: 1,    own: 2, pool: 1,   statMul: 1 },
   fused: { name: 'Fused', need: 2, mul: 1.6, cdMul: 0.75, own: 3, pool: 1.5, statMul: 1.25 },
-  super: { name: 'Super', need: 3, mul: 3.2, cdMul: 0.65, own: 6, pool: 4,   statMul: 1.5, lock: { stage: 3, stat: 'wins', min: 1, text: 'Beat Level 3' } },
-  mega:  { name: 'Mega',  need: 5, mul: 16,  cdMul: 0.55, own: 12, pool: 12,  statMul: 2,   lock: { stage: 6, stat: 'wins', min: 1, text: 'Beat Level 6' } },
+  super: { name: 'Super', need: 3, mul: 3.2, cdMul: 0.65, own: 6, pool: 4,   statMul: 1.5, hist: 3, lock: { stage: 3, stat: 'wins', min: 1, text: 'Beat Level 3' } },
+  mega:  { name: 'Mega',  need: 5, mul: 16,  cdMul: 0.55, own: 12, pool: 12,  statMul: 2,   hist: 5, lock: { stage: 6, stat: 'wins', min: 1, text: 'Beat Level 6' } },
 };
 const TIER_KEYS = Object.keys(FUSION);
 const tierOf = inst => FUSION[TIER_KEYS[(inst && inst.tier) || 0]];

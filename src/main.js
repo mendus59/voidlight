@@ -229,10 +229,11 @@ function levelItem(inst) {
 // Fusion tiers (FUSION in items.js). `need` level 5 items of one tier that all share at least one effect become one item
 // of the next tier: the player picks the one that stays. It takes 50% of every other one's base damage and passive stats,
 // carries all of their effects on its own bullets, and starts the new tier at the level's start level. The other sockets free up.
-// Base items need their mastery to fuse; Super and Mega fusion each open with an achievement.
+// Base items need their mastery to fuse; Super and Mega fusion each open with an achievement, and every item in a Super or
+// Mega fusion also needs its fusion history (FUSION[tier].hist, kept across runs in SAVE.fuseLog, see progress.js).
 // A passive item can only stay if everything fused into it is passive too.
 const tierOpen = t => G.sandbox || tierUnlocked(SAVE, TIER_KEYS[t]);
-const fusable = i => i.level >= MAX_LEVEL && i.tier < TIER_KEYS.length - 1 && tierOpen(i.tier + 1) && (G.sandbox || i.tier > 0 || fuseUnlocked(SAVE, i.def));
+const fusable = i => i.level >= MAX_LEVEL && i.tier < TIER_KEYS.length - 1 && tierOpen(i.tier + 1) && (G.sandbox || i.tier > 0 || fuseUnlocked(SAVE, i.def)) && (G.sandbox || histMet(SAVE, i.def.id, i.tier + 1));
 function commonEffects(group) { let c = instEffects(group[0]); for (const i of group.slice(1)) { const e = instEffects(i); c = c.filter(k => e.includes(k)); } return c; }
 const keepersOf = group => group.filter(s => !isPassive(s.def) || group.every(o => isPassive(o.def)));
 function combos(arr, k, limit) {
@@ -258,6 +259,9 @@ function fusionGroups() {
 const tierName = t => FUSION[TIER_KEYS[t]].name;
 function fuse(keep, others, quiet) {
   const T = keep.tier + 1, sh = commonEffects([keep, ...others]);
+  // fusion history (counts right away, also toward later fusions in this run)
+  const ready = G.sandbox ? [] : recordFusion(SAVE, TIER_KEYS[T], [keep, ...others].map(i => i.def.id));
+  if (!G.sandbox) writeSave();
   if (!keep.fuseEff) keep.fuseEff = sh.includes(keep.def.effect) ? keep.def.effect : sh[0] || keep.def.effect;
   for (const o of others) {
     keep.base += 0.5 * o.base;
@@ -274,6 +278,7 @@ function fuse(keep, others, quiet) {
     const freed = [...new Set(others.map(o => SLOTS[o.def.slot].name))].join(', ');
     toast(`${others.map(o => o.def.icon).join(' ')} fused into ${keep.def.icon} ${itemName(keep)}. Its bullets now carry ${effNames(instEffects(keep))}. Free sockets: ${freed}.`);
   }
+  for (const id of ready) toast(`✦ ${ITEM[id].icon} ${ITEM[id].name} can now ${tierName(T + 1)} Fuse.`);
   return keep;
 }
 function keepChoices(f, back) {
@@ -744,28 +749,93 @@ function renderForge() {
 const effTags = d => effectsOf(d).map(k => `<span style="color:${EFFECTS[k].color}">${EFFECTS[k].icon} ${EFFECTS[k].name}</span>`).join(' + ');
 const passiveText = d => `Per level: ${statText(d.passive)}.`;
 let codexFilter = 'all';
+// The Codex opens from the main menu and from the pause menu. In a run it can't buy anything and gets a "This run" tab.
+const inRun = () => !!(G && !G.sandbox && !G.over);
+const heldNow = d => inRun() && G.inv.some(i => i.def === d || i.gone.includes(d));
 function renderCodex() {
+  if (codexFilter === 'run' && !inRun()) codexFilter = 'all';
   const tabs = $('#codexTabs'); tabs.innerHTML = '';
-  for (const k of ['all', ...SLOT_KEYS]) { const b = document.createElement('button'); b.className = 'tab' + (codexFilter === k ? ' sel' : ''); b.textContent = k === 'all' ? 'All ' + ITEMS.filter(d => !d.disabled).length : SLOTS[k].icon + ' ' + SLOTS[k].name; b.onclick = () => { codexFilter = k; renderCodex(); }; tabs.appendChild(b); }
+  const keys = [...(inRun() ? ['run'] : []), 'all', ...SLOT_KEYS];
+  for (const k of keys) { const b = document.createElement('button'); b.className = 'tab' + (codexFilter === k ? ' sel' : ''); b.textContent = k === 'run' ? '▶ This run' : k === 'all' ? 'All ' + ITEMS.filter(d => !d.disabled).length : SLOTS[k].icon + ' ' + SLOTS[k].name; b.onclick = () => { codexFilter = k; renderCodex(); }; tabs.appendChild(b); }
   const wrap = $('#codexGrid'); wrap.innerHTML = '';
   for (const d of ITEMS) {
-    if (d.disabled || (codexFilter !== 'all' && d.slot !== codexFilter)) continue;
+    if (d.disabled || (codexFilter === 'run' ? !heldNow(d) : codexFilter !== 'all' && d.slot !== codexFilter)) continue;
     const un = itemUnlocked(SAVE, d), E = EFFECTS[d.effect], effs = effectsOf(d);
     const el = document.createElement('div'); el.className = 'card item' + (un ? '' : ' locked'); el.style.setProperty('--c', E.color);
     let lockHtml = '';
     const shut = effs.filter(k => !catUnlocked(SAVE, k));
     for (const k of shut) lockHtml += `<div class="req">🔒 ${EFFECTS[k].name} items: ${lockLabel(catLock(k))}</div>`;
-    lockHtml += window.lockHtml(d.lock, itemOwned(SAVE, d));
-    const fu = fuseUnlocked(SAVE, d), f = fuseLockOf(d);
-    const fuseLine = fu ? `<small class="fuse">✦ Fusion unlocked. At level 5 it fuses with any level 5 ${effs.map(k => EFFECTS[k].name).join(' or ')} item${isPassive(d) ? ' (as a passive it can only absorb other passives)' : ''}.</small>`
-      : `<small class="fuse">✦ Fusion locked: ${fuseLockText(d)} (${Math.min(runsAt(SAVE, d.id, f.level), f.runs)}/${f.runs}).</small>`;
-    el.innerHTML = `<div class="ico">${d.icon}</div><div class="body"><b>${d.name}</b><div class="tags"><span>${SLOTS[d.slot].icon} ${SLOTS[d.slot].name}</span><span>${effTags(d)}</span>${isPassive(d) ? '<span>Passive</span>' : ''}${effs.length > 1 ? '<span>Two effects</span>' : ''}${d.trig ? `<span>⏯ ${d.trig}</span>` : ''}</div><small>${d.pattern}</small>${isPassive(d) ? `<small class="perk">${passiveText(d)}</small>` : ''}${fuseLine}${lockHtml}</div>`;
+    if (!inRun()) lockHtml += window.lockHtml(d.lock, itemOwned(SAVE, d));
+    el.innerHTML = `<div class="ico">${d.icon}</div><div class="body"><b>${d.name}</b><div class="tags"><span>${SLOTS[d.slot].icon} ${SLOTS[d.slot].name}</span><span>${effTags(d)}</span>${isPassive(d) ? '<span>Passive</span>' : ''}${effs.length > 1 ? '<span>Two effects</span>' : ''}${d.trig ? `<span>⏯ ${d.trig}</span>` : ''}${heldNow(d) ? '<span class="held">In this run</span>' : ''}</div><small>${d.pattern}</small>${isPassive(d) ? `<small class="perk">${passiveText(d)}</small>` : ''}${fuseLine(d)}${histLine(d)}${lockHtml}</div>`;
+    el.classList.add('open'); el.title = 'Open the fusion history of ' + d.name;
+    el.onclick = e => { if (!e.target.closest('.buy')) openItemDetail(d); };
     const btn = el.querySelector('.buy');
     if (btn) btn.onclick = () => { buy(d.lock, SAVE.unlockedItems, d.id, d.name, shut.length ? `. It shows up once ${shut.map(k => EFFECTS[k].name).join(' and ')} items are unlocked.` : '!'); renderCodex(); };
     wrap.appendChild(el);
   }
+  if (!wrap.children.length) wrap.innerHTML = '<p class="note">Nothing here.</p>';
   $('#codex .gold-line').innerHTML = goldPill();
 }
+function fuseLine(d) {
+  const effs = effectsOf(d), f = fuseLockOf(d);
+  return fuseUnlocked(SAVE, d) ? `<small class="fuse">✦ Fusion unlocked. At level 5 it fuses with any level 5 ${effs.map(k => EFFECTS[k].name).join(' or ')} item${isPassive(d) ? ' (as a passive it can only absorb other passives)' : ''}.</small>`
+    : `<small class="fuse">✦ Fusion locked: ${fuseLockText(d)} (${Math.min(runsAt(SAVE, d.id, f.level), f.runs)}/${f.runs}).</small>`;
+}
+// one line per tier with a history requirement: "Super 1/3 · Mega 0/5"
+function histLine(d) {
+  const parts = [];
+  for (let t = 2; t < TIER_KEYS.length; t++) { const [a, b] = histProgress(SAVE, d.id, t); if (b) parts.push(`<span class="${a >= b ? 'ok' : ''}">${a >= b ? '✓' : '○'} ${tierName(t)} ${Math.min(a, b)}/${b}</span>`); }
+  return parts.length ? `<small class="hist">${parts.join(' · ')} <i>· fusion history ›</i></small>` : `<small class="hist"><i>Fusion history ›</i></small>`;
+}
+// item chip for the detail view; dim = not fused with yet
+function itemChip(id, dim) {
+  const d = ITEM[id]; if (!d) return '';
+  const lock = !itemUnlocked(SAVE, d) || effectsOf(d).some(k => !catUnlocked(SAVE, k));
+  return `<span class="chip${dim ? ' dim' : ''}" style="--c:${EFFECTS[d.effect].color}" title="${d.name}: ${effectsOf(d).map(k => EFFECTS[k].name).join(' + ')}${lock ? ' (locked)' : ''}">${lock ? '🔒' : ''}${d.icon} ${d.name} <i>${effectsOf(d).map(k => EFFECTS[k].icon).join('')}</i>${heldNow(d) ? ' <b>▶</b>' : ''}</span>`;
+}
+const setChip = ids => `<span class="chip combo">${ids.map(id => ITEM[id] ? `${ITEM[id].icon} ${ITEM[id].name}` : id).join(' + ')}</span>`;
+function histBar(a, b, color) { return `<div class="bar"><i style="width:${Math.round(100 * Math.min(1, a / Math.max(1, b)))}%;background:${color}"></i></div>`; }
+// The detail view of one item: what it has fused with (across runs), what is left, and its Super / Mega progress.
+function itemDetailHtml(d) {
+  const effs = effectsOf(d), mine = new Set(effs);
+  const partners = ITEMS.filter(x => !x.disabled && x.id !== d.id && effectsOf(x).some(k => mine.has(k)));
+  const done = new Set(fusedSets(SAVE, d.id, 'fused').flat());
+  let h = `<div class="dHead"><div class="ico">${d.icon}</div><div><h3>${d.name}</h3><div class="tags"><span>${SLOTS[d.slot].icon} ${SLOTS[d.slot].name}</span><span>${effTags(d)}</span>${isPassive(d) ? '<span>Passive</span>' : ''}${heldNow(d) ? '<span class="held">In this run</span>' : ''}</div></div><button class="close" data-close aria-label="Close">✕</button></div>`;
+  h += `<small>${d.pattern}</small>${fuseLine(d)}`;
+  for (let t = 1; t < TIER_KEYS.length; t++) {
+    const key = TIER_KEYS[t], F = FUSION[key], sets = fusedSets(SAVE, d.id, key), [a, b] = histProgress(SAVE, d.id, t), col = TIER_COLORS[t];
+    const open = tierUnlocked(SAVE, key);
+    h += `<div class="dSec" style="--c:${col}"><h4>✦ ${F.name} fusion <small>${F.need} level 5 ${FUSION[TIER_KEYS[t - 1]].name.toLowerCase()} items that share an effect</small></h4>`;
+    const req = [];
+    if (t === 1) req.push(`<span class="part${fuseUnlocked(SAVE, d) ? ' ok' : ''}">${fuseUnlocked(SAVE, d) ? '✓' : '○'} ${d.name} mastery</span>`);
+    if (F.lock) req.push(`<span class="part${open ? ' ok' : ''}">${open ? '✓' : '○'} ${lockLabel(F.lock)}</span>`);
+    if (b) req.push(`<span class="part${a >= b ? ' ok' : ''}">${a >= b ? '✓' : '○'} ${d.name} ${histText(t)} (${Math.min(a, b)}/${b})</span>`);
+    if (req.length) h += `<div class="req">${req.join('')}</div>`;
+    if (b) h += histBar(a, b, col);
+    if (t === 1) {
+      h += `<p class="note">Fused with ${partners.filter(x => done.has(x.id)).length} of ${partners.length} items it can fuse with (they share ${effs.map(k => EFFECTS[k].name).join(' or ')}).${(FUSION[TIER_KEYS[2]] || {}).hist ? ` Each different one counts toward ${tierName(2)} fusion.` : ''}</p>`;
+      if (done.size) h += `<div class="chips left">${partners.filter(x => done.has(x.id)).map(x => itemChip(x.id)).join('')}</div>`;
+      const left = partners.filter(x => !done.has(x.id));
+      if (left.length) h += `<p class="note">Not fused with yet${inRun() ? ' (▶ = in this run)' : ''}:</p><div class="chips left">${left.map(x => itemChip(x.id, true)).join('')}</div>`;
+    } else {
+      const nextHist = t + 1 < TIER_KEYS.length ? (FUSION[TIER_KEYS[t + 1]] || {}).hist : 0;
+      h += `<p class="note">${sets.length ? `${sets.length} different ${F.name} fusion${sets.length > 1 ? 's' : ''} so far${nextHist ? `, each one counts toward ${tierName(t + 1)} fusion` : ''}:` : `No ${F.name} fusions yet.${nextHist ? ` Each one with a different set of partners counts toward ${tierName(t + 1)} fusion.` : ''}`}</p>`;
+      if (sets.length) h += `<div class="chips left">${sets.map(setChip).join('')}</div>`;
+    }
+    h += '</div>';
+  }
+  return h;
+}
+let detailItem = null;
+function openItemDetail(d) {
+  detailItem = d; const box = $('#itemDetail');
+  box.querySelector('.dPanel').innerHTML = itemDetailHtml(d); box.hidden = false;
+  box.querySelector('[data-close]').onclick = closeItemDetail;
+}
+function closeItemDetail() { detailItem = null; $('#itemDetail').hidden = true; }
+$('#itemDetail').onclick = e => { if (e.target.id === 'itemDetail') closeItemDetail(); };
+// Back from the Codex: to the pause menu during a run, else to the main menu
+function codexBack() { closeItemDetail(); if (inRun() && G.paused) { renderPause(); showScreen('pause'); } else showScreen('menu'); }
 function renderAchievements() {
   const list = achievementList(SAVE), box = $('#achBody'); box.innerHTML = '';
   const parts = a => (a.parts && !a.done ? `<div class="parts">${a.parts.map(p => `<small class="part${p.done ? ' ok' : ''}">${p.done ? '✓' : '○'} ${p.text}</small>`).join('')}</div>` : '');
@@ -956,7 +1026,7 @@ function cycleSpeed() { const c = speedChoices(); SAVE.settings.speed = c[(c.ind
 // one held item, for the pause screen: tier, effects its bullets carry, passive stats, what was fused into it
 function invChip(i) {
   const T = i.tier || 0, next = T < TIER_KEYS.length - 1 ? FUSION[TIER_KEYS[T + 1]] : null, st = instStats(i);
-  const fuseNote = i.level < MAX_LEVEL || !next ? '' : !T && !fuseUnlocked(SAVE, i.def) ? `Fusion locked: ${fuseLockText(i.def)}.` : !tierUnlocked(SAVE, TIER_KEYS[T + 1]) ? `${next.name} fusion locked: ${lockLabel(next.lock)}.` : `Ready: ${next.need} level 5 ${tierName(T).toLowerCase()} items sharing an effect make a ${next.name} item.`;
+  const fuseNote = i.level < MAX_LEVEL || !next ? '' : !T && !fuseUnlocked(SAVE, i.def) ? `Fusion locked: ${fuseLockText(i.def)}.` : !tierUnlocked(SAVE, TIER_KEYS[T + 1]) ? `${next.name} fusion locked: ${lockLabel(next.lock)}.` : !histMet(SAVE, i.def.id, T + 1) ? `${next.name} fusion locked for ${i.def.name}: ${histText(T + 1)} first (${histProgress(SAVE, i.def.id, T + 1).join('/')}). See its Codex page.` : `Ready: ${next.need} level 5 ${tierName(T).toLowerCase()} items sharing an effect make a ${next.name} item.`;
   return `<div class="chip" style="--c:${T ? TIER_COLORS[T] : EFFECTS[i.def.effect].color}">${i.def.icon} ${itemName(i)} <b>Lv${i.level}</b>${T ? ` <b style="color:${TIER_COLORS[T]}">${tierName(T)}</b>` : ''}${isPassive(i.def) ? ' <b style="color:#c9f">Passive</b>' : ''} <span style="font-size:11px">${effNames(instEffects(i))}</span>` +
     `<small>${isPassive(i.def) ? 'Passive: ' + (statText(st) || 'no stats') : i.def.pattern}</small>` + (i.riders.length && !isPassive(i.def) ? `<small>Its bullets also carry ${effNames(i.riders)}.</small>` : '') +
     (!isPassive(i.def) && Object.keys(st).length ? `<small>Stats from fused passives: ${statText(st)}.</small>` : '') + (i.gone.length ? `<small>Made from ${i.gone.length + 1} items: ${[i.def, ...i.gone].map(d => d.icon).join('')}</small>` : '') + (fuseNote ? `<small>${fuseNote}</small>` : '') + '</div>';
@@ -975,7 +1045,10 @@ function renderPause() {
 window.addEventListener('keydown', e => {
   keys[e.code] = true;
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
+  if (e.code === 'Escape' && detailItem) { closeItemDetail(); return; }
+  if (e.code === 'Escape' && currentScreen === 'codex') { codexBack(); return; }
   if (!G || G.over) return;
+  if (currentScreen === 'codex') return;
   // 1-4 only select; Enter (or the Confirm button) takes it. Letter keys do nothing here, so WASD can't pick or skip.
   if (currentScreen === 'levelup') { if (e.code === 'Space' || e.code === 'Enter' || e.code === 'NumpadEnter') e.preventDefault(); const n = parseInt(e.key, 10); if (n >= 1 && n <= 4) selectLevel(n - 1); if (e.code === 'Enter' || e.code === 'NumpadEnter') confirmLevel(); return; }
   if (e.code === 'Escape' || e.code === 'KeyP') togglePause();
@@ -992,7 +1065,8 @@ $('#btnPlay').onclick = () => showScreen('chars');
 $('#btnForge').onclick = () => showScreen('forge');
 $('#btnCodex').onclick = () => showScreen('codex');
 $('#btnAch').onclick = () => showScreen('achievements');
-document.querySelectorAll('[data-back]').forEach(b => b.onclick = () => showScreen('menu'));
+document.querySelectorAll('[data-back]').forEach(b => b.onclick = () => (b.closest('#codex') ? codexBack() : showScreen('menu')));
+$('#btnPauseCodex').onclick = () => { if (G && G.paused) { codexFilter = 'run'; showScreen('codex'); } };
 $('#btnStart').onclick = () => { const c = CHARACTERS.find(x => x.id === selectedChar); if (c && charPlayable(SAVE, c)) newRun(c.id, selectedStage); else toast('Pick a hero you have unlocked'); };
 $('#reroll').onclick = () => { if (G.player.rerolls <= 0 || (levelChoices || []).some(o => o.type === 'keep')) return; G.player.rerolls--; luSel = null; levelChoices = buildChoices(); renderLevelUp(); };
 $('#skip').onclick = () => { if (!levelChoices || levelChoices.some(o => o.type === 'keep')) return; luSel = 'skip'; renderLevelUp(); };
