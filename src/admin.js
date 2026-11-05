@@ -33,7 +33,7 @@ let ov = {};                                   // what you are editing
 let live = { ov: {}, updatedAt: 0, by: '' };   // content/live, what players get
 let draft = null;                              // content/draft
 let history = [];
-const TABLE_NAMES = { items: 'Item', chars: 'Character', upgrades: 'Forge upgrade', enemies: 'Enemy', bosses: 'Boss', drops: 'Pickup' };
+const TABLE_NAMES = { items: 'Item', chars: 'Character', cats: 'Category', difficulty: 'Difficulty', upgrades: 'Forge upgrade', enemies: 'Enemy', bosses: 'Boss', drops: 'Pickup' };
 
 // current value of one entry: items.js default with the overrides on top
 function get(t, id) {
@@ -75,6 +75,7 @@ function countEdits(a, b) {
   return n;
 }
 function edited() {
+  C.apply(ov); // the global tables follow the working copy (lock texts, the progress simulator)
   try { localStorage.setItem(WORK_KEY, JSON.stringify({ ov, at: Date.now() })); } catch (e) { /* storage unavailable */ }
   refreshStatus(); sbPushSoon();
 }
@@ -131,7 +132,7 @@ async function start() {
   let local = null; try { local = JSON.parse(localStorage.getItem(WORK_KEY) || 'null'); } catch (e) { /* ignore */ }
   ov = prune(local ? local.ov : live.ov);
   live.ov = prune(live.ov);
-  refreshStatus(); render(); sbPushSoon();
+  C.apply(ov); refreshStatus(); render(); sbPushSoon();
 }
 async function loadHistory() {
   try {
@@ -172,7 +173,9 @@ function itemHeader(id, v) {
   const d = ITEM[id], props = [];
   props.push('dmg: ' + lit(v.dmg));
   if (v.cd) props.push('cd: ' + lit(v.cd));
+  if (v.effect2) props.push('effect2: ' + lit(v.effect2));
   if (v.lock) props.push('lock: ' + lit(v.lock));
+  if (v.fuseLock) props.push('fuseLock: ' + lit(v.fuseLock));
   if (v.color) props.push('color: ' + lit(v.color));
   if (v.vis) props.push('vis: ' + lit(v.vis));
   if (v.disabled) props.push('disabled: true');
@@ -186,7 +189,9 @@ function exportItemsJs(src, o) {
   const replaceLine = (range, re, text) => { for (let i = range[0]; i <= range[1]; i++) if (re.test(lines[i])) { lines[i] = text; n++; return; } throw new Error('Could not find ' + re); };
   const keepOrder = (orig, v, fields) => { const out = clone(orig); for (const f of fields) { if (v[f] === undefined) delete out[f]; else out[f] = v[f]; } return out; };
   for (const id of Object.keys(o.items || {})) replaceLine([0, lines.length - 1], new RegExp(`^def\\('\\w+', '${id}',`), itemHeader(id, get('items', id)));
-  const tables = [['chars', 'CHARACTERS', id => CHARACTERS.find(c => c.id === id), (id, x) => `  ${lit(x)},`, id => new RegExp(`^\\s*\\{ id: '${id}',`)],
+  const tables = [['cats', 'CATEGORIES', id => CATEGORIES[id], (id, x) => `  ${id}: ${lit(x)},`, id => new RegExp(`^\\s*${id}:\\s*\\{`)],
+    ['difficulty', 'DIFFICULTY', id => DIFFICULTY[id], (id, x) => `  ${id}: ${lit(x)},`, id => new RegExp(`^\\s*${id}:\\s*\\{`)],
+    ['chars', 'CHARACTERS', id => CHARACTERS.find(c => c.id === id), (id, x) => `  ${lit(x)},`, id => new RegExp(`^\\s*\\{ id: '${id}',`)],
     ['upgrades', 'UPGRADES', id => UPGRADES.find(u => u.id === id), (id, x) => `  ${lit(x)},`, id => new RegExp(`^\\s*\\{ id: '${id}',`)],
     ['enemies', 'ENEMY_TYPES', id => ENEMY_TYPES[id], (id, x) => `  ${id}: ${lit(x)},`, id => new RegExp(`^\\s*${id}:\\s*\\{`)],
     ['bosses', 'BOSSES', id => BOSSES[id], (id, x) => `  ${id}: ${lit(x)},`, id => new RegExp(`^\\s*${id}:\\s*\\{`)],
@@ -234,37 +239,45 @@ const num = (t, id, f, o = {}) => h('input', { type: 'number', step: o.step || '
 function colorIn(value, onset) { return h('input', { type: 'color', value: /^#[0-9a-f]{6}$/i.test(value || '') ? value : '#ffffff', oninput: e => onset(e.target.value) }); }
 function sel(options, value, onset) { return h('select', { onchange: e => onset(e.target.value) }, options.map(([v, l]) => h('option', { value: v, selected: v === value }, l))); }
 
-function lockText(stat, min) {
-  const one = min === 1;
-  switch (stat) {
-    case 'totalKills': return `Defeat ${min} enemies (lifetime)`;
-    case 'bestTime': return `Survive ${Math.floor(min / 60)}:${String(min % 60).padStart(2, '0')}`;
-    case 'bossKills': return one ? 'Defeat a boss' : `Defeat ${min} bosses`;
-    case 'evolves': return one ? 'Fuse an item' : `Make ${min} fusions`;
-    case 'wins': return one ? 'Win a run' : `Win ${min} runs`;
-    case 'runs': return `Play ${min} runs`;
-    case 'maxLevel': return `Reach level ${min}`;
-    case 'totalGold': return `Earn ${min} gold (lifetime)`;
-  }
-  return '';
+// lock kinds and their texts live in progress.js (shared with the game)
+const LOCK_MODES = [['none', 'Available from the start'], ['cost', 'Bought with gold'], ['stat', 'Achievement: a lifetime stat'], ['effect', 'Achievement: level any item of a category'], ['item', 'Achievement: level one specific item']];
+const lockMode = l => !l ? 'none' : 'cost' in l ? 'cost' : l.item ? 'item' : l.effect ? 'effect' : 'stat';
+function defaultLock(m) {
+  const l = m === 'cost' ? { cost: 500 } : m === 'stat' ? { stat: 'totalKills', min: 500 } : m === 'effect' ? { effect: 'burn', level: 5 } : { item: ITEMS[0].id, level: 5, runs: 1 };
+  if (m !== 'cost') l.text = lockText(l); return l;
 }
-function lockFields(t, id) {
-  const lock = get(t, id).lock, mode = !lock ? 'none' : 'cost' in lock ? 'cost' : 'stat';
-  const out = [field('Unlock', sel([['none', 'Available from the start'], ['cost', 'Bought with gold'], ['stat', 'Achievement']], mode, m => {
-    set(t, id, 'lock', m === 'none' ? null : m === 'cost' ? { cost: 500 } : { stat: 'totalKills', min: 500, text: lockText('totalKills', 500) }, { rerender: true });
-  }), t, id, 'lock', { wide: true })];
+const effectOptions = () => EFFECT_KEYS.map(k => [k, `${EFFECTS[k].icon} ${EFFECTS[k].name}`]);
+const itemOptions = () => ITEMS.map(d => [d.id, `${get('items', d.id).icon} ${get('items', d.id).name}`]);
+function lockFields(t, id, modes = LOCK_MODES) {
+  const lock = get(t, id).lock, mode = lockMode(lock);
+  const out = [field('Unlock', sel(modes, mode, m => set(t, id, 'lock', m === 'none' ? null : defaultLock(m), { rerender: true })), t, id, 'lock', { wide: true })];
   if (mode === 'cost') out.push(field('Gold cost', h('input', { type: 'number', min: 0, step: 50, value: lock.cost, oninput: e => { const v = parseInt(e.target.value, 10); if (v >= 0) set(t, id, 'lock', { cost: v }); } }), t, id, 'lock'));
-  if (mode === 'stat') {
-    const upd = patch => { const cur = get(t, id).lock; const next = Object.assign({}, cur, patch); if (cur.text === lockText(cur.stat, cur.min)) next.text = lockText(next.stat, next.min); set(t, id, 'lock', next, { rerender: true }); };
-    out.push(field('Requirement', h('div', { class: 'inline' }, sel(Object.entries(C.STATS), lock.stat, s => upd({ stat: s })), h('span', {}, '≥'),
-      h('input', { type: 'number', min: 0, value: lock.min, onchange: e => { const v = parseInt(e.target.value, 10); if (v >= 0) upd({ min: v }); } })), t, id, 'lock', { wide: true, hint: lock.stat === 'bestTime' ? 'In seconds: 300 is 5:00.' : '' }));
-    out.push(field('Text players see', h('input', { type: 'text', value: lock.text, oninput: e => set(t, id, 'lock', Object.assign({}, get(t, id).lock, { text: e.target.value })) }), t, id, 'lock', { wide: true }));
-  }
+  if (mode === 'none' || mode === 'cost') return out;
+  // the text follows the requirement unless it was written by hand
+  const upd = patch => { const cur = get(t, id).lock; const next = Object.assign({}, cur, patch); if (cur.text === lockText(cur)) next.text = lockText(next); set(t, id, 'lock', next, { rerender: true }); };
+  const n = (k, min, max) => h('input', { type: 'number', min, max, style: 'width:72px', value: lock[k], onchange: e => { const v = parseInt(e.target.value, 10); if (v >= min && v <= max) upd({ [k]: v }); } });
+  let req;
+  if (mode === 'stat') req = h('div', { class: 'inline' }, sel(Object.entries(C.STATS), lock.stat, x => upd({ stat: x })), h('span', {}, '≥'), n('min', 0, 1e6));
+  if (mode === 'effect') req = h('div', { class: 'inline' }, h('span', {}, 'Level'), n('level', 1, 5), h('span', {}, 'with any'), sel(effectOptions(), lock.effect, x => upd({ effect: x })), h('span', {}, 'item'));
+  if (mode === 'item') req = h('div', { class: 'inline' }, h('span', {}, 'Level'), n('level', 1, 5), h('span', {}, 'with'), sel(itemOptions(), lock.item, x => upd({ item: x })), h('span', {}, 'in'), n('runs', 1, 1000), h('span', {}, 'runs'));
+  out.push(field('Requirement', req, t, id, 'lock', { wide: true, hint: mode === 'stat' && lock.stat === 'bestTime' ? 'In seconds: 300 is 5:00.' : mode === 'stat' ? '' : 'Counted when a run ends. Two-effect items count for both of their categories.' }));
+  out.push(field('Text players see', h('input', { type: 'text', value: lock.text, oninput: e => set(t, id, 'lock', Object.assign({}, get(t, id).lock, { text: e.target.value })) }), t, id, 'lock', { wide: true }));
   return out;
 }
+// fusion lock of one item: reach `level` with it in `runs` runs (0 = always fusable)
+function fuseLockInput(id, k, onDone) {
+  const cur = () => Object.assign({}, FUSE_LOCK, get('items', id).fuseLock || {});
+  const [min, max] = k === 'level' ? [1, 5] : [0, 1000];
+  return h('input', { type: 'number', min, max, style: 'width:64px', value: cur()[k], onchange: e => {
+    const v = parseInt(e.target.value, 10); if (!(v >= min && v <= max)) return;
+    const n = cur(); n[k] = v; set('items', id, 'fuseLock', canon(n) === canon(FUSE_LOCK) ? null : n, { rerender: !onDone }); if (onDone) onDone();
+  } });
+}
+const effectsOfId = id => effectsOf(get('items', id));
+const partnersOf = id => { const mine = effectsOfId(id); return ITEMS.filter(d => d.id !== id && !get('items', d.id).disabled && effectsOfId(d.id).some(k => mine.includes(k))); };
 
 // ---------- test canvas (the real game engine in an iframe, see the sandbox section of main.js) ----------
-const sb = { frame: null, ready: false, cfg: { item: ITEMS[0].id, level: 3, evo: false, layout: 'ring', tough: true, move: false }, numbers: true, dps: 0, shapes: [], timer: 0 };
+const sb = { frame: null, ready: false, cfg: { item: ITEMS[0].id, level: 3, fuse: null, layout: 'ring', tough: true, move: false }, numbers: true, dps: 0, shapes: [], timer: 0 };
 function sbSend(m) { if (sb.ready && sb.frame.contentWindow) sb.frame.contentWindow.postMessage(Object.assign({ vl: 'sandbox' }, m), location.origin); }
 function sbPushSoon() { clearTimeout(sb.timer); sb.timer = setTimeout(() => sbSend({ overrides: ov }), 120); }
 window.addEventListener('message', e => {
@@ -287,25 +300,33 @@ function sandboxPane() {
     const isRelic = ITEM[cfg.item].slot === 'relic';
     controls.replaceChildren(
       h('div', { class: 'controls' },
-        h('div', { class: 'grp' }, h('span', { class: 'lbl' }, 'Level'), [1, 2, 3, 4, 5].map(L => btn(String(L), cfg.level === L, () => conf({ level: L })))),
-        btn('✦ Fused', cfg.evo, () => conf({ evo: !cfg.evo }), 'Preview the fused version: ×1.8 damage, faster, +1 projectile'),
+        h('div', { class: 'grp' }, h('span', { class: 'lbl' }, 'Level'), [1, 2, 3, 4, 5].map(L => btn(String(L), cfg.fuse ? L === 5 : cfg.level === L, () => conf({ level: L, fuse: null }), cfg.fuse ? 'Fused items are always level 5' : ''))),
+        h('div', { class: 'grp' }, h('span', { class: 'lbl' }, '✦ Fuse with'), sel([['', 'nothing'], ...partnersOf(cfg.item).map(d => [d.id, `${get('items', d.id).icon} ${get('items', d.id).name}`])], cfg.fuse || '', v => conf({ fuse: v || null }))),
         h('div', { class: 'grp' }, h('span', { class: 'lbl' }, 'Targets'), sel([['ring', 'Ring'], ['line', 'Line'], ['scatter', 'Scattered'], ['swarm', 'Walking swarm']], cfg.layout, v => conf({ layout: v }))),
         btn('Unkillable', cfg.tough, () => conf({ tough: !cfg.tough }), 'Targets never die, so you can watch hits and status effects'),
         btn('Walk in a circle', cfg.move, () => conf({ move: !cfg.move }), 'Items that react to movement need this. You can also click the canvas and use WASD.'),
         btn('Numbers', sb.numbers, () => { sb.numbers = !sb.numbers; sbSend({ numbers: sb.numbers }); renderControls(); }, 'Damage numbers'),
         btn('↻ Restart', false, () => sbSend({ restart: true }))),
-      isRelic ? h('div', { class: 'controls' }, h('span', { class: 'lbl' }, 'Trigger'),
+      cfg.fuse ? h('div', { class: 'note' }, fusionSummary(cfg.item, cfg.fuse)) : null,
+      isRelic || (cfg.fuse && ITEM[cfg.fuse].slot === 'relic') ? h('div', { class: 'controls' }, h('span', { class: 'lbl' }, 'Trigger'),
         [['kill', 'Kill a target'], ['hurt', 'Get hit'], ['levelup', 'Level up'], ['crit', 'Critical hit'], ['pickup', 'Pick up crystal']].map(([k, l]) => btn(l, false, () => sbSend({ trigger: k })))) : '');
   }
   sb.renderControls = renderControls;
   return h('div', { class: 'canvaspane' }, h('div', { class: 'stage' }, sb.frame), controls, h('div', { class: 'readout', id: 'readout' }, 'Starting…'));
 }
+// what the fusion on the test canvas does, in words
+function fusionSummary(keep, gone) {
+  const a = get('items', keep), b = get('items', gone), effs = [...new Set([...effectsOfId(keep), ...effectsOfId(gone)])];
+  const sh = effectsOfId(keep).filter(k => effectsOfId(gone).includes(k)), pre = FUSE_PREFIX[sh.includes(a.effect) ? a.effect : sh[0]];
+  return `${pre} ${a.name}: ${a.name} remains at level 5 with ${a.dmg} + 50% × ${b.dmg} = ${+(a.dmg + 0.5 * b.dmg).toFixed(2)} base damage, −25% cooldown and +1 projectile. ` +
+    `${b.name}'s attack keeps firing inside it at 50% damage. Effects: ${effs.map(k => EFFECTS[k].icon + ' ' + EFFECTS[k].name).join(' + ')}. To test the other way round, pick ${b.name} and fuse it with ${a.name}.`;
+}
 function selectSandboxItem(def) {
   if (sb.cfg.item === def.id) return;
   const src = [def.fire, def.spawn, def.update, ...Object.values(def.on || {})].filter(Boolean).map(f => f.toString()).join('\n');
   sb.shapes = [];
-  sb.cfg.item = def.id; sb.cfg.move = /P\.moving|moveAng/.test(src) || !!(def.on && def.on.move);
-  sbSend({ config: { item: def.id, move: sb.cfg.move } });
+  sb.cfg.item = def.id; sb.cfg.move = /P\.moving|moveAng/.test(src) || !!(def.on && def.on.move); sb.cfg.fuse = null;
+  sbSend({ config: { item: def.id, move: sb.cfg.move, fuse: null } });
   sb.dps = 0; const r = $('#readout'); if (r) r.textContent = 'Starting…';
 }
 function staticShapes(def) {
@@ -317,7 +338,7 @@ function staticShapes(def) {
 
 // ---------- views ----------
 const SLOT_TABS = { weapon: 'Weapons', spell: 'Spells', orbit: 'Orbitals', trap: 'Deployables', relic: 'Relics' };
-const TABS = [['overview', 'Overview'], ...Object.entries(SLOT_TABS), ['chars', 'Characters'], ['enemies', 'Enemies'], ['drops', 'Pickups'], ['upgrades', 'Forge']];
+const TABS = [['overview', 'Overview'], ['progress', 'Progression'], ...Object.entries(SLOT_TABS), ['chars', 'Characters'], ['enemies', 'Enemies & difficulty'], ['drops', 'Pickups'], ['upgrades', 'Forge']];
 let tab = 'overview';
 const pickId = {};
 let ed = null; const other = h('div');
@@ -335,6 +356,7 @@ function render() {
   else if (tab === 'enemies') other.replaceChildren(enemyView());
   else if (tab === 'drops') other.replaceChildren(dropView());
   else if (tab === 'upgrades') other.replaceChildren(upgradeView());
+  else if (tab === 'progress') other.replaceChildren(progressView());
   else other.replaceChildren(overview());
 }
 let relist = () => {};
@@ -352,7 +374,7 @@ function itemView(slot) {
   if (!ids.includes(pickId[slot])) pickId[slot] = ids[0];
   const id = pickId[slot], def = ITEM[id], v = get('items', id), E = EFFECTS[v.effect];
   selectSandboxItem(def);
-  const list = listPane(() => ids.map(i => { const x = get('items', i); return { id: i, key: 'items:' + i, icon: x.icon, name: x.name, color: x.color || EFFECTS[x.effect].color, tag: (x.disabled ? 'off ' : '') + lockTag(x.lock), edited: entryChanged('items', i) }; }),
+  const list = listPane(() => ids.map(i => { const x = get('items', i); return { id: i, key: 'items:' + i, icon: x.icon, name: x.name, color: x.color || EFFECTS[x.effect].color, tag: (x.disabled ? 'off ' : '') + (x.effect2 ? '2fx ' : '') + (effectsOf(x).some(catLock) ? '◇' : '') + lockTag(x.lock), edited: entryChanged('items', i) }; }),
     () => pickId[slot], i => { pickId[slot] = i; render(); });
   const T = 'items';
   const effectOpts = EFFECT_KEYS.map(k => [k, `${EFFECTS[k].icon} ${EFFECTS[k].name}`]);
@@ -361,16 +383,23 @@ function itemView(slot) {
     h('div', { class: 'fields' },
       field('Name', txt(T, id, 'name', { relist: true }), T, id, 'name'),
       field('Icon', txt(T, id, 'icon', { relist: true }), T, id, 'icon', { hint: 'An emoji' }),
-      field('Effect', sel(effectOpts, v.effect, x => set(T, id, 'effect', x, { rerender: true })), T, id, 'effect', { hint: `Fuses into ${FUSE_PREFIX[v.effect]} ${v.name}. Changing it moves the item to another effect family.` }),
+      field('Effect', sel(effectOpts, v.effect, x => set(T, id, 'effect', x, { rerender: true })), T, id, 'effect', { hint: `Its category, and its color. Changing it moves the item to another family.` }),
+      field('Second effect', sel([['', '— none —'], ...effectOpts.filter(([k]) => k !== v.effect)], v.effect2 || '', x => set(T, id, 'effect2', x || null, { rerender: true })), T, id, 'effect2', { hint: 'Two-effect items add 60% of their level to each effect (not 100% to one), get +1 own stack of each (not +2), fuse with items of either effect, and need both categories unlocked. Give them about 70% of the usual damage.' }),
       field('In level-up choices', h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: !v.disabled, onchange: e => set(T, id, 'disabled', e.target.checked ? null : true, { rerender: true }) }), v.disabled ? 'Disabled: hidden from players' : 'Enabled'), T, id, 'disabled'),
       field('Description', txt(T, id, 'pattern', { area: true }), T, id, 'pattern', { wide: true }),
       def.slot === 'relic' ? field('Trigger text', txt(T, id, 'trig'), T, id, 'trig', { wide: true }) : null),
     h('h3', {}, 'Stats'),
     h('div', { class: 'fields' },
-      field('Base damage', num(T, id, 'dmg', { step: 1 }), T, id, 'dmg', { hint: '+30% per level, ×1.8 when fused' }),
+      field('Base damage', num(T, id, 'dmg', { step: 1 }), T, id, 'dmg', { hint: '+30% per level. When fused: + 50% of the absorbed item\'s damage' }),
       def.fire ? field('Cooldown (s)', num(T, id, 'cd', { step: 0.05 }), T, id, 'cd', { hint: '−7% per level, −25% when fused' }) : null),
     h('h3', {}, 'Unlock'),
-    h('div', { class: 'fields' }, lockFields(T, id)),
+    h('div', { class: 'fields' }, lockFields(T, id),
+      h('div', { class: 'f wide note' }, `Also needs its ${effectsOf(v).map(k => EFFECTS[k].name).join(' and ')} ${effectsOf(v).length > 1 ? 'categories' : 'category'}: ${effectsOf(v).map(k => catLock(k) ? `${EFFECTS[k].name} opens with “${catLock(k).text || lockText(catLock(k))}”` : `${EFFECTS[k].name} is open from the start`).join('; ')}. Categories are set on the Progression tab.`)),
+    h('h3', {}, 'Fusion'),
+    h('div', { class: 'fields' },
+      field('Fusion unlock', h('div', { class: 'inline' }, h('span', {}, 'Reach level'), fuseLockInput(id, 'level'), h('span', {}, 'with it in'), fuseLockInput(id, 'runs'), h('span', {}, 'runs')), T, id, 'fuseLock',
+        { wide: true, hint: `Players see this as the “${v.name} mastery” achievement. 0 runs = can always fuse. Both items in a fusion need their mastery.` }),
+      h('div', { class: 'f wide note' }, `Fuses with (any level 5 item sharing ${effectsOf(v).map(k => EFFECTS[k].name).join(' or ')}): ${partnersOf(id).map(d => get('items', d.id).icon + ' ' + get('items', d.id).name).join(', ') || 'nothing yet'}. Try one with “Fuse with” under the test canvas.`)),
     h('h3', {}, 'Visual style'),
     visualFields(def, v, E));
   ed.list.replaceChildren(list); ed.form.replaceChildren(form);
@@ -450,7 +479,7 @@ function tableView(title, note, t, ids, cols) {
 function enemyView() {
   const shapes = ['circle', 'tri', 'diamond', 'square', 'hex', 'star'].map(s => [s, s]);
   const cols = [{ f: 'name', label: 'Name', kind: 'text' }, { f: 'hp', label: 'HP' }, { f: 'spd', label: 'Speed' }, { f: 'r', label: 'Size' }, { f: 'dmg', label: 'Contact dmg' }, { f: 'xp', label: 'XP' }, { f: 'color', label: 'Color', kind: 'color' }];
-  return h('div', { style: 'display:grid;gap:16px' },
+  return h('div', { style: 'display:grid;gap:16px' }, difficultyView(),
     tableView('Enemies', 'HP and damage are the values at 0:00; both grow with the run clock.', 'enemies', Object.keys(BASE.enemies), [...cols, { f: 'shape', label: 'Shape', kind: 'select', options: shapes }]),
     tableView('Bosses', 'Bosses arrive at 5:00, 10:00 and 15:00. Their HP does not scale.', 'bosses', Object.keys(BASE.bosses), cols));
 }
@@ -463,11 +492,104 @@ function upgradeView() {
     { f: 'icon', label: 'Icon', kind: 'text' }, { f: 'name', label: 'Name', kind: 'text' }, { f: 'desc', label: 'Description', kind: 'text' }, { f: 'max', label: 'Ranks', step: 1 }, { f: 'cost', label: 'Base cost', step: 5 }, { f: 'per', label: 'Per rank' }]);
 }
 
+const DIFF_FIELDS = [['hpGrowth', 'Enemy HP growth', 'per minute'], ['hpCurve', 'Enemy HP curve', 'per minute²'], ['spawnBase', 'Spawns per second at 0:00', ''], ['spawnGrowth', 'Spawn growth', 'per minute'],
+  ['spawnCurve', 'Spawn curve', 'per minute²'], ['dmgGrowth', 'Enemy damage growth', 'per minute, 0.1 = +10%'], ['eliteEvery', 'Elite every (s)', ''], ['eliteHp', 'Elite HP ×', ''],
+  ['ringEvery', 'Encirclement every (s)', ''], ['bossHp', 'Boss HP ×', 'on top of the boss table'], ['xpStep', 'XP per level step', ''], ['xpCurve', 'XP curve exponent', '']];
+function difficultyView() {
+  const T = 'difficulty', id = 'run', D = get(T, id), at = m => ({ hp: 1 + m * D.hpGrowth + m * m * D.hpCurve, sp: D.spawnBase + m * D.spawnGrowth + m * m * D.spawnCurve, dmg: 1 + m * D.dmgGrowth });
+  const xp = l => Math.floor(5 + (l - 1) * D.xpStep + Math.pow(l - 1, D.xpCurve));
+  const row = m => { const x = at(m); return h('tr', {}, h('td', {}, `${m}:00`), h('td', {}, `×${x.hp.toFixed(1)}`), h('td', {}, x.sp.toFixed(1)), h('td', {}, `×${x.dmg.toFixed(2)}`)); };
+  return h('div', { class: 'card' }, h('h2', {}, 'Difficulty', h('span', { class: 'spacer' }), entryChanged(T, id) ? h('button', { class: 'small', onclick: () => resetEntry(T, id) }, 'Reset difficulty') : null),
+    h('p', { class: 'note', style: 'margin-top:-6px' }, 'How the run gets harder with the clock. The table updates when you leave a field. Changes reach the test canvas only for enemies it spawns; play a run to feel them.'),
+    h('div', { class: 'fields', style: 'grid-template-columns: repeat(auto-fill, minmax(190px, 1fr))' }, DIFF_FIELDS.map(([f, label, hint]) =>
+      field(label, h('input', { type: 'number', step: 'any', min: 0, value: D[f], onchange: e => { const v = parseFloat(e.target.value); if (isFinite(v) && v >= 0) set(T, id, f, v, { rerender: true }); } }), T, id, f, { hint }))),
+    h('div', { class: 'tablewrap', style: 'margin-top:12px' }, h('table', {}, h('tr', {}, h('th', {}, 'Time'), h('th', {}, 'Enemy HP'), h('th', {}, 'Spawns/s'), h('th', {}, 'Enemy damage')), [0, 3, 5, 10, 15].map(row))),
+    h('p', { class: 'note' }, `XP to reach level 2: ${xp(1)}, level 10: ${xp(9)}, level 20: ${xp(19)}, level 30: ${xp(29)}. Elites have ×${D.eliteHp} HP; bosses ×${D.bossHp} of the boss table.`));
+}
+
+// ---------- progression: categories, fusion locks and a progress simulator ----------
+let sim = null; // a pretend player save, to see what a player at some point of progress gets
+const simSave = () => (sim = sim || normalizeSave(null));
+function progressView() { return h('div', { style: 'display:grid;gap:16px' }, categoryCard(), fusionCard(), simulatorCard()); }
+function categoryCard() {
+  const T = 'cats', start = startingCats();
+  return h('div', { class: 'card' }, h('h2', {}, 'Item categories'),
+    h('p', { class: 'note', style: 'margin-top:-6px' }, `A run only offers items whose categories are all unlocked (a two-effect item needs both). Open from the start: ${start.map(k => EFFECTS[k].icon + ' ' + EFFECTS[k].name).join(', ') || 'none'}. A hero's starting weapon is always available to that hero. Unlocks are checked when a run ends.`),
+    h('div', { class: 'catgrid' }, EFFECT_KEYS.map(k => {
+      const items = ITEMS.filter(d => effectsOfId(d.id).includes(k) && !get('items', d.id).disabled);
+      return h('div', { class: 'catcard', style: `--c:${EFFECTS[k].color}` },
+        h('div', { class: 'inline' }, h('b', {}, `${EFFECTS[k].icon} ${EFFECTS[k].name}`), h('span', { class: 'spacer' }), entryChanged(T, k) ? h('button', { class: 'small', onclick: () => resetEntry(T, k) }, 'reset') : null),
+        h('small', { class: 'hint' }, `${items.length} items, ${items.filter(d => effectsOfId(d.id).length > 1).length} of them two-effect`),
+        h('div', { class: 'fields', style: 'grid-template-columns:minmax(0,1fr)' }, lockFields(T, k, LOCK_MODES.filter(m => m[0] !== 'cost'))));
+    })));
+}
+function fusionCard() {
+  const all = lock => { for (const d of ITEMS) set('items', d.id, 'fuseLock', lock); render(); toast('Fusion locks updated for every item.'); };
+  return h('div', { class: 'card' }, h('h2', {}, 'Fusion locks (mastery achievements)'),
+    h('p', { class: 'note', style: 'margin-top:-6px' }, 'Fusing an item unlocks once a player has reached the level below with it in that many runs (counted when the run ends). Both items in a fusion need it. 0 runs means it can always fuse. Players see each one as “<item> mastery” on the Achievements screen.'),
+    h('div', { class: 'controls' }, h('span', { class: 'lbl' }, 'Set every item:'), h('button', { class: 'small', onclick: () => all(null) }, `Default (level ${FUSE_LOCK.level}, ${FUSE_LOCK.runs} run)`),
+      h('button', { class: 'small', onclick: () => all({ level: 5, runs: 2 }) }, 'Level 5 in 2 runs'), h('button', { class: 'small', onclick: () => all({ level: 5, runs: 3 }) }, 'Level 5 in 3 runs'), h('button', { class: 'small', onclick: () => all({ level: 5, runs: 0 }) }, 'No lock')),
+    h('div', { class: 'tablewrap', style: 'max-height:420px;overflow-y:auto;margin-top:8px' }, h('table', {}, h('tr', {}, h('th', {}, 'Item'), h('th', {}, 'Slot'), h('th', {}, 'Effects'), h('th', {}, 'Fusion unlocks at'), h('th', {}, 'Fuses with')),
+      ITEMS.map(d => { const v = get('items', d.id);
+        return h('tr', {}, h('td', {}, h('button', { class: 'link', onclick: () => { tab = d.slot; pickId[tab] = d.id; render(); window.scrollTo(0, 0); } }, `${v.icon} ${v.name}`)), h('td', {}, SLOTS[d.slot].name),
+          h('td', {}, effectsOf(v).map(k => EFFECTS[k].icon + ' ' + EFFECTS[k].name).join(' + ')),
+          h('td', { class: changed('items', d.id, 'fuseLock') ? 'changed' : '' }, h('div', { class: 'inline' }, h('span', {}, 'Level'), fuseLockInput(d.id, 'level'), h('span', {}, 'in'), fuseLockInput(d.id, 'runs'), h('span', {}, 'runs'))),
+          h('td', {}, h('small', {}, `${partnersOf(d.id).length} items`)));
+      }))));
+}
+function simulatorCard() {
+  const s = simSave(), redo = () => render();
+  const setSim = (x, msg) => { sim = normalizeSave(x); redo(); if (msg) toast(msg); };
+  async function loadMine() {
+    try { const snap = await fb.F.getDoc(fb.F.doc(fb.db, 'users', user.uid)); if (snap.exists() && snap.data().save) return setSim(snap.data().save, 'Loaded your cloud save (a copy: nothing is written back).'); }
+    catch (e) { console.warn(e); }
+    try { const raw = localStorage.getItem('voidlight.save.v1'); if (raw) return setSim(JSON.parse(raw), 'Loaded the save in this browser (a copy).'); } catch (e) { /* ignore */ }
+    toast('No save found for this account or browser.', true);
+  }
+  function everything() {
+    const x = normalizeSave(null); x.gold = 99999; x.unlockedCats = EFFECT_KEYS.slice(); x.unlockedItems = ITEMS.filter(d => d.lock).map(d => d.id); x.unlockedChars = CHARACTERS.map(c => c.id);
+    for (const d of ITEMS) x.itemRuns[d.id] = [9, 9, 9, 9, 9]; setSim(x, 'Everything unlocked.');
+  }
+  function play() {
+    try { localStorage.setItem('voidlight.testsave', JSON.stringify(s)); localStorage.setItem('voidlight.testcontent', JSON.stringify(ov)); }
+    catch (e) { return toast('This browser blocks storage, so the test game cannot start.', true); }
+    window.open('index.html?testsave', '_blank');
+  }
+  function fromGame() { try { const raw = localStorage.getItem('voidlight.testsave'); if (raw) return setSim(JSON.parse(raw), 'Loaded the progress from the test game.'); } catch (e) { /* ignore */ } toast('No test game progress yet.', true); }
+  const pending = applyUnlocks(normalizeSave(clone(s)));
+  const avail = ITEMS.filter(d => !get('items', d.id).disabled && itemUnlocked(s, d)), fusable = avail.filter(d => fuseUnlocked(s, d));
+  const ach = achievementList(s);
+  const masteryRow = d => {
+    const r = s.itemRuns[d.id] || [0, 0, 0, 0, 0], best = r.reduce((b, v, k) => (v > 0 ? k + 1 : b), 0), runs = best ? r[best - 1] : 0;
+    const write = (b, n) => { s.itemRuns[d.id] = [1, 2, 3, 4, 5].map(L => (L <= b ? n : 0)); if (!b || !n) delete s.itemRuns[d.id]; redo(); };
+    return h('div', { class: 'simrow' + (itemUnlocked(s, d) ? '' : ' off') }, h('span', { class: 'nm' }, `${get('items', d.id).icon} ${get('items', d.id).name}`),
+      sel([0, 1, 2, 3, 4, 5].map(L => [String(L), L ? 'Lv ' + L : '—']), String(best), x => write(+x, Math.max(1, runs))),
+      h('input', { type: 'number', min: 0, style: 'width:56px', value: runs, title: 'Runs that reached that level', onchange: e => write(best || 5, Math.max(0, parseInt(e.target.value, 10) || 0)) }),
+      h('span', { class: 'tag', title: fuseLockText(d) }, fuseUnlocked(s, d) ? '✦' : ''));
+  };
+  return h('div', { class: 'card' }, h('h2', {}, 'Test a player’s progress'),
+    h('p', { class: 'note', style: 'margin-top:-6px' }, 'A pretend save, separate from every real one. Set where a player is, see what they get, then play the real game with it in a new tab (with your unpublished edits). Progress in that tab stays in the test save.'),
+    h('div', { class: 'controls' }, h('button', { class: 'small', onclick: () => setSim(null, 'Fresh save.') }, 'Fresh save'), h('button', { class: 'small', onclick: loadMine }, 'Copy my save'),
+      h('button', { class: 'small', onclick: everything }, 'Everything unlocked'), h('button', { class: 'small', onclick: () => { const f = applyUnlocks(s); redo(); toast(f.length ? 'Granted: ' + f.join(', ') : 'Nothing new to grant.'); } }, 'Grant earned achievements'),
+      h('button', { class: 'small', onclick: fromGame }, 'Load from test game'), h('span', { class: 'spacer' }), h('button', { class: 'primary', onclick: play }, '▶ Play with this save')),
+    h('div', { class: 'simgrid' },
+      h('div', {},
+        h('h3', {}, 'Lifetime stats'), h('div', { class: 'fields' }, Object.keys(C.STATS).map(k => h('div', { class: 'f' }, h('label', {}, C.STATS[k]), h('input', { type: 'number', min: 0, value: s.stats[k] || 0, onchange: e => { s.stats[k] = Math.max(0, parseFloat(e.target.value) || 0); redo(); } })))),
+        h('div', { class: 'f', style: 'margin-top:10px' }, h('label', {}, 'Gold'), h('input', { type: 'number', min: 0, value: s.gold, onchange: e => { s.gold = Math.max(0, parseFloat(e.target.value) || 0); redo(); } })),
+        h('h3', {}, 'Categories unlocked'), h('div', { class: 'checks' }, EFFECT_KEYS.map(k => h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: catUnlocked(s, k), disabled: !catLock(k), onchange: e => { s.unlockedCats = s.unlockedCats.filter(x => x !== k); if (e.target.checked) s.unlockedCats.push(k); redo(); } }), `${EFFECTS[k].icon} ${EFFECTS[k].name}${catLock(k) ? '' : ' (start)'}`))),
+        h('h3', {}, 'What this player gets'),
+        h('p', { class: 'note' }, `${avail.length} of ${ITEMS.filter(d => !get('items', d.id).disabled).length} items can show up in runs (${SLOT_KEYS.map(k => `${SLOTS[k].icon} ${avail.filter(d => d.slot === k).length}`).join(' · ')}). ${fusable.length} of them can fuse. ${ach.filter(a => a.done).length}/${ach.length} achievements done.`),
+        h('p', { class: 'note' }, pending.length ? `Earned but not granted yet (granted when their next run ends): ${pending.join(', ')}.` : 'Nothing earned and waiting.'),
+        h('div', { class: 'chipbox' }, avail.map(d => h('span', { class: 'chip', title: effectsOf(d).map(k => EFFECTS[k].name).join(' + ') + (fuseUnlocked(s, d) ? ' · can fuse' : ' · fusion locked') }, `${get('items', d.id).icon} ${get('items', d.id).name}${fuseUnlocked(s, d) ? ' ✦' : ''}`)))),
+      h('div', {}, h('h3', {}, 'Best level reached per item, and in how many runs'), h('div', { class: 'simlist' }, ITEMS.map(masteryRow)),
+        h('p', { class: 'note' }, 'Greyed items are not available with these unlocks. ✦ = fusion unlocked.'))));
+}
+
 function overview() {
   const all = ITEMS.map(d => get('items', d.id)), chars = CHARACTERS.map(c => ({ id: c.id, ...get('chars', c.id) }));
   const stat = (n, label, sub) => h('div', { class: 'card stat' }, h('b', {}, n), label, sub ? h('small', { style: 'display:block' }, sub) : null);
-  const go = (t, id) => { if (t === 'items') { tab = ITEM[id].slot; pickId[tab] = id; } else if (t === 'chars') { tab = 'chars'; pickId.chars = id; } else tab = t === 'bosses' ? 'enemies' : t; render(); window.scrollTo(0, 0); };
-  const unlockRows = [...ITEMS.map(d => ['items', d.id, get('items', d.id)]), ...CHARACTERS.map(c => ['chars', c.id, get('chars', c.id)])].filter(r => r[2].lock);
+  const go = (t, id) => { if (t === 'items') { tab = ITEM[id].slot; pickId[tab] = id; } else if (t === 'chars') { tab = 'chars'; pickId.chars = id; } else tab = { bosses: 'enemies', difficulty: 'enemies', cats: 'progress' }[t] || t; render(); window.scrollTo(0, 0); };
+  const unlockRows = [...EFFECT_KEYS.map(k => ['cats', k, get('cats', k)]), ...ITEMS.map(d => ['items', d.id, get('items', d.id)]), ...CHARACTERS.map(c => ['chars', c.id, get('chars', c.id)])].filter(r => r[2].lock);
   const edits = [];
   for (const t of Object.keys(BASE)) for (const id of Object.keys(BASE[t])) {
     const a = (ov[t] || {})[id] || {}, b = (live.ov[t] || {})[id] || {};
@@ -475,10 +597,11 @@ function overview() {
     const fields = [...new Set([...Object.keys(a), ...Object.keys(b)])].filter(f => canon(a[f]) !== canon(b[f]));
     edits.push([t, id, fields]);
   }
-  const nameOf = (t, id) => { const v = get(t, id); return (v.icon ? v.icon + ' ' : '') + (v.name || id); };
+  const nameOf = (t, id) => { if (t === 'cats') return `${EFFECTS[id].icon} ${EFFECTS[id].name} items`; if (t === 'difficulty') return 'Run difficulty'; const v = get(t, id); return (v.icon ? v.icon + ' ' : '') + (v.name || id); };
   return h('div', { style: 'display:grid;gap:16px' },
     h('div', { class: 'stats' },
-      stat(all.length, 'items', `${all.filter(x => x.lock).length} locked · ${all.filter(x => x.disabled).length} disabled`),
+      stat(all.length, 'items', `${all.filter(x => x.effect2).length} two-effect · ${all.filter(x => x.lock).length} own locks · ${all.filter(x => x.disabled).length} disabled`),
+      stat(startingCats().length + ' / ' + EFFECT_KEYS.length, 'categories at start', startingCats().map(k => EFFECTS[k].name).join(', ')),
       stat(chars.length, 'characters', `${chars.filter(x => x.lock).length} locked`),
       stat(Object.keys(BASE.enemies).length + Object.keys(BASE.bosses).length, 'enemies', `${Object.keys(BASE.bosses).length} of them bosses`),
       stat(Object.keys(BASE.drops).length, 'pickups'), stat(UPGRADES.length, 'Forge upgrades'),
@@ -486,10 +609,11 @@ function overview() {
     h('div', { class: 'card' }, h('h2', {}, 'Changes not yet published'),
       edits.length ? h('table', {}, edits.map(([t, id, f]) => h('tr', {}, h('td', {}, TABLE_NAMES[t]), h('td', {}, h('button', { class: 'link', onclick: () => go(t, id) }, nameOf(t, id))), h('td', {}, h('code', {}, f.join(', '))))))
         : h('p', { class: 'note' }, `Everything matches the live game. Last published ${ago(live.updatedAt)}${live.by ? ' by ' + live.by : ''}.`)),
-    h('div', { class: 'card' }, h('h2', {}, 'Unlocks'),
+    h('div', { class: 'card' }, h('h2', {}, 'Unlocks and achievements'),
       h('div', { class: 'tablewrap' }, h('table', {}, h('tr', {}, h('th', {}, 'What'), h('th', {}, 'Type'), h('th', {}, 'How players unlock it')),
-        unlockRows.map(([t, id, v]) => h('tr', {}, h('td', {}, h('button', { class: 'link', onclick: () => go(t, id) }, nameOf(t, id))), h('td', {}, t === 'items' ? SLOTS[ITEM[id].slot].name : 'Character'),
-          h('td', {}, v.lock.cost ? `Buy for ● ${v.lock.cost}` : `${v.lock.text}  `, v.lock.stat ? h('code', {}, `${v.lock.stat} ≥ ${v.lock.min}`) : null)))))),
+        unlockRows.map(([t, id, v]) => h('tr', {}, h('td', {}, h('button', { class: 'link', onclick: () => go(t, id) }, nameOf(t, id))), h('td', {}, t === 'items' ? SLOTS[ITEM[id].slot].name : t === 'cats' ? 'Category' : 'Character'),
+          h('td', {}, v.lock.cost ? `Buy for ● ${v.lock.cost}` : `${v.lock.text}  `, h('code', {}, v.lock.stat ? `${v.lock.stat} ≥ ${v.lock.min}` : v.lock.item ? `${v.lock.item} Lv${v.lock.level} × ${v.lock.runs} runs` : v.lock.effect ? `any ${v.lock.effect} item Lv${v.lock.level}` : '')))))),
+      h('p', { class: 'note' }, 'Fusion locks (one per item) are on the Progression tab.')),
     h('div', { class: 'card' }, h('h2', {}, 'Publish history'),
       history.length ? h('table', {}, history.map(x => h('tr', {}, h('td', {}, new Date(x.updatedAt).toLocaleString()), h('td', {}, x.by), h('td', {}, `${countEdits(prune(x.ov), {})} edited entries`),
         h('td', {}, h('button', { class: 'small', onclick: () => { if (confirm('Replace your current edits with this published version? Nothing is published until you press Publish.')) setWorking(x.ov, 'Loaded. Press Publish to roll the game back to it.'); } }, 'Load')))))

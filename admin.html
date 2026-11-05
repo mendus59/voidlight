@@ -101,12 +101,24 @@
   .preview .avatar { font-size: 30px; color: var(--c); text-shadow: 0 0 14px var(--c); }
   .preview small { color: var(--muted); } .preview .perk { font-size: 12px; color: #c9f; }
 
+  /* progression tab */
+  .catgrid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+  .catcard { border: 1px solid var(--line); border-left: 3px solid var(--c); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .catcard .inline { flex-wrap: wrap; } .catcard .inline .spacer { flex: 1; } .catcard .inline input[type=number] { width: 56px !important; flex: none; } .catcard .inline select { width: auto; flex: 1; min-width: 110px; }
+  .simgrid { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); margin-top: 6px; }
+  .simlist { display: flex; flex-direction: column; gap: 3px; max-height: 620px; overflow-y: auto; }
+  .simrow { display: flex; gap: 6px; align-items: center; } .simrow .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+  .simrow select { width: auto; } .simrow.off .nm { opacity: 0.45; } .simrow .tag { width: 14px; color: #ffe14d; }
+  .checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 4px; }
+  .chipbox { display: flex; flex-wrap: wrap; gap: 4px; } .chip { font-size: 12px; border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; }
+  .controls .spacer { flex: 1; }
   #toasts { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; z-index: 20; pointer-events: none; width: min(520px, calc(100% - 32px)); }
   .toast { background: var(--panel2); border: 1px solid var(--line2); border-radius: 10px; padding: 9px 14px; text-align: center; animation: fade 4s forwards; }
   .toast.bad { border-color: var(--bad); }
   @keyframes fade { 0%, 85% { opacity: 1; } 100% { opacity: 0; } }
 
   @media (max-width: 1200px) { .editor { grid-template-columns: 200px minmax(0, 1fr); } .canvaspane { grid-column: 2; position: static; } }
+  @media (max-width: 900px) { .simgrid { grid-template-columns: minmax(0, 1fr); } }
   @media (max-width: 760px) {
     header { position: static; } main { padding: 12px; } .editor { grid-template-columns: minmax(0, 1fr); } .canvaspane { grid-column: auto; }
     .list { position: static; flex-direction: row; overflow-x: auto; max-height: none; } .row { width: auto; flex: none; }
@@ -144,6 +156,7 @@
 <script src="src/core.js"></script>
 <script src="src/items.js"></script>
 <script src="src/content.js"></script>
+<script src="src/progress.js"></script>
 <script type="module" src="src/admin.js"></script>
 </body>
 </html>

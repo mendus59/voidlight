@@ -70,6 +70,15 @@
   #toasts { position: fixed; bottom: 70px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; z-index: 10; pointer-events: none; width: min(560px, calc(100% - 32px)); }
   .toast { background: rgba(18, 14, 36, 0.95); border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; font-size: 14px; text-align: center; animation: fade 3.5s forwards; }
   @keyframes fade { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
+  .testsave { color: #ffb84c; margin-bottom: 6px; }
+  .achSec h3 { margin: 16px 0 4px; font-size: 15px; } .achSec h3 small { color: var(--muted); font-weight: 400; }
+  .achSec .note { color: var(--muted); font-size: 12px; margin: 0 0 8px; }
+  .achGrid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+  .card.ach { opacity: 0.75; } .card.ach.done { opacity: 1; border-color: rgba(107, 255, 143, 0.5); }
+  .card.ach .ico { font-size: 22px; } .card.ach .rew { color: #c9f; } .card.ach .ok { color: #6bff8f; }
+  .card.ach .bar { height: 4px; background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden; margin-top: 2px; }
+  .card.ach .bar i { display: block; height: 100%; background: linear-gradient(90deg, #7a3cff, #c04cff); }
+  .card.ach.done .bar i { background: #6bff8f; }
   @media (max-width: 600px) { .panel { padding: 14px; } .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); } #codexGrid { grid-template-columns: 1fr; } }
 </style>
 </head>
@@ -83,10 +92,11 @@
     <button class="big primary" id="btnPlay">▶ Play</button>
     <button class="big" id="btnForge">⚒ Forge (upgrades)</button>
     <button class="big" id="btnCodex">📖 Codex &amp; Armory</button>
+    <button class="big" id="btnAch">🏆 Achievements</button>
   </div>
   <div class="stats"></div>
   <div id="account" hidden></div>
-  <div class="help">Move: WASD / arrows (drag on touch) · Dash: Space or Shift (second finger) · Pause: Esc / P<br>Weapons fire automatically. Every item adds its effect to <b>all</b> your bullets. Max two same-effect items to fuse.</div>
+  <div class="help">Move: WASD / arrows (drag on touch) · Dash: Space or Shift (second finger) · Pause: Esc / P<br>Weapons fire automatically. Every item adds its effect to <b>all</b> your bullets. Max two items that share an effect, then fuse them: one absorbs the other and frees its socket.</div>
   <div class="center" style="margin-top:12px"><button class="link" id="btnReset">Reset save</button></div>
 </div></div>
 
@@ -108,6 +118,12 @@
   <div class="head"><h2>📖 Codex &amp; Armory</h2><div class="gold-line"></div></div>
   <div class="tabs" id="codexTabs"></div>
   <div class="grid" id="codexGrid"></div>
+  <div class="head" style="margin-top:14px"><button data-back>← Back</button></div>
+</div></div>
+
+<div class="screen" id="achievements"><div class="panel">
+  <div class="head"><h2>🏆 Achievements</h2><div class="gold-line"></div></div>
+  <div id="achBody"></div>
   <div class="head" style="margin-top:14px"><button data-back>← Back</button></div>
 </div></div>
 
@@ -134,6 +150,7 @@
 <script src="src/core.js"></script>
 <script src="src/items.js"></script>
 <script src="src/content.js"></script>
+<script src="src/progress.js"></script>
 <script src="src/main.js"></script>
 <script type="module" src="src/cloud.js"></script>
 </body>
