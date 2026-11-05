@@ -8,10 +8,47 @@ function defaultSave() {
     stats: { totalKills: 0, bestTime: 0, bossKills: 0, evolves: 0, wins: 0, runs: 0, maxLevel: 0, totalGold: 0 }, settings: { numbers: true }, lastChar: 'kael' };
 }
 let SAVE = defaultSave();
-function loadSave() {
-  try { const raw = localStorage.getItem(SAVE_KEY); if (raw) { const s = JSON.parse(raw); const d = defaultSave(); SAVE = Object.assign(d, s); SAVE.stats = Object.assign(d.stats, s.stats || {}); SAVE.settings = Object.assign(defaultSave().settings, s.settings || {}); } } catch (e) { SAVE = defaultSave(); }
+// Fills in any fields an older or partial save is missing.
+function normalizeSave(s) {
+  const d = defaultSave(); if (!s || typeof s !== 'object') return d;
+  const out = Object.assign(d, s);
+  out.stats = Object.assign(defaultSave().stats, s.stats || {});
+  out.settings = Object.assign(defaultSave().settings, s.settings || {});
+  out.upg = Object.assign({}, s.upg || {});
+  out.unlockedItems = Array.isArray(s.unlockedItems) ? s.unlockedItems.slice() : [];
+  out.unlockedChars = Array.isArray(s.unlockedChars) ? s.unlockedChars.slice() : d.unlockedChars;
+  return out;
 }
-function writeSave() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(SAVE)); } catch (e) { /* storage unavailable */ } }
+function loadSave() {
+  try { const raw = localStorage.getItem(SAVE_KEY); if (raw) SAVE = normalizeSave(JSON.parse(raw)); } catch (e) { SAVE = defaultSave(); }
+}
+// Every change goes through here: localStorage first, then the cloud hook (src/cloud.js) when signed in.
+function writeSave() {
+  SAVE.updatedAt = Date.now();
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(SAVE)); } catch (e) { /* storage unavailable */ }
+  if (window.VOIDLIGHT_CLOUD) try { window.VOIDLIGHT_CLOUD.saved(SAVE); } catch (e) { /* cloud is best effort */ }
+}
+// Combines progress a guest made on this device with an account's cloud save, so nothing earned is lost.
+// Gold and counters add up, ranks and records take the higher value, unlocks are the union.
+function mergeSaves(a, b) {
+  a = normalizeSave(a); b = normalizeSave(b);
+  const m = normalizeSave(b);
+  m.gold = (a.gold || 0) + (b.gold || 0);
+  for (const id of new Set([...Object.keys(a.upg), ...Object.keys(b.upg)])) m.upg[id] = Math.max(a.upg[id] || 0, b.upg[id] || 0);
+  m.unlockedItems = [...new Set([...a.unlockedItems, ...b.unlockedItems])];
+  m.unlockedChars = [...new Set([...a.unlockedChars, ...b.unlockedChars])];
+  for (const k of ['totalKills', 'bossKills', 'evolves', 'wins', 'runs', 'totalGold']) m.stats[k] = (a.stats[k] || 0) + (b.stats[k] || 0);
+  for (const k of ['bestTime', 'maxLevel']) m.stats[k] = Math.max(a.stats[k] || 0, b.stats[k] || 0);
+  return m;
+}
+// Swaps in a whole save (used by cloud sync) and refreshes whatever menu is open.
+function replaceSave(s, { persist = true } = {}) {
+  SAVE = normalizeSave(s);
+  if (G) G.settings = SAVE.settings;
+  if (persist) { try { localStorage.setItem(SAVE_KEY, JSON.stringify(SAVE)); } catch (e) { /* storage unavailable */ } }
+  checkUnlocks();
+  if (!G && ['menu', 'chars', 'forge', 'codex'].includes(currentScreen)) showScreen(currentScreen);
+}
 const itemUnlocked = d => !d.lock || SAVE.unlockedItems.includes(d.id);
 const charUnlocked = c => !c.lock || SAVE.unlockedChars.includes(c.id);
 function checkUnlocks() {
@@ -649,7 +686,7 @@ $('#btnMenu').onclick = () => { G = null; showScreen('menu'); };
 let resetArmed = 0;
 $('#btnReset').onclick = () => {
   const b = $('#btnReset');
-  if (Date.now() - resetArmed < 4000) { SAVE = defaultSave(); writeSave(); renderMenu(); b.textContent = 'Reset save'; resetArmed = 0; toast('Progress erased'); return; }
+  if (Date.now() - resetArmed < 4000) { const owner = SAVE.owner; SAVE = defaultSave(); if (owner) SAVE.owner = owner; writeSave(); renderMenu(); b.textContent = 'Reset save'; resetArmed = 0; toast('Progress erased'); return; }
   resetArmed = Date.now(); b.textContent = 'Click again to erase all progress'; setTimeout(() => { if (resetArmed && Date.now() - resetArmed >= 4000) b.textContent = 'Reset save'; }, 4100);
 };
 
@@ -664,4 +701,4 @@ function frame(now) {
 loadSave(); checkUnlocks(); showScreen('menu'); requestAnimationFrame(frame);
 
 // debug hooks for testing
-window.VOIDLIGHT = { get G() { return G; }, SAVE: () => SAVE, ITEMS, addItem: id => addItem(ITEM[id]), update, newRun, levelItem, fuseItem };
+window.VOIDLIGHT = { get G() { return G; }, SAVE: () => SAVE, ITEMS, defaultSave, normalizeSave, mergeSaves, replaceSave, toast, addItem: id => addItem(ITEM[id]), update, newRun, levelItem, fuseItem };

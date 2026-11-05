@@ -2,9 +2,11 @@
 import re, pathlib
 root = pathlib.Path(__file__).parent
 html = (root / 'index.html').read_text()
-for name in ['core', 'items', 'main']:
+for name in ['firebase-config', 'core', 'items', 'main']:
     js = (root / 'src' / f'{name}.js').read_text()
     html = html.replace(f'<script src="src/{name}.js"></script>', '<script>\n' + js + '\n</script>')
+js = (root / 'src' / 'cloud.js').read_text()
+html = html.replace('<script type="module" src="src/cloud.js"></script>', '<script type="module">\n' + js + '\n</script>')
 (root / 'dist').mkdir(exist_ok=True)
 (root / 'dist' / 'voidlight.html').write_text(html)
 # artifact variant: no document skeleton tags
