@@ -544,16 +544,18 @@ function fmtTime(t) { t = Math.floor(t); return Math.floor(t / 60) + ':' + Strin
 function drawHUD() {
   const W = VIEW.w, H = VIEW.h, P = G.player; const small = W < 640;
   if (G.sandbox) { drawSandboxHUD(); return; }
+  const L = 62, hpW = Math.min(140, W / 2 - L - 48); // left column starts after the pause button; keep clear of the timer
   // xp bar
   ctx.fillStyle = 'rgba(20,16,40,0.9)'; ctx.fillRect(0, 0, W, 10); ctx.fillStyle = '#5ab8ff'; ctx.fillRect(0, 0, W * clamp(G.xp / G.xpNext, 0, 1), 10);
   ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.font = 'bold 14px system-ui,sans-serif'; ctx.fillStyle = '#fff';
-  ctx.fillText('LV ' + G.level, 12, 16);
+  ctx.fillText('LV ' + G.level, L, 16);
   // hp
-  ctx.fillStyle = '#300'; ctx.fillRect(12, 36, 140, 10); ctx.fillStyle = '#ff3b5c'; ctx.fillRect(12, 36, 140 * clamp(P.hp / P.maxHp, 0, 1), 10);
-  ctx.fillStyle = '#fff'; ctx.font = '11px system-ui,sans-serif'; ctx.fillText(Math.ceil(P.hp) + ' / ' + P.maxHp, 16, 36);
-  ctx.font = '12px system-ui,sans-serif'; ctx.fillStyle = P.dashCd > 0 ? '#888' : '#7fdcff'; ctx.fillText(P.dashCd > 0 ? 'Dash ' + P.dashCd.toFixed(1) : 'Dash ready', 12, 52);
+  ctx.fillStyle = '#300'; ctx.fillRect(L, 36, hpW, 10); ctx.fillStyle = '#ff3b5c'; ctx.fillRect(L, 36, hpW * clamp(P.hp / P.maxHp, 0, 1), 10);
+  ctx.fillStyle = '#fff'; ctx.font = '11px system-ui,sans-serif'; ctx.fillText(Math.ceil(P.hp) + ' / ' + P.maxHp, L + 4, 36);
+  ctx.font = '12px system-ui,sans-serif'; ctx.fillStyle = P.dashCd > 0 ? '#888' : '#7fdcff'; ctx.fillText(P.dashCd > 0 ? 'Dash ' + P.dashCd.toFixed(1) : 'Dash ready', L, 52);
   // timer
   ctx.textAlign = 'center'; ctx.font = 'bold 26px system-ui,sans-serif'; ctx.fillStyle = '#fff'; ctx.fillText(fmtTime(G.time), W / 2, 16);
+  if (gameSpeed() !== 1) { ctx.font = 'bold 12px system-ui,sans-serif'; ctx.fillStyle = '#c9a0ff'; ctx.fillText('▶▶ ' + gameSpeed() + 'x', W / 2, 46); }
   // kills/gold
   ctx.textAlign = 'right'; ctx.font = 'bold 14px system-ui,sans-serif'; ctx.fillStyle = '#ddd'; ctx.fillText('☠ ' + G.kills, W - 12, 16); ctx.fillStyle = '#ffd24c'; ctx.fillText('● ' + Math.floor(G.gold), W - 12, 36);
   // boss bar
@@ -726,11 +728,15 @@ function togglePause() {
   if (G.paused) { G.paused = false; showScreen(null); }
   else { G.paused = true; renderPause(); showScreen('pause'); }
 }
+const SPEEDS = [1, 1.25, 1.5, 2];
+function gameSpeed() { const v = SAVE.settings.speed; return SPEEDS.includes(v) ? v : 1; }
+function cycleSpeed() { SAVE.settings.speed = SPEEDS[(SPEEDS.indexOf(gameSpeed()) + 1) % SPEEDS.length]; writeSave(); }
 function renderPause() {
   const inv = G.inv.map(i => `<div class="chip" style="--c:${EFFECTS[i.def.effect].color}">${i.def.icon} ${itemName(i)} <b>Lv${i.level}</b> <span style="font-size:11px">${effNames(instEffects(i))}</span><small>${i.def.pattern}</small>${i.absorbed.length ? `<small>Fused with ${i.absorbed.map(a => a.icon + ' ' + a.name).join(', ')} (attacks at 50%).</small>` : i.level >= MAX_LEVEL && !fuseUnlocked(SAVE, i.def) ? `<small>Fusion locked: ${fuseLockText(i.def)}.</small>` : ''}</div>`).join('');
   const pool = EFFECT_KEYS.filter(k => G.pool[k]).map(k => `<span style="color:${EFFECTS[k].color}">${EFFECTS[k].icon} ${EFFECTS[k].name} ×${G.pool[k]}</span>`).join(' · ') || 'none';
   $('#pauseBody').innerHTML = `<div class="chips col">${inv}</div><p><b>Effect pool</b> (applies to every bullet): ${pool}</p>`;
   $('#numToggle').textContent = 'Damage numbers: ' + (SAVE.settings.numbers ? 'on' : 'off');
+  $('#speedToggle').innerHTML = 'Game speed: <b>' + gameSpeed() + 'x</b>';
 }
 
 // ---------------- input ----------------
@@ -758,6 +764,8 @@ $('#btnStart').onclick = () => { const c = CHARACTERS.find(x => x.id === selecte
 $('#reroll').onclick = () => { if (G.player.rerolls <= 0 || (levelChoices || []).some(o => o.type === 'keep')) return; G.player.rerolls--; levelChoices = buildChoices(); renderLevelUp(); };
 $('#btnResume').onclick = togglePause;
 $('#btnQuit').onclick = () => { G.paused = false; endRun(false); };
+$('#speedToggle').onclick = () => { cycleSpeed(); renderPause(); };
+$('#pauseBtn').onclick = e => { e.currentTarget.blur(); togglePause(); };
 $('#numToggle').onclick = () => { SAVE.settings.numbers = !SAVE.settings.numbers; writeSave(); renderPause(); };
 $('#btnAgain').onclick = () => { const id = G.char.id; newRun(id); };
 $('#btnMenu').onclick = () => { G = null; showScreen('menu'); };
@@ -842,9 +850,14 @@ function sandboxBoot() {
 
 // ---------------- main loop ----------------
 let last = performance.now();
+const pauseBtn = $('#pauseBtn');
 function frame(now) {
   const dt = Math.min(0.033, (now - last) / 1000); last = now;
-  if (G && !G.paused && !G.over) update(dt);
+  if (G && !G.paused && !G.over) {
+    const speed = G.sandbox ? 1 : gameSpeed(), steps = Math.ceil(speed);
+    for (let i = 0; i < steps && !G.paused && !G.over; i++) update(dt * speed / steps);
+  }
+  pauseBtn.hidden = !(G && !G.sandbox && !G.over && !currentScreen);
   render();
   requestAnimationFrame(frame);
 }
