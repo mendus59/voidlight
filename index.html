@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Voidlight</title>
+<style>
+  :root { color-scheme: dark; --bg: #07060f; --panel: rgba(18, 14, 36, 0.94); --line: rgba(160, 130, 255, 0.25); --text: #ece8ff; --muted: #9a93c0; --accent: #a55cff; --gold: #ffd24c; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; overflow: hidden; user-select: none; }
+  canvas { display: block; position: fixed; inset: 0; touch-action: none; }
+  .screen { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; padding: 16px; background: rgba(5, 4, 12, 0.72); backdrop-filter: blur(3px); z-index: 5; overflow-y: auto; }
+  .screen.show { display: flex; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 22px; width: min(1000px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; box-shadow: 0 0 60px rgba(165, 92, 255, 0.15); }
+  h1 { font-size: clamp(42px, 9vw, 84px); margin: 0; letter-spacing: 0.12em; background: linear-gradient(90deg, #ff8a3d, #ff4cc3, #7fdcff); -webkit-background-clip: text; background-clip: text; color: transparent; text-align: center; }
+  h2 { margin: 0 0 12px; font-size: 22px; }
+  .sub { text-align: center; color: var(--muted); margin: 6px 0 22px; }
+  .menuBtns { display: flex; flex-direction: column; gap: 10px; width: min(320px, 100%); margin: 0 auto; }
+  button { font: inherit; color: var(--text); background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--accent); background: rgba(165, 92, 255, 0.14); }
+  button:disabled { opacity: 0.4; cursor: default; }
+  button.big { font-size: 18px; padding: 14px; }
+  button.primary { background: linear-gradient(90deg, #7a3cff, #c04cff); border: none; font-weight: 700; }
+  button.link { background: none; border: none; color: var(--muted); text-decoration: underline; padding: 0 6px; font-size: 13px; }
+  .stats { text-align: center; color: var(--muted); font-size: 13px; margin-top: 20px; }
+  .gold { color: var(--gold); font-weight: 700; }
+  .head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  .grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+  .card { text-align: left; display: flex; flex-direction: column; gap: 4px; position: relative; border-radius: 12px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.04); padding: 12px; }
+  .card small { color: var(--muted); font-size: 12px; line-height: 1.35; }
+  .card.char { align-items: center; text-align: center; border-color: color-mix(in srgb, var(--c) 40%, transparent); }
+  .card.char .avatar { font-size: 30px; color: var(--c); text-shadow: 0 0 14px var(--c); }
+  .card.char.sel { border: 2px solid var(--c); box-shadow: 0 0 18px color-mix(in srgb, var(--c) 40%, transparent); }
+  .card.locked { opacity: 0.6; }
+  .card .wpn { font-size: 13px; } .card .perk { font-size: 12px; color: #c9f; }
+  .card .req { font-size: 12px; color: #ff9e4c; }
+  #charInfo { margin: 14px 0; color: var(--muted); font-size: 14px; }
+  .card.up .ico, .card.item .ico { font-size: 24px; }
+  .card.up .pips { letter-spacing: 2px; color: var(--accent); }
+  .card.up .cost { color: var(--gold); font-weight: 700; }
+  .card.up.maxed { opacity: 0.6; } .card.up.poor .cost { color: #a66; }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .tab.sel { border-color: var(--accent); background: rgba(165, 92, 255, 0.2); }
+  .card.item { flex-direction: row; gap: 10px; border-left: 3px solid var(--c); }
+  .card.item .body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .tags { display: flex; gap: 6px; flex-wrap: wrap; font-size: 11px; }
+  .tags span { background: rgba(255, 255, 255, 0.06); border-radius: 6px; padding: 1px 6px; }
+  .fuse i { color: #ffe14d; font-style: normal; }
+  .buy { font-size: 12px; padding: 4px 8px; margin-top: 4px; align-self: flex-start; color: var(--gold); }
+  #codexGrid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+  #luCards { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+  .card.lu { cursor: pointer; padding: 16px; border: 1px solid color-mix(in srgb, var(--c, #a55cff) 50%, transparent); background: linear-gradient(180deg, color-mix(in srgb, var(--c, #a55cff) 14%, transparent), rgba(255,255,255,0.02)); transition: transform 0.08s; }
+  .card.lu:hover { transform: translateY(-3px); border-color: var(--c, #a55cff); }
+  .card.lu .ico { font-size: 34px; } .card.lu .key { position: absolute; top: 8px; right: 10px; color: var(--muted); font-size: 12px; }
+  .card.lu .tag { font-size: 11px; font-weight: 800; letter-spacing: 0.08em; color: var(--c, #fff); }
+  .card.lu.fuse { border: 2px solid #ffe14d; box-shadow: 0 0 24px rgba(255, 225, 77, 0.35); }
+  .card.lu.fuse .tag { color: #ffe14d; }
+  .center { text-align: center; } .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin: 10px 0; }
+  .row > div { background: rgba(255,255,255,0.05); border-radius: 10px; padding: 10px 16px; display: flex; flex-direction: column; align-items: center; min-width: 90px; }
+  .row small { color: var(--muted); } .row b { font-size: 20px; }
+  #goTitle { font-size: 48px; margin: 0 0 6px; text-align: center; letter-spacing: 0.1em; } #goTitle.win { color: #6bff8f; } #goTitle.lose { color: #ff3b5c; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; justify-content: center; } .chips.col { flex-direction: column; align-items: stretch; }
+  .chip { border: 1px solid var(--c); border-radius: 8px; padding: 4px 8px; font-size: 13px; } .chip small { display: block; color: var(--muted); font-size: 11px; }
+  .unlocks { background: rgba(107, 255, 143, 0.08); border: 1px solid rgba(107, 255, 143, 0.4); border-radius: 10px; padding: 10px; text-align: center; margin: 10px 0; }
+  .help { color: var(--muted); font-size: 13px; text-align: center; margin-top: 16px; line-height: 1.5; }
+  #toasts { position: fixed; bottom: 70px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; z-index: 10; pointer-events: none; width: min(560px, calc(100% - 32px)); }
+  .toast { background: rgba(18, 14, 36, 0.95); border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; font-size: 14px; text-align: center; animation: fade 3.5s forwards; }
+  @keyframes fade { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
+  @media (max-width: 600px) { .panel { padding: 14px; } .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); } #codexGrid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div class="screen show" id="menu"><div class="panel" style="max-width:560px">
+  <h1>VOIDLIGHT</h1>
+  <div class="sub">Survive the swarm. Build the storm.</div>
+  <div class="menuBtns">
+    <button class="big primary" id="btnPlay">▶ Play</button>
+    <button class="big" id="btnForge">⚒ Forge (upgrades)</button>
+    <button class="big" id="btnCodex">📖 Codex &amp; Armory</button>
+  </div>
+  <div class="stats"></div>
+  <div class="help">Move: WASD / arrows (drag on touch) · Dash: Space or Shift (second finger) · Pause: Esc / P<br>Weapons fire automatically. Every item adds its effect to <b>all</b> your bullets. Max two same-effect items to fuse.</div>
+  <div class="center" style="margin-top:12px"><button class="link" id="btnReset">Reset save</button></div>
+</div></div>
+
+<div class="screen" id="chars"><div class="panel">
+  <div class="head"><h2>Choose your hero</h2><div class="gold-line"></div></div>
+  <div class="grid" id="charGrid"></div>
+  <div id="charInfo"></div>
+  <div class="head"><button data-back>← Back</button><button class="primary big" id="btnStart">Start run</button></div>
+</div></div>
+
+<div class="screen" id="forge"><div class="panel">
+  <div class="head"><h2>⚒ The Forge</h2><div class="gold-line"></div></div>
+  <p style="color:var(--muted);margin-top:0">Permanent upgrades bought with Void Gold. They apply to every hero.</p>
+  <div class="grid" id="forgeGrid"></div>
+  <div class="head" style="margin-top:14px"><button data-back>← Back</button></div>
+</div></div>
+
+<div class="screen" id="codex"><div class="panel">
+  <div class="head"><h2>📖 Codex &amp; Armory</h2><div class="gold-line"></div></div>
+  <div class="tabs" id="codexTabs"></div>
+  <div class="grid" id="codexGrid"></div>
+  <div class="head" style="margin-top:14px"><button data-back>← Back</button></div>
+</div></div>
+
+<div class="screen" id="levelup"><div class="panel" style="max-width:900px">
+  <h2 class="center" id="luTitle">Level up!</h2>
+  <div id="luCards"></div>
+  <div class="center" style="margin-top:14px"><button id="reroll">🎲 Reroll</button> <small style="color:var(--muted)">Press 1–4 to pick</small></div>
+</div></div>
+
+<div class="screen" id="pause"><div class="panel" style="max-width:640px">
+  <h2 class="center">Paused</h2>
+  <div id="pauseBody"></div>
+  <div class="row"><button class="primary" id="btnResume">Resume</button><button id="numToggle">Damage numbers</button><button id="btnQuit">End run</button></div>
+</div></div>
+
+<div class="screen" id="gameover"><div class="panel" style="max-width:640px">
+  <div id="goTitle">YOU FELL</div>
+  <div id="goBody"></div>
+  <div class="row"><button class="primary" id="btnAgain">Run again</button><button id="btnMenu">Main menu</button></div>
+</div></div>
+
+<div id="toasts"></div>
+<script src="src/core.js"></script>
+<script src="src/items.js"></script>
+<script src="src/main.js"></script>
+</body>
+</html>
