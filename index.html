@@ -24,6 +24,8 @@
   button.link { background: none; border: none; color: var(--muted); text-decoration: underline; padding: 0 6px; font-size: 13px; }
   .stats { text-align: center; color: var(--muted); font-size: 13px; margin-top: 20px; }
   .gold { color: var(--gold); font-weight: 700; }
+  .head h2 { margin: 0; flex: 1; }
+  .backBtn { order: -1; }
   .head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
   .grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
   .card { text-align: left; display: flex; flex-direction: column; gap: 4px; position: relative; border-radius: 12px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.04); padding: 12px; }
@@ -79,11 +81,15 @@
   .card.ach .bar { height: 4px; background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden; margin-top: 2px; }
   .card.ach .bar i { display: block; height: 100%; background: linear-gradient(90deg, #7a3cff, #c04cff); }
   .card.ach.done .bar i { background: #6bff8f; }
+  #pauseBtn { position: fixed; top: 16px; left: 10px; z-index: 4; width: 44px; height: 44px; padding: 0; border-radius: 10px; font-size: 18px; font-weight: 800; background: rgba(18, 14, 36, 0.8); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; letter-spacing: -1px; }
+  #pauseBtn[hidden] { display: none; }
+  #speedToggle b { color: var(--accent); }
   @media (max-width: 600px) { .panel { padding: 14px; } .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); } #codexGrid { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
 <canvas id="game"></canvas>
+<button id="pauseBtn" hidden aria-label="Pause" title="Pause (Esc / P)">❚❚</button>
 
 <div class="screen show" id="menu"><div class="panel" style="max-width:560px">
   <h1>VOIDLIGHT</h1>
@@ -96,35 +102,32 @@
   </div>
   <div class="stats"></div>
   <div id="account" hidden></div>
-  <div class="help">Move: WASD / arrows (drag on touch) · Dash: Space or Shift (second finger) · Pause: Esc / P<br>Weapons fire automatically. Every item adds its effect to <b>all</b> your bullets. Max two items that share an effect, then fuse them: one absorbs the other and frees its socket.</div>
+  <div class="help">Move: WASD / arrows (drag on touch) · Dash: Space or Shift (second finger) · Pause: Esc / P or the ❚❚ button<br>Weapons fire automatically. Every item adds its effect to <b>all</b> your bullets. Max two items that share an effect, then fuse them: one absorbs the other and frees its socket.</div>
   <div class="center" style="margin-top:12px"><button class="link" id="btnReset">Reset save</button></div>
 </div></div>
 
 <div class="screen" id="chars"><div class="panel">
-  <div class="head"><h2>Choose your hero</h2><div class="gold-line"></div></div>
+  <div class="head"><button data-back class="backBtn">← Back</button><h2>Choose your hero</h2><div class="gold-line"></div></div>
   <div class="grid" id="charGrid"></div>
   <div id="charInfo"></div>
-  <div class="head"><button data-back>← Back</button><button class="primary big" id="btnStart">Start run</button></div>
+  <div class="head" style="justify-content:flex-end"><button class="primary big" id="btnStart">Start run</button></div>
 </div></div>
 
 <div class="screen" id="forge"><div class="panel">
-  <div class="head"><h2>⚒ The Forge</h2><div class="gold-line"></div></div>
+  <div class="head"><button data-back class="backBtn">← Back</button><h2>⚒ The Forge</h2><div class="gold-line"></div></div>
   <p style="color:var(--muted);margin-top:0">Permanent upgrades bought with Void Gold. They apply to every hero.</p>
   <div class="grid" id="forgeGrid"></div>
-  <div class="head" style="margin-top:14px"><button data-back>← Back</button></div>
 </div></div>
 
 <div class="screen" id="codex"><div class="panel">
-  <div class="head"><h2>📖 Codex &amp; Armory</h2><div class="gold-line"></div></div>
+  <div class="head"><button data-back class="backBtn">← Back</button><h2>📖 Codex &amp; Armory</h2><div class="gold-line"></div></div>
   <div class="tabs" id="codexTabs"></div>
   <div class="grid" id="codexGrid"></div>
-  <div class="head" style="margin-top:14px"><button data-back>← Back</button></div>
 </div></div>
 
 <div class="screen" id="achievements"><div class="panel">
-  <div class="head"><h2>🏆 Achievements</h2><div class="gold-line"></div></div>
+  <div class="head"><button data-back class="backBtn">← Back</button><h2>🏆 Achievements</h2><div class="gold-line"></div></div>
   <div id="achBody"></div>
-  <div class="head" style="margin-top:14px"><button data-back>← Back</button></div>
 </div></div>
 
 <div class="screen" id="levelup"><div class="panel" style="max-width:900px">
@@ -136,7 +139,7 @@
 <div class="screen" id="pause"><div class="panel" style="max-width:640px">
   <h2 class="center">Paused</h2>
   <div id="pauseBody"></div>
-  <div class="row"><button class="primary" id="btnResume">Resume</button><button id="numToggle">Damage numbers</button><button id="btnQuit">End run</button></div>
+  <div class="row"><button class="primary" id="btnResume">Resume</button><button id="speedToggle" title="Tap to cycle 1x, 1.25x, 1.5x, 2x">Game speed</button><button id="numToggle">Damage numbers</button><button id="btnQuit">End run</button></div>
 </div></div>
 
 <div class="screen" id="gameover"><div class="panel" style="max-width:640px">
