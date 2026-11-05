@@ -32,8 +32,22 @@ const SLOTS = {
   trap:   { name: 'Deployable', icon: '🛠️', sockets: 2 },
   relic:  { name: 'Relic', icon: '💠', sockets: 2 },
 };
-const SLOT_KEYS = Object.keys(SLOTS);
+const SLOT_KEYS = Object.keys(SLOTS); // sockets is the base count; the Forge can add more (slotSockets in main.js)
 const MAX_LEVEL = 5;
+// Player stats that hero perks, Forge ranks and passive items add to. pct: shown as a percentage. neg: lowers the value.
+const STAT_INFO = {
+  might: { name: 'damage', pct: true }, hp: { name: 'max HP', pct: true }, armor: { name: 'armor' }, regen: { name: 'HP/s' },
+  speed: { name: 'move speed', pct: true }, area: { name: 'area', pct: true }, cd: { name: 'cooldowns', pct: true, neg: true },
+  projSpd: { name: 'projectile speed', pct: true }, duration: { name: 'duration', pct: true }, amount: { name: 'projectiles' },
+  crit: { name: 'crit chance', pct: true }, magnet: { name: 'pickup range', pct: true }, luck: { name: 'luck', pct: true },
+  growth: { name: 'XP', pct: true }, greed: { name: 'gold', pct: true },
+};
+const STAT_KEYS = Object.keys(STAT_INFO);
+function statText(m, k = 1) {
+  return Object.entries(m || {}).filter(([s, v]) => STAT_INFO[s] && v).map(([s, v]) => { const I = STAT_INFO[s], x = v * k * (I.neg ? -1 : 1);
+    return (x >= 0 ? '+' : '−') + (I.pct ? +(Math.abs(x) * 100).toFixed(1) + '%' : +Math.abs(x).toFixed(2)) + ' ' + I.name; }).join(', ');
+}
+const TIER_COLORS = ['#ffffff', '#ffe14d', '#5affd9', '#ff4cc3'];
 
 let G = null;          // current run state
 let VIEW = { w: 960, h: 640 };
@@ -112,7 +126,8 @@ function poolStack(b, k) {
 }
 
 function shoot(o) {
-  if (G.bullets.length > 2600) return null;
+  // bullet cap; higher fusion tiers get headroom so big fused items are not starved by a screen full of small bullets
+  if (G.bullets.length > 2600 + 900 * ((o.owner && o.owner.tier) || 0)) return null;
   const P = G.player;
   const b = Object.assign({ x: P.x, y: P.y, ang: 0, spd: 400, r: 5, dmg: 10, life: 1.5, pierce: 1, t: 0, color: '#fff', shape: 'orb', effect: null }, o);
   b.spd *= P.projSpd;
@@ -277,7 +292,7 @@ function hitEnemy(e, b) {
   if ((s = S('vampiric')) > 0 && Math.random() < 0.012 * s) heal(1);
   if (b.lifesteal) heal(dmg * b.lifesteal);
   damageEnemy(e, dmg, crit ? '#ffe14d' : (b.effect ? EFFECTS[b.effect].color : '#ffffff'), crit);
-  if (crit && hitDepth < 3) trigger('crit', e);
+  if (crit && hitDepth < 3 && !b.noTrig) trigger('crit', e); // noTrig: bullets made by a crit trigger, so crits cannot chain forever
   // shock arcs
   if (!b.noChain && hitDepth < 3 && (s = S('shock')) > 0 && Math.random() < 0.06 * s) {
     const n = nearest(e.x, e.y, 150, new Set([e.id]));
@@ -311,12 +326,16 @@ function trigger(name, arg) {
 }
 
 // ---------- item instance ctx ----------
-// A fused item adds 50% of each absorbed item's base damage to its own. An absorbed item keeps firing inside it
-// as a sub-instance with mul 0.5 (half damage).
-function baseDmg(inst) { let d = inst.def.dmg; for (const a of inst.absorbed || []) d += 0.5 * a.dmg; return d * (inst.mul || 1); }
+// inst.base is the item's base damage: its own, plus 50% of the base of everything fused into it (set in main.js fuse()).
+// The fusion tier (FUSION in items.js) multiplies it; each tier also adds +1 projectile and its cooldown factor.
+function baseDmg(inst) { return (inst.base ?? inst.def.dmg) * tierOf(inst).mul; }
 function ctxOf(inst) {
-  const P = G.player, L = inst.level, E = inst.evo ? 1 : 0, def = inst.def, e2 = def.effect2 || def.effect;
-  return { L, E, P, x: P.x, y: P.y, d: baseDmg(inst) * (1 + 0.3 * (L - 1)) * P.might, n: P.amount + E, aim: aimAngle(), face: P.face,
+  const P = G.player, L = inst.level, T = inst.tier || 0, E = T ? 1 : 0, def = inst.def, e2 = def.effect2 || (inst.riders && inst.riders[0]) || def.effect;
+  return { L, E, T, P, x: P.x, y: P.y, d: baseDmg(inst) * (1 + 0.3 * (L - 1)) * P.might, n: P.amount + T, aim: aimAngle(), face: P.face,
     col: def.color || EFFECTS[def.effect].color, col2: EFFECTS[e2].color, eff: def.effect, eff2: e2, inst };
 }
-function itemName(inst) { return inst.evo ? FUSE_PREFIX[inst.fuseEff || inst.def.effect] + ' ' + inst.def.name + ((inst.absorbed || []).length > 1 ? ' II' : '') : inst.def.name; }
+function itemName(inst) {
+  const T = inst.tier || 0; if (!T) return inst.def.name;
+  const fused = (FUSE_PREFIX[inst.fuseEff || inst.def.effect] || 'Fused') + ' ' + inst.def.name;
+  return T === 1 ? fused : tierOf(inst).name + ' ' + fused;
+}

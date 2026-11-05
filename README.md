@@ -42,15 +42,15 @@ https://mendus59.github.io/voidlight/admin.html (or `localhost:8000/admin.html`)
 How it fits together: `src/content.js` lists what is editable, keeps the items.js values, and applies the published overrides on top; `src/cloud.js` downloads `content/live`; `src/admin.js` is the panel. Changing `firestore.rules` means pasting them into **Firestore > Rules** again and clicking **Publish**.
 
 ## Controls
-WASD / arrow keys to move, Space or Shift to dash (brief invulnerability), Esc or P to pause, 1–4 to pick level-up cards, R to reroll.
+WASD / arrow keys to move, Space or Shift to dash (brief invulnerability), Esc or P to pause, 1–4 to pick level-up cards, R to reroll, S to skip.
 On touch screens, drag to move and tap with a second finger to dash.
 
 ## Files
 | File | What's in it |
 |---|---|
-| `DESIGN.md` | Progression design, all 65 items, categories and mastery, fusion, combination math, characters |
+| `DESIGN.md` | Progression design: 10 levels, 74 items, passive items, categories and mastery, the 4 fusion tiers, combination math, characters |
 | `src/core.js` | Engine: spatial grid, bullets and their behaviours, effect pool, reactions, damage |
-| `src/items.js` | Content: 65 item definitions (one bullet pattern each), 11 characters, categories, difficulty, enemies and bosses, pickups, Forge upgrades |
+| `src/items.js` | Content: 74 item definitions (one bullet pattern each, or a passive stat map), 15 characters, categories, 10 levels, fusion tiers, difficulty, enemies and bosses, pickups, Forge upgrades |
 | `src/progress.js` | Save format and migration, unlock rules, achievements (shared by the game and the admin simulator) |
 | `src/content.js` | Applies content published from the admin page on top of items.js |
 | `admin.html`, `src/admin.js` | The admin panel |
@@ -63,6 +63,6 @@ On touch screens, drag to move and tap with a second finger to dash.
 Call `def(slot, id, name, effect, icon, { dmg, cd, pattern, fire(inst, c) {...} })` in `src/items.js`.
 `c` gives you level `c.L`, damage `c.d`, extra projectiles `c.n`, aim angle `c.aim`, and the helper `B(c, {...})` spawns a bullet carrying the item's effect.
 Persistent things use `spawn(inst, c)`, reactive relics use `on: { kill, hurt, crit, pickup, move, levelup }`.
-Keep the plain-data properties (`dmg`, `cd`, `effect2`, `lock`, `fuseLock`, `pattern`, …) on the `def(` line, so the admin export can rewrite it. `effect2` makes it a two-effect item (`c.col2` is its color). Locks are `{ cost: 500 }`, `{ stat: 'totalKills', min: 500, text }`, `{ effect: 'burn', level: 5, text }` (any item of a category) or `{ item: 'ember_pistol', level: 5, runs: 1, text }`. `fuseLock: { level: 5, runs: 2 }` overrides the default mastery needed to fuse it (`runs: 0` = always).
+Keep the plain-data properties (`dmg`, `cd`, `effect2`, `lock`, `fuseLock`, `pattern`, …) on the `def(` line, so the admin export can rewrite it. `passive: { might: .04, cd: .02 }` makes it a passive item (stats per level, no `fire`). Locks are `{ stage: 3, stat: 'kills', min: 1000, text, cost: 500 }` (a stat in one level: `kills`, `best`, `bosses`, `wins`), `{ stat: 'totalKills', min: 500, text }`, `{ effect: 'burn', level: 5, text }` (any item of a category) or `{ item: 'ember_pistol', level: 5, runs: 1, text }`. `cost` is the gold price once the achievement is met; a lock with only a cost is ignored. `fuseLock: { level: 5, runs: 2 }` overrides the default mastery needed to fuse it (`runs: 0` = always).
 
-Debug hook in the console: `VOIDLIGHT.addItem('blood_lance')`, `VOIDLIGHT.G` for the run state.
+Debug hook in the console: `VOIDLIGHT.addItem('blood_lance', 5)`, `VOIDLIGHT.fusionGroups()`, `VOIDLIGHT.G` for the run state.

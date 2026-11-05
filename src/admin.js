@@ -33,7 +33,7 @@ let ov = {};                                   // what you are editing
 let live = { ov: {}, updatedAt: 0, by: '' };   // content/live, what players get
 let draft = null;                              // content/draft
 let history = [];
-const TABLE_NAMES = { items: 'Item', chars: 'Character', cats: 'Category', difficulty: 'Difficulty', upgrades: 'Forge upgrade', enemies: 'Enemy', bosses: 'Boss', drops: 'Pickup' };
+const TABLE_NAMES = { items: 'Item', chars: 'Character', cats: 'Category', stages: 'Level', tiers: 'Fusion tier', difficulty: 'Difficulty', upgrades: 'Forge upgrade', enemies: 'Enemy', bosses: 'Boss', drops: 'Pickup' };
 
 // current value of one entry: items.js default with the overrides on top
 function get(t, id) {
@@ -174,6 +174,7 @@ function itemHeader(id, v) {
   props.push('dmg: ' + lit(v.dmg));
   if (v.cd) props.push('cd: ' + lit(v.cd));
   if (v.effect2) props.push('effect2: ' + lit(v.effect2));
+  if (v.passive) props.push('passive: ' + lit(v.passive));
   if (v.lock) props.push('lock: ' + lit(v.lock));
   if (v.fuseLock) props.push('fuseLock: ' + lit(v.fuseLock));
   if (v.color) props.push('color: ' + lit(v.color));
@@ -190,6 +191,8 @@ function exportItemsJs(src, o) {
   const keepOrder = (orig, v, fields) => { const out = clone(orig); for (const f of fields) { if (v[f] === undefined) delete out[f]; else out[f] = v[f]; } return out; };
   for (const id of Object.keys(o.items || {})) replaceLine([0, lines.length - 1], new RegExp(`^def\\('\\w+', '${id}',`), itemHeader(id, get('items', id)));
   const tables = [['cats', 'CATEGORIES', id => CATEGORIES[id], (id, x) => `  ${id}: ${lit(x)},`, id => new RegExp(`^\\s*${id}:\\s*\\{`)],
+    ['stages', 'STAGES', id => STAGES.find(x => String(x.id) === String(id)), (id, x) => `  ${lit(x)},`, id => new RegExp(`^\\s*\\{ id: ${id},`)],
+    ['tiers', 'FUSION', id => FUSION[id], (id, x) => `  ${id}: ${lit(x)},`, id => new RegExp(`^\\s*${id}:\\s*\\{`)],
     ['difficulty', 'DIFFICULTY', id => DIFFICULTY[id], (id, x) => `  ${id}: ${lit(x)},`, id => new RegExp(`^\\s*${id}:\\s*\\{`)],
     ['chars', 'CHARACTERS', id => CHARACTERS.find(c => c.id === id), (id, x) => `  ${lit(x)},`, id => new RegExp(`^\\s*\\{ id: '${id}',`)],
     ['upgrades', 'UPGRADES', id => UPGRADES.find(u => u.id === id), (id, x) => `  ${lit(x)},`, id => new RegExp(`^\\s*\\{ id: '${id}',`)],
@@ -240,28 +243,32 @@ function colorIn(value, onset) { return h('input', { type: 'color', value: /^#[0
 function sel(options, value, onset) { return h('select', { onchange: e => onset(e.target.value) }, options.map(([v, l]) => h('option', { value: v, selected: v === value }, l))); }
 
 // lock kinds and their texts live in progress.js (shared with the game)
-const LOCK_MODES = [['none', 'Available from the start'], ['cost', 'Bought with gold'], ['stat', 'Achievement: a lifetime stat'], ['effect', 'Achievement: level any item of a category'], ['item', 'Achievement: level one specific item']];
-const lockMode = l => !l ? 'none' : 'cost' in l ? 'cost' : l.item ? 'item' : l.effect ? 'effect' : 'stat';
-function defaultLock(m) {
-  const l = m === 'cost' ? { cost: 500 } : m === 'stat' ? { stat: 'totalKills', min: 500 } : m === 'effect' ? { effect: 'burn', level: 5 } : { item: ITEMS[0].id, level: 5, runs: 1 };
-  if (m !== 'cost') l.text = lockText(l); return l;
+const LOCK_MODES = [['none', 'Available from the start'], ['stage', 'Achievement: a stat in one level'], ['stat', 'Achievement: a lifetime stat'], ['effect', 'Achievement: level any item of a category'], ['item', 'Achievement: level one specific item']];
+const lockMode = l => !l || !hasReq(l) ? 'none' : l.stage ? 'stage' : l.item ? 'item' : l.effect ? 'effect' : 'stat';
+function defaultLock(m, cost) {
+  const l = m === 'stage' ? { stage: 1, stat: 'kills', min: 500 } : m === 'stat' ? { stat: 'totalKills', min: 500 } : m === 'effect' ? { effect: 'burn', level: 5 } : { item: ITEMS[0].id, level: 5, runs: 1 };
+  l.text = lockText(l); if (cost) l.cost = cost; return l;
 }
 const effectOptions = () => EFFECT_KEYS.map(k => [k, `${EFFECTS[k].icon} ${EFFECTS[k].name}`]);
 const itemOptions = () => ITEMS.map(d => [d.id, `${get('items', d.id).icon} ${get('items', d.id).name}`]);
-function lockFields(t, id, modes = LOCK_MODES) {
+const stageOptions = () => STAGES.map(x => [String(x.id), `Level ${x.id}: ${get('stages', String(x.id)).name}`]);
+// buyable: items and characters can carry a gold price that the player pays once the requirement is met
+function lockFields(t, id, { buyable = false } = {}) {
   const lock = get(t, id).lock, mode = lockMode(lock);
-  const out = [field('Unlock', sel(modes, mode, m => set(t, id, 'lock', m === 'none' ? null : defaultLock(m), { rerender: true })), t, id, 'lock', { wide: true })];
-  if (mode === 'cost') out.push(field('Gold cost', h('input', { type: 'number', min: 0, step: 50, value: lock.cost, oninput: e => { const v = parseInt(e.target.value, 10); if (v >= 0) set(t, id, 'lock', { cost: v }); } }), t, id, 'lock'));
-  if (mode === 'none' || mode === 'cost') return out;
+  const out = [field('Unlock', sel(LOCK_MODES, mode, m => set(t, id, 'lock', m === 'none' ? null : defaultLock(m, buyable ? lockCost(lock) || 500 : 0), { rerender: true })), t, id, 'lock', { wide: true })];
+  if (mode === 'none') { if (lock && lockCost(lock)) out.push(h('div', { class: 'f wide note' }, `This lock only has a gold price (● ${lock.cost}). Gold-only unlocks are gone: players get it as if it were unlocked. Pick an achievement for it.`)); return out; }
   // the text follows the requirement unless it was written by hand
   const upd = patch => { const cur = get(t, id).lock; const next = Object.assign({}, cur, patch); if (cur.text === lockText(cur)) next.text = lockText(next); set(t, id, 'lock', next, { rerender: true }); };
   const n = (k, min, max) => h('input', { type: 'number', min, max, style: 'width:72px', value: lock[k], onchange: e => { const v = parseInt(e.target.value, 10); if (v >= min && v <= max) upd({ [k]: v }); } });
   let req;
+  if (mode === 'stage') req = h('div', { class: 'inline' }, sel(stageOptions(), String(lock.stage), x => upd({ stage: +x })), sel(Object.entries(STAGE_STATS), lock.stat, x => upd({ stat: x })), h('span', {}, '≥'), n('min', 0, 1e6));
   if (mode === 'stat') req = h('div', { class: 'inline' }, sel(Object.entries(C.STATS), lock.stat, x => upd({ stat: x })), h('span', {}, '≥'), n('min', 0, 1e6));
   if (mode === 'effect') req = h('div', { class: 'inline' }, h('span', {}, 'Level'), n('level', 1, 5), h('span', {}, 'with any'), sel(effectOptions(), lock.effect, x => upd({ effect: x })), h('span', {}, 'item'));
   if (mode === 'item') req = h('div', { class: 'inline' }, h('span', {}, 'Level'), n('level', 1, 5), h('span', {}, 'with'), sel(itemOptions(), lock.item, x => upd({ item: x })), h('span', {}, 'in'), n('runs', 1, 1000), h('span', {}, 'runs'));
-  out.push(field('Requirement', req, t, id, 'lock', { wide: true, hint: mode === 'stat' && lock.stat === 'bestTime' ? 'In seconds: 300 is 5:00.' : mode === 'stat' ? '' : 'Counted when a run ends. Two-effect items count for both of their categories.' }));
+  const timeHint = (mode === 'stage' && lock.stat === 'best') || (mode === 'stat' && lock.stat === 'bestTime') ? 'In seconds: 300 is 5:00.' : '';
+  out.push(field('Requirement', req, t, id, 'lock', { wide: true, hint: timeHint || (mode === 'stage' || mode === 'stat' ? 'Counted when a run ends.' : 'Counted when a run ends. Two-effect items count for both of their categories.') }));
   out.push(field('Text players see', h('input', { type: 'text', value: lock.text, oninput: e => set(t, id, 'lock', Object.assign({}, get(t, id).lock, { text: e.target.value })) }), t, id, 'lock', { wide: true }));
+  if (buyable) out.push(field('Then buy for (gold)', h('input', { type: 'number', min: 0, step: 50, value: lockCost(lock), oninput: e => { const v = parseInt(e.target.value, 10); if (v >= 0) { const nx = Object.assign({}, get(t, id).lock); if (v) nx.cost = v; else delete nx.cost; set(t, id, 'lock', nx); } } }), t, id, 'lock', { hint: '0 = free as soon as it is earned' }));
   return out;
 }
 // fusion lock of one item: reach `level` with it in `runs` runs (0 = always fusable)
@@ -277,7 +284,7 @@ const effectsOfId = id => effectsOf(get('items', id));
 const partnersOf = id => { const mine = effectsOfId(id); return ITEMS.filter(d => d.id !== id && !get('items', d.id).disabled && effectsOfId(d.id).some(k => mine.includes(k))); };
 
 // ---------- test canvas (the real game engine in an iframe, see the sandbox section of main.js) ----------
-const sb = { frame: null, ready: false, cfg: { item: ITEMS[0].id, level: 3, fuse: null, layout: 'ring', tough: true, move: false }, numbers: true, dps: 0, shapes: [], timer: 0 };
+const sb = { frame: null, ready: false, cfg: { item: ITEMS[0].id, level: 3, fuse: [], tier: 0, layout: 'ring', tough: true, move: false }, numbers: true, dps: 0, shapes: [], timer: 0 };
 function sbSend(m) { if (sb.ready && sb.frame.contentWindow) sb.frame.contentWindow.postMessage(Object.assign({ vl: 'sandbox' }, m), location.origin); }
 function sbPushSoon() { clearTimeout(sb.timer); sb.timer = setTimeout(() => sbSend({ overrides: ov }), 120); }
 window.addEventListener('message', e => {
@@ -300,33 +307,39 @@ function sandboxPane() {
     const isRelic = ITEM[cfg.item].slot === 'relic';
     controls.replaceChildren(
       h('div', { class: 'controls' },
-        h('div', { class: 'grp' }, h('span', { class: 'lbl' }, 'Level'), [1, 2, 3, 4, 5].map(L => btn(String(L), cfg.fuse ? L === 5 : cfg.level === L, () => conf({ level: L, fuse: null }), cfg.fuse ? 'Fused items are always level 5' : ''))),
-        h('div', { class: 'grp' }, h('span', { class: 'lbl' }, '✦ Fuse with'), sel([['', 'nothing'], ...partnersOf(cfg.item).map(d => [d.id, `${get('items', d.id).icon} ${get('items', d.id).name}`])], cfg.fuse || '', v => conf({ fuse: v || null }))),
+        h('div', { class: 'grp' }, h('span', { class: 'lbl' }, 'Level'), [1, 2, 3, 4, 5].map(L => btn(String(L), cfg.level === L, () => conf({ level: L })))),
+        h('div', { class: 'grp' }, h('span', { class: 'lbl' }, '✦ Tier'), TIER_KEYS.map((k, t) => btn(t ? get('tiers', k).name : 'Plain', cfg.tier === t, () => conf({ tier: t, fuse: t ? cfg.fuse : [] }), t ? `${get('tiers', k).name}: ×${get('tiers', k).mul} damage` : 'Not fused'))),
+        cfg.tier ? h('div', { class: 'grp' }, h('span', { class: 'lbl' }, 'Fused with'), sel([['', 'a copy of itself'], ...partnersOf(cfg.item).map(d => [d.id, `${get('items', d.id).icon} ${get('items', d.id).name}`])], (cfg.fuse || [])[0] || '', v => conf({ fuse: v ? [v] : [] }))) : null,
         h('div', { class: 'grp' }, h('span', { class: 'lbl' }, 'Targets'), sel([['ring', 'Ring'], ['line', 'Line'], ['scatter', 'Scattered'], ['swarm', 'Walking swarm']], cfg.layout, v => conf({ layout: v }))),
         btn('Unkillable', cfg.tough, () => conf({ tough: !cfg.tough }), 'Targets never die, so you can watch hits and status effects'),
         btn('Walk in a circle', cfg.move, () => conf({ move: !cfg.move }), 'Items that react to movement need this. You can also click the canvas and use WASD.'),
         btn('Numbers', sb.numbers, () => { sb.numbers = !sb.numbers; sbSend({ numbers: sb.numbers }); renderControls(); }, 'Damage numbers'),
         btn('↻ Restart', false, () => sbSend({ restart: true }))),
-      cfg.fuse ? h('div', { class: 'note' }, fusionSummary(cfg.item, cfg.fuse)) : null,
-      isRelic || (cfg.fuse && ITEM[cfg.fuse].slot === 'relic') ? h('div', { class: 'controls' }, h('span', { class: 'lbl' }, 'Trigger'),
-        [['kill', 'Kill a target'], ['hurt', 'Get hit'], ['levelup', 'Level up'], ['crit', 'Critical hit'], ['pickup', 'Pick up crystal']].map(([k, l]) => btn(l, false, () => sbSend({ trigger: k })))) : '');
+      cfg.tier ? h('div', { class: 'note' }, fusionSummary(cfg.item, (cfg.fuse || [])[0] || cfg.item, cfg.tier)) : null,
+      isRelic ? h('div', { class: 'controls' }, h('span', { class: 'lbl' }, 'Trigger'),
+        [['kill', 'Kill a target'], ['hurt', 'Get hit'], ['levelup', 'Level up'], ['crit', 'Critical hit'], ['pickup', 'Pick up crystal'], ['dash', 'Dash']].map(([k, l]) => btn(l, false, () => sbSend({ trigger: k })))) : '');
   }
   sb.renderControls = renderControls;
   return h('div', { class: 'canvaspane' }, h('div', { class: 'stage' }, sb.frame), controls, h('div', { class: 'readout', id: 'readout' }, 'Starting…'));
 }
-// what the fusion on the test canvas does, in words
-function fusionSummary(keep, gone) {
+// what the fusion on the test canvas does, in words (same maths as synthFusion in main.js)
+function fusionSummary(keep, gone, T) {
   const a = get('items', keep), b = get('items', gone), effs = [...new Set([...effectsOfId(keep), ...effectsOfId(gone)])];
-  const sh = effectsOfId(keep).filter(k => effectsOfId(gone).includes(k)), pre = FUSE_PREFIX[sh.includes(a.effect) ? a.effect : sh[0]];
-  return `${pre} ${a.name}: ${a.name} remains at level 5 with ${a.dmg} + 50% × ${b.dmg} = ${+(a.dmg + 0.5 * b.dmg).toFixed(2)} base damage, −25% cooldown and +1 projectile. ` +
-    `${b.name}'s attack keeps firing inside it at 50% damage. Effects: ${effs.map(k => EFFECTS[k].icon + ' ' + EFFECTS[k].name).join(' + ')}. To test the other way round, pick ${b.name} and fuse it with ${a.name}.`;
+  const sh = effectsOfId(keep).filter(k => effectsOfId(gone).includes(k)), pre = FUSE_PREFIX[sh.includes(a.effect) ? a.effect : sh[0] || a.effect];
+  let base = a.dmg + 0.5 * b.dmg; const steps = [`${a.dmg} + 50% × ${b.dmg} = ${+base.toFixed(1)}`];
+  for (let t = 2; t <= T; t++) { const need = get('tiers', TIER_KEYS[t]).need, f = 1 + 0.5 * (need - 1); base *= f; steps.push(`× ${f} (${get('tiers', TIER_KEYS[t]).name}: it plus 50% of ${need - 1} more like it) = ${+base.toFixed(1)}`); }
+  const tr = get('tiers', TIER_KEYS[T]), nm = (T > 1 ? tr.name + ' ' : '') + pre + ' ' + a.name;
+  const made = TIER_KEYS.slice(1, T + 1).reduce((n, k) => n * get('tiers', k).need, 1);
+  return `${nm} (made from ${made} items): base damage ${steps.join(', ')}; × ${tr.mul} for the tier = ${Math.round(base * tr.mul)} at level 1, +30% per level. ` +
+    `${Math.round(100 * (1 - tr.cdMul))}% faster, +${T} projectile${T > 1 ? 's' : ''}. Its own bullets get ${tr.own} stacks of each of ${effs.map(k => EFFECTS[k].icon + ' ' + EFFECTS[k].name).join(', ')}.` +
+    (a.passive ? ' A passive can only absorb passives.' : '');
 }
 function selectSandboxItem(def) {
   if (sb.cfg.item === def.id) return;
   const src = [def.fire, def.spawn, def.update, ...Object.values(def.on || {})].filter(Boolean).map(f => f.toString()).join('\n');
   sb.shapes = [];
-  sb.cfg.item = def.id; sb.cfg.move = /P\.moving|moveAng/.test(src) || !!(def.on && def.on.move); sb.cfg.fuse = null;
-  sbSend({ config: { item: def.id, move: sb.cfg.move, fuse: null } });
+  sb.cfg.item = def.id; sb.cfg.move = /P\.moving|moveAng/.test(src) || !!(def.on && def.on.move); sb.cfg.fuse = [];
+  sbSend({ config: { item: def.id, move: sb.cfg.move, fuse: [] } });
   sb.dps = 0; const r = $('#readout'); if (r) r.textContent = 'Starting…';
 }
 function staticShapes(def) {
@@ -367,14 +380,14 @@ function listPane(rows, current, onpick) {
   draw(); relist = draw;
   return el;
 }
-const lockTag = l => !l ? '' : 'cost' in l ? '● ' + l.cost : '🔒';
+const lockTag = l => !l ? '' : (hasReq(l) ? (l.stage ? 'L' + l.stage + ' ' : '🔒') : '') + (lockCost(l) ? '● ' + l.cost : '');
 
 function itemView(slot) {
   const ids = ITEMS.filter(d => d.slot === slot).map(d => d.id);
   if (!ids.includes(pickId[slot])) pickId[slot] = ids[0];
   const id = pickId[slot], def = ITEM[id], v = get('items', id), E = EFFECTS[v.effect];
   selectSandboxItem(def);
-  const list = listPane(() => ids.map(i => { const x = get('items', i); return { id: i, key: 'items:' + i, icon: x.icon, name: x.name, color: x.color || EFFECTS[x.effect].color, tag: (x.disabled ? 'off ' : '') + (x.effect2 ? '2fx ' : '') + (effectsOf(x).some(catLock) ? '◇' : '') + lockTag(x.lock), edited: entryChanged('items', i) }; }),
+  const list = listPane(() => ids.map(i => { const x = get('items', i); return { id: i, key: 'items:' + i, icon: x.icon, name: x.name, color: x.color || EFFECTS[x.effect].color, tag: (x.disabled ? 'off ' : '') + (x.passive ? 'P ' : x.effect2 ? '2fx ' : '') + (effectsOf(x).some(catLock) ? '◇' : '') + lockTag(x.lock), edited: entryChanged('items', i) }; }),
     () => pickId[slot], i => { pickId[slot] = i; render(); });
   const T = 'items';
   const effectOpts = EFFECT_KEYS.map(k => [k, `${EFFECTS[k].icon} ${EFFECTS[k].name}`]);
@@ -389,20 +402,29 @@ function itemView(slot) {
       field('Description', txt(T, id, 'pattern', { area: true }), T, id, 'pattern', { wide: true }),
       def.slot === 'relic' ? field('Trigger text', txt(T, id, 'trig'), T, id, 'trig', { wide: true }) : null),
     h('h3', {}, 'Stats'),
-    h('div', { class: 'fields' },
-      field('Base damage', num(T, id, 'dmg', { step: 1 }), T, id, 'dmg', { hint: '+30% per level. When fused: + 50% of the absorbed item\'s damage' }),
-      def.fire ? field('Cooldown (s)', num(T, id, 'cd', { step: 0.05 }), T, id, 'cd', { hint: '−7% per level, −25% when fused' }) : null),
+    def.passive ? passiveFields(id) : h('div', { class: 'fields' },
+      field('Base damage', num(T, id, 'dmg', { step: 1 }), T, id, 'dmg', { hint: '+30% per level. A fusion adds 50% of every other item\'s base damage, then the tier multiplies it' }),
+      def.fire ? field('Cooldown (s)', num(T, id, 'cd', { step: 0.05 }), T, id, 'cd', { hint: '−7% per level, times the fusion tier\'s cooldown factor' }) : null),
     h('h3', {}, 'Unlock'),
-    h('div', { class: 'fields' }, lockFields(T, id),
+    h('div', { class: 'fields' }, lockFields(T, id, { buyable: true }),
       h('div', { class: 'f wide note' }, `Also needs its ${effectsOf(v).map(k => EFFECTS[k].name).join(' and ')} ${effectsOf(v).length > 1 ? 'categories' : 'category'}: ${effectsOf(v).map(k => catLock(k) ? `${EFFECTS[k].name} opens with “${catLock(k).text || lockText(catLock(k))}”` : `${EFFECTS[k].name} is open from the start`).join('; ')}. Categories are set on the Progression tab.`)),
     h('h3', {}, 'Fusion'),
     h('div', { class: 'fields' },
       field('Fusion unlock', h('div', { class: 'inline' }, h('span', {}, 'Reach level'), fuseLockInput(id, 'level'), h('span', {}, 'with it in'), fuseLockInput(id, 'runs'), h('span', {}, 'runs')), T, id, 'fuseLock',
         { wide: true, hint: `Players see this as the “${v.name} mastery” achievement. 0 runs = can always fuse. Both items in a fusion need their mastery.` }),
-      h('div', { class: 'f wide note' }, `Fuses with (any level 5 item sharing ${effectsOf(v).map(k => EFFECTS[k].name).join(' or ')}): ${partnersOf(id).map(d => get('items', d.id).icon + ' ' + get('items', d.id).name).join(', ') || 'nothing yet'}. Try one with “Fuse with” under the test canvas.`)),
+      h('div', { class: 'f wide note' }, `Fuses with (any level 5 item sharing ${effectsOf(v).map(k => EFFECTS[k].name).join(' or ')}): ${partnersOf(id).map(d => get('items', d.id).icon + ' ' + get('items', d.id).name).join(', ') || 'nothing yet'}. Try a fusion tier under the test canvas.${v.passive ? ' As a passive it can only absorb other passives.' : ''}`)),
     h('h3', {}, 'Visual style'),
     visualFields(def, v, E));
   ed.list.replaceChildren(list); ed.form.replaceChildren(form);
+}
+// a passive item's stat boosts, per item level (×level, ×the fusion tier's statMul)
+function passiveFields(id) {
+  const T = 'items', cur = get(T, id).passive || {};
+  const setStat = (k, x) => { const n = Object.assign({}, get(T, id).passive); if (!x) delete n[k]; else n[k] = x; set(T, id, 'passive', n); };
+  return h('div', { class: 'fields' }, field('Passive stats per level', h('div', { class: 'fields' }, STAT_KEYS.map(k => h('div', { class: 'f' + (cur[k] ? ' changed' : '') }, h('label', {}, STAT_INFO[k].name),
+    h('input', { type: 'number', step: 'any', value: cur[k] ?? '', placeholder: '0', oninput: e => { const x = parseFloat(e.target.value); setStat(k, isFinite(x) ? x : 0); } }),
+    h('div', { class: 'hint' }, STAT_INFO[k].pct ? '0.04 = ' + (STAT_INFO[k].neg ? '−' : '+') + '4%' : 'flat')))), T, id, 'passive',
+    { wide: true, hint: `Passive: no attack. Now ${statText(cur) || 'nothing'} per level, so ${statText(cur, 5) || 'nothing'} at level 5. It can only absorb other passives; an attacking item that absorbs it gets 50% of these.` }));
 }
 function visualFields(def, v, E) {
   const T = 'items', id = def.id, vis = v.vis || {};
@@ -454,9 +476,9 @@ function charView() {
     h('h3', {}, 'Stat bonuses'),
     h('div', { class: 'fields' }, field('Bonuses', h('div', { class: 'fields' }, C.MODS.map(k => h('div', { class: 'f' }, h('label', {}, k), h('input', { type: 'number', step: 'any', value: mods[k] ?? '', placeholder: '0', oninput: e => { const x = parseFloat(e.target.value); setMod(k, isFinite(x) ? x : 0); } }), h('div', { class: 'hint' }, MOD_HINT[k])))), T, id, 'mods', { wide: true })),
     h('h3', {}, 'Unlock'),
-    h('div', { class: 'fields' }, lockFields(T, id)),
+    h('div', { class: 'fields' }, lockFields(T, id, { buyable: true })),
     h('h3', {}, 'Preview'),
-    h('div', { class: 'preview', style: `--c:${v.color}` }, h('div', { class: 'avatar' }, '◆'), h('b', {}, v.name), h('small', {}, v.title), h('div', {}, `${w.icon} ${w.name}`), h('div', { class: 'perk' }, v.perk), v.lock ? h('small', { style: 'color:#ff9e4c' }, v.lock.cost ? `Buy: ● ${v.lock.cost}` : v.lock.text) : null));
+    h('div', { class: 'preview', style: `--c:${v.color}` }, h('div', { class: 'avatar' }, '◆'), h('b', {}, v.name), h('small', {}, v.title), h('div', {}, `${w.icon} ${w.name}`), h('div', { class: 'perk' }, v.perk), v.lock ? h('small', { style: 'color:#ff9e4c' }, lockFull(v.lock)) : null));
   return h('div', { class: 'editor', style: 'grid-template-columns: 220px minmax(300px, 760px)' }, list, form);
 }
 
@@ -472,7 +494,7 @@ function tableView(title, note, t, ids, cols) {
     const td = h('td', { class: changed(t, id, c.f) ? 'changed' : '' }, input);
     return td;
   };
-  return h('div', { class: 'card' }, h('h2', {}, title), note ? h('p', { class: 'note', style: 'margin-top:-6px' }, note) : null,
+  return h('div', { class: 'card' }, title ? h('h2', {}, title) : null, note ? h('p', { class: 'note', style: 'margin-top:-6px' }, note) : null,
     h('div', { class: 'tablewrap' }, h('table', {}, h('tr', {}, h('th', {}, ''), cols.map(c => h('th', {}, c.label)), h('th', {}, '')),
       ids.map(id => h('tr', {}, h('td', {}, h('code', {}, id)), cols.map(c => cell(id, c)), h('td', {}, entryChanged(t, id) ? h('button', { class: 'small', onclick: () => resetEntry(t, id) }, 'reset') : null))))));
 }
@@ -510,7 +532,27 @@ function difficultyView() {
 // ---------- progression: categories, fusion locks and a progress simulator ----------
 let sim = null; // a pretend player save, to see what a player at some point of progress gets
 const simSave = () => (sim = sim || normalizeSave(null));
-function progressView() { return h('div', { style: 'display:grid;gap:16px' }, categoryCard(), fusionCard(), simulatorCard()); }
+function progressView() { return h('div', { style: 'display:grid;gap:16px' }, stagesCard(), tiersCard(), categoryCard(), fusionCard(), simulatorCard()); }
+function stagesCard() {
+  const cols = [{ f: 'name', label: 'Name', kind: 'text' }, { f: 'color', label: 'Color', kind: 'color' }, { f: 'hp', label: 'Enemy HP ×' }, { f: 'ramp', label: 'HP ramp by 15:00' }, { f: 'spawn', label: 'Spawns ×' }, { f: 'dmg', label: 'Enemy dmg ×' },
+    { f: 'bossHp', label: 'Boss HP ×' }, { f: 'xp', label: 'XP ×' }, { f: 'gold', label: 'Gold ×' }, { f: 'start', label: 'Items arrive at Lv', step: 1 }];
+  const t = tableView('Levels', 'Level 1 is open; each level opens when the one before it is beaten. On top of the run difficulty (Enemies tab): enemy HP × "HP", growing (with the cube of the clock) to × HP·(1 + ramp) at 15:00. Each level opened also lets the player buy one more Forge socket. "Items arrive at" is the level new items and new fusions start at, which is what lets later levels fit bigger fusions into 15 minutes.', 'stages', Object.keys(BASE.stages), cols);
+  const end = x => { const v = get('stages', x); return +(v.hp * (1 + v.ramp)).toFixed(1); };
+  t.append(h('p', { class: 'note' }, 'Enemy HP at 15:00 vs Level 1: ' + Object.keys(BASE.stages).map(x => `L${x} ×${end(x)}`).join(' · ')));
+  return t;
+}
+function tiersCard() {
+  const T = 'tiers', keys = TIER_KEYS.filter(k => k !== 'base');
+  const made = k => TIER_KEYS.slice(1, TIER_KEYS.indexOf(k) + 1).reduce((n, x) => n * get(T, x).need, 1);
+  return h('div', { class: 'card' }, h('h2', {}, 'Fusion tiers'),
+    h('p', { class: 'note', style: 'margin-top:-6px' }, '“Needs” level 5 items of the tier below that all share an effect become one. The one the player keeps takes 50% of the others’ base damage and passive stats and carries all their effects. Damage ×, cooldown ×, own stacks (of each carried effect, on its own bullets), pool (its own effect per level, for every bullet) and stats × apply to the new tier.'),
+    tableView('', '', T, keys, [{ f: 'name', label: 'Name', kind: 'text' }, { f: 'need', label: 'Needs', step: 1 }, { f: 'mul', label: 'Damage ×' }, { f: 'cdMul', label: 'Cooldown ×' }, { f: 'own', label: 'Own stacks', step: 1 }, { f: 'pool', label: 'Pool / level' }, { f: 'statMul', label: 'Stats ×' }]),
+    h('p', { class: 'note' }, keys.map(k => `${get(T, k).name} = ${made(k)} base items`).join(' · ') + '. An item fused into something else can be offered again later in the run, so the limits are sockets and level-ups. ' +
+      (() => { const S = get('stages', String(STAGES.length)), up = 5 - S.start; const cost = t => t === 0 ? 1 + up : get(T, TIER_KEYS[t]).need * cost(t - 1) + 1 + up;
+        return `On Level ${STAGES.length} (items arrive at level ${S.start}) one Mega costs about ${cost(TIER_KEYS.length - 1)} level-up picks.`; })()),
+    h('div', { class: 'catgrid' }, keys.filter(k => k !== 'fused').map(k => h('div', { class: 'catcard', style: `--c:${TIER_COLORS[TIER_KEYS.indexOf(k)]}` }, h('b', {}, `✦ ${get(T, k).name} fusion unlock`),
+      h('div', { class: 'fields', style: 'grid-template-columns:minmax(0,1fr)' }, lockFields(T, k))))));
+}
 function categoryCard() {
   const T = 'cats', start = startingCats();
   return h('div', { class: 'card' }, h('h2', {}, 'Item categories'),
@@ -520,13 +562,13 @@ function categoryCard() {
       return h('div', { class: 'catcard', style: `--c:${EFFECTS[k].color}` },
         h('div', { class: 'inline' }, h('b', {}, `${EFFECTS[k].icon} ${EFFECTS[k].name}`), h('span', { class: 'spacer' }), entryChanged(T, k) ? h('button', { class: 'small', onclick: () => resetEntry(T, k) }, 'reset') : null),
         h('small', { class: 'hint' }, `${items.length} items, ${items.filter(d => effectsOfId(d.id).length > 1).length} of them two-effect`),
-        h('div', { class: 'fields', style: 'grid-template-columns:minmax(0,1fr)' }, lockFields(T, k, LOCK_MODES.filter(m => m[0] !== 'cost'))));
+        h('div', { class: 'fields', style: 'grid-template-columns:minmax(0,1fr)' }, lockFields(T, k)));
     })));
 }
 function fusionCard() {
   const all = lock => { for (const d of ITEMS) set('items', d.id, 'fuseLock', lock); render(); toast('Fusion locks updated for every item.'); };
   return h('div', { class: 'card' }, h('h2', {}, 'Fusion locks (mastery achievements)'),
-    h('p', { class: 'note', style: 'margin-top:-6px' }, 'Fusing an item unlocks once a player has reached the level below with it in that many runs (counted when the run ends). Both items in a fusion need it. 0 runs means it can always fuse. Players see each one as “<item> mastery” on the Achievements screen.'),
+    h('p', { class: 'note', style: 'margin-top:-6px' }, 'Fusing an item unlocks once a player has reached the level below with it in that many runs (counted when the run ends). Every item in a base fusion needs it. 0 runs means it can always fuse. Players see each one as “<item> mastery” on the Achievements screen. Super and Mega fusion have their own locks in the Fusion tiers card.'),
     h('div', { class: 'controls' }, h('span', { class: 'lbl' }, 'Set every item:'), h('button', { class: 'small', onclick: () => all(null) }, `Default (level ${FUSE_LOCK.level}, ${FUSE_LOCK.runs} run)`),
       h('button', { class: 'small', onclick: () => all({ level: 5, runs: 2 }) }, 'Level 5 in 2 runs'), h('button', { class: 'small', onclick: () => all({ level: 5, runs: 3 }) }, 'Level 5 in 3 runs'), h('button', { class: 'small', onclick: () => all({ level: 5, runs: 0 }) }, 'No lock')),
     h('div', { class: 'tablewrap', style: 'max-height:420px;overflow-y:auto;margin-top:8px' }, h('table', {}, h('tr', {}, h('th', {}, 'Item'), h('th', {}, 'Slot'), h('th', {}, 'Effects'), h('th', {}, 'Fusion unlocks at'), h('th', {}, 'Fuses with')),
@@ -548,7 +590,9 @@ function simulatorCard() {
   }
   function everything() {
     const x = normalizeSave(null); x.gold = 99999; x.unlockedCats = EFFECT_KEYS.slice(); x.unlockedItems = ITEMS.filter(d => d.lock).map(d => d.id); x.unlockedChars = CHARACTERS.map(c => c.id);
-    for (const d of ITEMS) x.itemRuns[d.id] = [9, 9, 9, 9, 9]; setSim(x, 'Everything unlocked.');
+    for (const d of ITEMS) x.itemRuns[d.id] = [9, 9, 9, 9, 9];
+    for (const S of STAGES) x.stages[String(S.id)] = { kills: 9999, best: 900, wins: 1, bosses: 3, runs: 1 };
+    for (const u of UPGRADES) x.upg[u.id] = u.max; x.lastStage = stageCount(); setSim(x, 'Everything unlocked, every level beaten, the Forge maxed.');
   }
   function play() {
     try { localStorage.setItem('voidlight.testsave', JSON.stringify(s)); localStorage.setItem('voidlight.testcontent', JSON.stringify(ov)); }
@@ -576,10 +620,18 @@ function simulatorCard() {
       h('div', {},
         h('h3', {}, 'Lifetime stats'), h('div', { class: 'fields' }, Object.keys(C.STATS).map(k => h('div', { class: 'f' }, h('label', {}, C.STATS[k]), h('input', { type: 'number', min: 0, value: s.stats[k] || 0, onchange: e => { s.stats[k] = Math.max(0, parseFloat(e.target.value) || 0); redo(); } })))),
         h('div', { class: 'f', style: 'margin-top:10px' }, h('label', {}, 'Gold'), h('input', { type: 'number', min: 0, value: s.gold, onchange: e => { s.gold = Math.max(0, parseFloat(e.target.value) || 0); redo(); } })),
+        h('h3', {}, 'Levels'), h('div', { class: 'tablewrap' }, h('table', {}, h('tr', {}, h('th', {}, 'Level'), ...Object.values(STAGE_STATS).map(x => h('th', {}, x))),
+          STAGES.map(S => { const key = String(S.id), st = stageStats(s, S.id);
+            return h('tr', { style: stageUnlocked(s, S.id) ? '' : 'opacity:0.5' }, h('td', {}, `${S.id} ${get('stages', key).name}`), ...Object.keys(STAGE_STATS).map(k => h('td', {}, h('input', { type: 'number', min: 0, style: 'width:72px', value: st[k],
+              onchange: e => { s.stages[key] = Object.assign(emptyStage(), s.stages[key], { [k]: Math.max(0, parseInt(e.target.value, 10) || 0) }); redo(); } })))); }))),
+        h('div', { class: 'f', style: 'margin-top:10px' }, h('label', {}, 'Level the test game starts on'), sel(STAGES.filter(S => stageUnlocked(s, S.id)).map(S => [String(S.id), `Level ${S.id}`]), String(stageUnlocked(s, s.lastStage) ? s.lastStage : 1), x => { s.lastStage = +x; redo(); })),
+        h('p', { class: 'note' }, `${stagesUnlocked(s)} of ${stageCount()} levels open. Forge sockets: ${socketsBought(s)} bought of ${socketCap(s)} available. Fusion tiers open: ${TIER_KEYS.filter(k => tierUnlocked(s, k)).map(k => get('tiers', k).name).join(', ')}.`),
         h('h3', {}, 'Categories unlocked'), h('div', { class: 'checks' }, EFFECT_KEYS.map(k => h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: catUnlocked(s, k), disabled: !catLock(k), onchange: e => { s.unlockedCats = s.unlockedCats.filter(x => x !== k); if (e.target.checked) s.unlockedCats.push(k); redo(); } }), `${EFFECTS[k].icon} ${EFFECTS[k].name}${catLock(k) ? '' : ' (start)'}`))),
         h('h3', {}, 'What this player gets'),
         h('p', { class: 'note' }, `${avail.length} of ${ITEMS.filter(d => !get('items', d.id).disabled).length} items can show up in runs (${SLOT_KEYS.map(k => `${SLOTS[k].icon} ${avail.filter(d => d.slot === k).length}`).join(' · ')}). ${fusable.length} of them can fuse. ${ach.filter(a => a.done).length}/${ach.length} achievements done.`),
         h('p', { class: 'note' }, pending.length ? `Earned but not granted yet (granted when their next run ends): ${pending.join(', ')}.` : 'Nothing earned and waiting.'),
+        (() => { const b = [...ITEMS.filter(d => !get('items', d.id).disabled && itemBuyable(s, d)).map(d => `${d.icon} ${d.name} ● ${lockCost(d.lock)}`), ...CHARACTERS.filter(c => charBuyable(s, c)).map(c => `🧍 ${c.name} ● ${lockCost(c.lock)}`)];
+          return h('p', { class: 'note' }, b.length ? `Earned, waiting to be bought: ${b.join(', ')}.` : 'Nothing earned and waiting to be bought.'); })(),
         h('div', { class: 'chipbox' }, avail.map(d => h('span', { class: 'chip', title: effectsOf(d).map(k => EFFECTS[k].name).join(' + ') + (fuseUnlocked(s, d) ? ' · can fuse' : ' · fusion locked') }, `${get('items', d.id).icon} ${get('items', d.id).name}${fuseUnlocked(s, d) ? ' ✦' : ''}`)))),
       h('div', {}, h('h3', {}, 'Best level reached per item, and in how many runs'), h('div', { class: 'simlist' }, ITEMS.map(masteryRow)),
         h('p', { class: 'note' }, 'Greyed items are not available with these unlocks. ✦ = fusion unlocked.'))));
@@ -588,8 +640,9 @@ function simulatorCard() {
 function overview() {
   const all = ITEMS.map(d => get('items', d.id)), chars = CHARACTERS.map(c => ({ id: c.id, ...get('chars', c.id) }));
   const stat = (n, label, sub) => h('div', { class: 'card stat' }, h('b', {}, n), label, sub ? h('small', { style: 'display:block' }, sub) : null);
-  const go = (t, id) => { if (t === 'items') { tab = ITEM[id].slot; pickId[tab] = id; } else if (t === 'chars') { tab = 'chars'; pickId.chars = id; } else tab = { bosses: 'enemies', difficulty: 'enemies', cats: 'progress' }[t] || t; render(); window.scrollTo(0, 0); };
-  const unlockRows = [...EFFECT_KEYS.map(k => ['cats', k, get('cats', k)]), ...ITEMS.map(d => ['items', d.id, get('items', d.id)]), ...CHARACTERS.map(c => ['chars', c.id, get('chars', c.id)])].filter(r => r[2].lock);
+  const go = (t, id) => { if (t === 'items') { tab = ITEM[id].slot; pickId[tab] = id; } else if (t === 'chars') { tab = 'chars'; pickId.chars = id; } else tab = { bosses: 'enemies', difficulty: 'enemies', cats: 'progress', stages: 'progress', tiers: 'progress' }[t] || t; render(); window.scrollTo(0, 0); };
+  const unlockRows = [...TIER_KEYS.map(k => ['tiers', k, get('tiers', k)]), ...EFFECT_KEYS.map(k => ['cats', k, get('cats', k)]), ...ITEMS.map(d => ['items', d.id, get('items', d.id)]), ...CHARACTERS.map(c => ['chars', c.id, get('chars', c.id)])].filter(r => r[2].lock)
+    .sort((a, b) => (a[2].lock.stage || 0) - (b[2].lock.stage || 0));
   const edits = [];
   for (const t of Object.keys(BASE)) for (const id of Object.keys(BASE[t])) {
     const a = (ov[t] || {})[id] || {}, b = (live.ov[t] || {})[id] || {};
@@ -597,11 +650,13 @@ function overview() {
     const fields = [...new Set([...Object.keys(a), ...Object.keys(b)])].filter(f => canon(a[f]) !== canon(b[f]));
     edits.push([t, id, fields]);
   }
-  const nameOf = (t, id) => { if (t === 'cats') return `${EFFECTS[id].icon} ${EFFECTS[id].name} items`; if (t === 'difficulty') return 'Run difficulty'; const v = get(t, id); return (v.icon ? v.icon + ' ' : '') + (v.name || id); };
+  const nameOf = (t, id) => { if (t === 'cats') return `${EFFECTS[id].icon} ${EFFECTS[id].name} items`; if (t === 'difficulty') return 'Run difficulty'; if (t === 'stages') return `Level ${id}: ${get(t, id).name}`; if (t === 'tiers') return `✦ ${get(t, id).name} fusion`; const v = get(t, id); return (v.icon ? v.icon + ' ' : '') + (v.name || id); };
   return h('div', { style: 'display:grid;gap:16px' },
     h('div', { class: 'stats' },
-      stat(all.length, 'items', `${all.filter(x => x.effect2).length} two-effect · ${all.filter(x => x.lock).length} own locks · ${all.filter(x => x.disabled).length} disabled`),
+      stat(all.length, 'items', `${all.filter(x => x.passive).length} passive · ${all.filter(x => x.lock).length} own locks · ${all.filter(x => x.disabled).length} disabled`),
       stat(startingCats().length + ' / ' + EFFECT_KEYS.length, 'categories at start', startingCats().map(k => EFFECTS[k].name).join(', ')),
+      stat(STAGES.length, 'levels', 'each opens when the one before it is beaten'),
+      stat(TIER_KEYS.length - 1, 'fusion tiers', TIER_KEYS.slice(1).map(k => get('tiers', k).name).join(', ')),
       stat(chars.length, 'characters', `${chars.filter(x => x.lock).length} locked`),
       stat(Object.keys(BASE.enemies).length + Object.keys(BASE.bosses).length, 'enemies', `${Object.keys(BASE.bosses).length} of them bosses`),
       stat(Object.keys(BASE.drops).length, 'pickups'), stat(UPGRADES.length, 'Forge upgrades'),
@@ -611,8 +666,8 @@ function overview() {
         : h('p', { class: 'note' }, `Everything matches the live game. Last published ${ago(live.updatedAt)}${live.by ? ' by ' + live.by : ''}.`)),
     h('div', { class: 'card' }, h('h2', {}, 'Unlocks and achievements'),
       h('div', { class: 'tablewrap' }, h('table', {}, h('tr', {}, h('th', {}, 'What'), h('th', {}, 'Type'), h('th', {}, 'How players unlock it')),
-        unlockRows.map(([t, id, v]) => h('tr', {}, h('td', {}, h('button', { class: 'link', onclick: () => go(t, id) }, nameOf(t, id))), h('td', {}, t === 'items' ? SLOTS[ITEM[id].slot].name : t === 'cats' ? 'Category' : 'Character'),
-          h('td', {}, v.lock.cost ? `Buy for ● ${v.lock.cost}` : `${v.lock.text}  `, h('code', {}, v.lock.stat ? `${v.lock.stat} ≥ ${v.lock.min}` : v.lock.item ? `${v.lock.item} Lv${v.lock.level} × ${v.lock.runs} runs` : v.lock.effect ? `any ${v.lock.effect} item Lv${v.lock.level}` : '')))))),
+        unlockRows.map(([t, id, v]) => h('tr', {}, h('td', {}, h('button', { class: 'link', onclick: () => go(t, id) }, nameOf(t, id))), h('td', {}, t === 'items' ? SLOTS[ITEM[id].slot].name : t === 'cats' ? 'Category' : t === 'tiers' ? 'Fusion tier' : 'Character'),
+          h('td', {}, `${lockFull(v.lock)}  `, h('code', {}, v.lock.stage ? `L${v.lock.stage} ${v.lock.stat} ≥ ${v.lock.min}` : v.lock.stat ? `${v.lock.stat} ≥ ${v.lock.min}` : v.lock.item ? `${v.lock.item} Lv${v.lock.level} × ${v.lock.runs} runs` : v.lock.effect ? `any ${v.lock.effect} item Lv${v.lock.level}` : '')))))),
       h('p', { class: 'note' }, 'Fusion locks (one per item) are on the Progression tab.')),
     h('div', { class: 'card' }, h('h2', {}, 'Publish history'),
       history.length ? h('table', {}, history.map(x => h('tr', {}, h('td', {}, new Date(x.updatedAt).toLocaleString()), h('td', {}, x.by), h('td', {}, `${countEdits(prune(x.ov), {})} edited entries`),

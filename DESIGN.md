@@ -1,7 +1,7 @@
 # VOIDLIGHT — Design Document
 
 An original top-down "survivor-style" bullet hell for the browser. You move; your gear fires on its own.
-Survive 15 minutes of escalating swarms and three bosses, collect XP to build a loadout mid-run, and
+Survive 15 minutes of escalating swarms and three bosses on each of 10 levels, collect XP to build a loadout mid-run, and
 collect **Void Gold** that persists between runs to buy permanent upgrades and unlocks.
 
 ---
@@ -12,14 +12,14 @@ collect **Void Gold** that persists between runs to buy permanent upgrades and u
 |---|---|---|
 | **In-run (per round)** | XP crystals dropped by enemies | Level-ups → pick 1 of 3 cards (new item, item upgrade, or Fusion) |
 | **Time** | The run clock (0:00 → 15:00) | New enemy types every few minutes, elites every ~45s, bosses at 5:00 / 10:00 / 15:00. Enemy HP and spawn rate scale with time |
-| **Meta (between rounds)** | Void Gold picked up during the run + a time bonus at the end | Permanent stat ranks in the Forge, item unlocks in the Armory, character unlocks |
-| **Achievements** | Lifetime stats (best time, total kills, bosses, fusions, wins, max level) | Free unlocks for specific characters and items |
+| **Meta (between rounds)** | Void Gold picked up during the run + a time bonus at the end | Permanent stat ranks and extra sockets in the Forge, buying unlocked items and characters |
+| **Achievements** | Stats per level (kills, best time, bosses, wins) and lifetime stats | Unlock categories, characters, items, fusion tiers and the next level. Most items and characters still cost gold after their achievement |
 
 A run ends when you die, or when you defeat the 15:00 boss (a win).
 
 ## 2. Slots (5) and sockets
 
-Every item belongs to exactly one of **5 slots**. (Section 5 lists the original 55 single-effect items; the 10 two-effect items are in section 3.) Each slot has **2 sockets**, so a full loadout holds 10 items.
+Every item belongs to exactly one of **5 slots**. (Section 5 lists the original 55 items; the 10 passive items are in section 3 and the 9 level items in section 9.) Each slot starts with **2 sockets**, so a starting loadout holds 10 items. Each level you unlock lets you buy one more socket in the Forge (section 7), up to 19 sockets with all 10 levels open.
 
 | Slot | Role | Fires… |
 |---|---|---|
@@ -61,48 +61,59 @@ So picking up Cinder Ring (Burn, Orbital) makes your Frost Fan shards burn too. 
 | **Conduction** | Shock + Chill | Shock arcs deal double damage |
 | **Contagion** | Shock + Poison | Arcs spread the poison to the new target |
 
-### Two-effect items
-10 items carry two effects (`effect2`): Frostfire Bolt (Burn+Chill), Needle Thrower (Poison+Pierce), Storm Front (Shock+Chill),
-Blood Moon (Critical+Vampiric), Plasma Orbs (Burn+Shock), Hive Drones (Homing+Poison), Magma Geyser (Burn+Force),
-Shrapnel Bumper (Ricochet+Split), Thunder Sigil (Shock+Critical), Glacial Shell (Chill+Force).
-They are weaker alone: about 70% of the usual damage, they add 60% of their level to *each* effect pool (not 100% to one),
-and their own bullets get +1 stack of each effect instead of +2. In return they fuse with items of either effect,
-and they need both categories unlocked to show up.
+### Passive items
+The 10 former two-effect items are now **passive stat boosts**. They fire nothing and add nothing to the Effect Pool. Each level adds its stats
+(for example Frostfire Core: +4% damage and +2% cooldown per level), and fusion tiers multiply them (`statMul`). They still carry their two
+effect tags, so they fuse with passive items that share an effect. A passive item can't absorb an attacking item; an attacking item can absorb a passive one
+and gets 50% of its stats. Frostfire Core, Barbed Quiver, Storm Lens, Blood Moon Idol, Plasma Capacitor, Hive Mind, Magma Heart,
+Shrapnel Charm, Thunder Sigil and Glacial Shell. They need both of their categories unlocked to show up.
 
-### Fusion
-When you hold **two level 5 items that share an effect** (any slots, including the same slot), and **both have their fusion
-unlocked** (see Mastery below), a Fusion card appears. You choose which item remains:
-* The survivor absorbs the other. Its damage becomes its own + 50% of the absorbed item's, it gets −25% cooldown and
-  +1 projectile, and the absorbed item's attack keeps firing inside it at 50% damage.
-* The fused item has every effect of both items (fuse with a two-effect item and you gain its second effect), counts
-  ×2 of its level in the Effect Pool for each, and its bullets get +3 own stacks.
-* The absorbed item's socket is freed for a new item.
-* A fused item can absorb one more item (up to 2 absorbed, named “… II”). An item that has already absorbed something can't be the one that disappears.
-Chests from elites and bosses offer an available fusion first (you still choose which item remains).
+### Fusion (4 tiers)
+Fusion needs several **level 5 items of the same tier that share at least one effect** (any slots). You choose which one remains:
+* The survivor takes **50% of every other item's damage and passive stats**. It does not take their attacks: their effects are
+  added to its own bullets instead.
+* The other items' sockets are freed.
+* The survivor moves up one tier and starts again at the level's start level, so it has to be levelled to 5 before the next tier.
+* A passive item can't keep a fusion that consumes an attacking item.
 
-## 3b. Progression: categories, mastery and achievements
-* **Categories.** Each effect is a category. A new save starts with only **Burn, Chill and Shock** (Frost and Chill are the
-  same effect in this game, so Shock is the third starting category; it matches the three starting heroes and enables the
-  Shatter and Conduction reactions). That is 18 of 65 items. The others open with achievements:
+| Tier | Needs | Damage | Cooldown | Own stacks per effect | Pool per level | Stats | Unlock |
+|---|---|---|---|---|---|---|---|
+| Base | | ×1 | ×1 | 2 | 1 | ×1 | |
+| Fused | 2 base items | ×1.6 | ×0.75 | 3 | 1.5 | ×1.25 | Mastery of each item |
+| Super | 3 fused items | ×3.2 | ×0.65 | 6 | 4 | ×1.5 | Beat Level 3 |
+| Mega | 5 super items | ×16 | ×0.55 | 12 | 12 | ×2 | Beat Level 6 |
+
+A Mega is 30 base items deep, so **items consumed by a fusion can be offered again later in the run** (only items held right now are
+excluded), and offers favour items that share an effect with what you hold. The level-up screen has **Skip** (S) for when no card helps.
+Chests from elites and bosses offer an available fusion first. All tiers are editable in the admin panel (Progression > Fusion tiers).
+
+**How many Megas fit in a run?** Sockets are not the limit (19 with everything bought). Level-ups are: one Mega takes about 51 picks
+from level 1 items (fewer from a higher start level), and Level 10 gives roughly 220 level-ups in 15 minutes. So the most a strong run
+can reach is **about 4 Megas**. Level 10 is tuned so that around 3 early Megas just survive the final boss and 4 is comfortable
+(tested with a bot and injected builds, not by hand).
+
+## 3b. Progression: levels, categories, mastery and achievements
+* **Nothing unlocks by gold alone.** Every locked item, character, category and fusion tier has an achievement. Most items and
+  characters then still have to be bought with gold (the price shows once the achievement is done); categories and tiers are free.
+* **Categories.** A new save starts with **Burn, Chill and Shock**. The others open by surviving 3:00 in a level:
 
 | Category | Unlocks when |
 |---|---|
-| Poison | Reach level 5 with any Burn item |
-| Force | Reach level 5 with any Chill item |
-| Pierce | Reach level 5 with any Shock item |
-| Ricochet | Reach level 5 with any Pierce item |
-| Homing | Reach level 5 with any Force item |
-| Critical | Survive 5:00 |
-| Split | Defeat a boss |
-| Vampiric | Make 3 fusions |
+| Poison | Survive 3:00 in Level 2 |
+| Force | Survive 3:00 in Level 3 |
+| Pierce | Survive 3:00 in Level 4 |
+| Critical | Survive 3:00 in Level 5 |
+| Ricochet | Survive 3:00 in Level 6 |
+| Homing | Survive 3:00 in Level 7 |
+| Split | Survive 3:00 in Level 8 |
+| Vampiric | Survive 3:00 in Level 9 |
 
 * **Mastery.** Every item has a mastery achievement: reach level 5 with it in 1 run (editable per item). Fusing an item is
-  locked until its mastery is done, so the first time you max an item you can't fuse it that run.
-* Item-level progress is saved per item (`itemRuns`: how many runs reached each level) and counted when a run ends.
-  New unlocks are listed on the game-over screen and on the Achievements screen (main menu).
-* Item and hero locks from before still apply on top of categories.
-* Saves from before this change (v1) keep everything: items bought with gold also open their categories, and stat
-  achievements are granted on load. Category and mastery achievements that depend on item levels start from zero.
+  locked until its mastery is done.
+* Stats are saved per level (`stages`: kills, best time, bosses, wins, runs) and in total. New unlocks and items that are now
+  for sale are listed on the game-over screen and on the Achievements screen, grouped by level.
+* **Saves.** Save v3 adds `stages`. Older saves load: their stats count as Level 1, so Level 2 opens if they had a win, and
+  anything already bought or unlocked stays.
 
 ### Difficulty
 Tunable in the admin panel (Enemies & difficulty). Defaults: enemy HP ×(1 + 0.4m + 0.06m²) (was 0.3m + 0.04m²),
@@ -120,7 +131,7 @@ with ×10 HP (was 45 s, ×8), encirclements every 50 s (was 60 s), bosses ×1.4 
 
 ## 5. The 55 items
 
-Legend: 🔒 = locked at start (unlock condition or Armory price shown).
+Legend: 🔒 = locked at start. The conditions listed below are from before levels; every lock is now a level achievement plus a price (section 9 and the admin panel).
 
 ### 🔫 Weapons (auto-aimed, short cooldown)
 | # | Item | Effect | Bullet pattern | Unlock |
@@ -200,21 +211,25 @@ Legend: 🔒 = locked at start (unlock condition or Armory price shown).
 Item locks shown here apply on top of the category locks in section 3b. A character's starting weapon is
 always available to that character even if it's still locked for others.
 
-## 6. Characters (11, one per weapon)
+## 6. Characters (15, one per weapon)
 
-| Character | Starting weapon | Perk | Unlock |
-|---|---|---|---|
-| Kael, Ember Warden | Ember Pistol | +10% damage | Start |
-| Mira, Frostweaver | Frost Fan | +15% area | Start |
-| Volt, Storm Runner | Arc Rifle | −8% cooldowns | Start |
-| Briar, Thornkeeper | Thorn Spitter | +20% max HP, +0.5 regen | Survive 5:00 |
-| Juno, Trickshot | Ricochet Disc | +15% projectile speed | 1000 lifetime kills |
-| Orrin, Tinker | Seeker Swarm | +20% duration | Reach level 20 |
-| Sable, Wanderer | Boomerang Glaive | +15% move speed | Defeat a boss |
-| Grim, Scrapper | Scrap Blaster | +2 armor | 1500 gold |
-| Lyra, Gambler | Helix Cannon | +10% crit chance | Fuse an item |
-| Nyx, Fractured | Splitter Orb | +1 projectile, −20% max HP | Win a run |
-| Vesper, Nightblood | Blood Lance | Lifesteal 2% of damage as healing on lance hits | 3000 gold |
+| Character | Starting weapon | Perk | Achievement | Price |
+|---|---|---|---|---|
+| Kael, Ember Warden | Ember Pistol | +10% damage | Start | |
+| Mira, Frostweaver | Frost Fan | +15% area | Start | |
+| Volt, Storm Runner | Arc Rifle | −8% cooldowns | Start | |
+| Briar, Thornkeeper | Thorn Spitter | +20% max HP, +0.5 regen | Survive 5:00 in Level 1 | free |
+| Juno, Trickshot | Ricochet Disc | +15% projectile speed | 1500 kills in Level 1 | ● 500 |
+| Sable, Wanderer | Boomerang Glaive | +15% move speed | Boss in Level 1 | ● 400 |
+| Grim, Scrapper | Scrap Blaster | +2 armor | Boss in Level 2 | ● 900 |
+| Lyra, Gambler | Helix Cannon | +10% crit chance | Survive 5:00 in Level 2 | ● 700 |
+| Corvin, Rimeguard | Rime Lance | +10% area, +10% max HP | Survive 5:00 in Level 3 | ● 900 |
+| Orrin, Tinker | Seeker Swarm | +20% duration | Survive 10:00 in Level 4 | ● 1200 |
+| Tamsin, Stormcaller | Arc Halo | −10% cooldowns, −10% max HP | 2000 kills in Level 5 | ● 1500 |
+| Nyx, Fractured | Splitter Orb | +1 projectile, −20% max HP | Boss in Level 6 | ● 1600 |
+| Vesper, Nightblood | Blood Lance | Lance hits heal 2% of damage | Survive 10:00 in Level 7 | ● 2200 |
+| Wren, Shardwright | Shard Cannon | +15% damage, +10% XP | Survive 10:00 in Level 8 | ● 2500 |
+| Morrow, Tidecaller | Crimson Tide | +1 HP/s, +15% duration | Boss in Level 9 | ● 3000 |
 
 ## 7. Permanent upgrades (the Forge)
 
@@ -222,6 +237,9 @@ Bought with Void Gold, cost rises per rank: Might, Vitality (max HP), Armor, Rec
 (move speed), Reach (area), Haste (cooldown), Velocity (projectile speed), Persistence (duration),
 Multishot (+1 projectile), Magnetism, Luck (crit + 4th card chance), Growth (XP), Greed (gold), Second
 Wind (revive), Reroll.
+
+**Extra sockets.** Each slot can buy up to 2 more sockets (● 400 each, rising per rank). Every unlocked level after the first allows one
+more socket bought in total, so 9 extra sockets (19 in all) once Level 10 is open.
 
 ## 8. Enemies and time
 
@@ -240,3 +258,39 @@ Wind (revive), Reroll.
 
 Every ~45s an Elite spawns (8× HP, drops a chest). Every 60s an encirclement wave rings you in.
 You have a small hitbox (bullet-hell style) and a **dash** (Space / Shift) with brief invulnerability.
+
+## 9. Levels
+
+Each level is unlocked by beating the one before it. A level multiplies enemy HP (with a ramp that grows with the run clock, cubed),
+spawn rate, enemy damage and boss HP, and also XP and gold so a build can keep up. Items arrive at the level's start level
+(new items and freshly fused ones), so later levels skip the early picks.
+
+| Level | Name | Enemy HP | Late ramp | Spawns | Damage | Boss HP | XP | Gold | Items start at |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | The Rift | ×1 | 0 | ×1 | ×1 | ×1 | ×1 | ×1 | 1 |
+| 2 | Ashen Verge | ×1.2 | 0.5 | ×1.05 | ×1.1 | ×1.6 | ×1.4 | ×1.2 | 1 |
+| 3 | Frostbound Deep | ×1.4 | 1.2 | ×1.1 | ×1.2 | ×2.6 | ×1.9 | ×1.4 | 2 |
+| 4 | Storm Spire | ×1.6 | 2.1 | ×1.15 | ×1.3 | ×4 | ×2.6 | ×1.6 | 2 |
+| 5 | Blight Garden | ×1.8 | 3.4 | ×1.2 | ×1.4 | ×6.5 | ×3.4 | ×1.8 | 3 |
+| 6 | Mirror Wastes | ×2 | 5 | ×1.25 | ×1.5 | ×10 | ×4.4 | ×2 | 3 |
+| 7 | Hunter's Moon | ×2.3 | 9 | ×1.3 | ×1.6 | ×20 | ×6 | ×2.3 | 4 |
+| 8 | Shattered Crown | ×2.6 | 16 | ×1.35 | ×1.7 | ×40 | ×8 | ×2.6 | 4 |
+| 9 | Crimson Expanse | ×3 | 27 | ×1.4 | ×1.8 | ×85 | ×11 | ×3 | 5 |
+| 10 | The Void Heart | ×3.5 | 68 | ×1.45 | ×1.9 | ×1500 | ×16 | ×3.5 | 5 |
+
+Enemy HP is `hp × (1 + ramp × f³)`, where f goes from 0 at 0:00 to 1 at 15:00. All values are editable in the admin panel (Progression > Levels).
+
+### Level items (9 new)
+| Item | Slot | Effect | Achievement | Price |
+|---|---|---|---|---|
+| Cinder Mortar | Deployable | Burn | 800 kills in Level 2 | free |
+| Rime Lance | Weapon | Chill | 1000 kills in Level 3 | ● 500 |
+| Arc Halo | Orbital | Shock | Survive 5:00 in Level 4 | ● 700 |
+| War Drum | Relic (on dash) | Force | Boss in Level 5 | ● 800 |
+| Mirror Storm | Spell | Ricochet | 1500 kills in Level 6 | ● 900 |
+| Comet Lash | Spell | Homing | Survive 8:00 in Level 7 | ● 1000 |
+| Shard Cannon | Weapon | Split | 2000 kills in Level 8 | ● 1100 |
+| Crimson Tide | Spell | Vampiric | Survive 10:00 in Level 9 | ● 1200 |
+| Deadeye Bow | Weapon | Critical | Boss in Level 10 | ● 1500 |
+
+The older locked items also have level achievements now, each with a price (see the Armory or the admin panel's Progression tab).
