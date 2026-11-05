@@ -104,7 +104,12 @@ function aimAngle(range = 520) {
 }
 
 // ---------- bullets ----------
-function poolStack(b, k) { return (G.pool[k] || 0) + (b && b.effect === k ? 2 : 0); }
+// Stacks of effect k on a hit: the shared pool, plus the firing item's own bonus (inst.own, set in recomputePool:
+// +2 for a single-effect item, +1 per effect for a two-effect item, +3 per effect for a fused item).
+function poolStack(b, k) {
+  const o = b && b.owner;
+  return (G.pool[k] || 0) + (o && o.own ? (o.own[k] || 0) : (b && b.effect === k ? 2 : 0));
+}
 
 function shoot(o) {
   if (G.bullets.length > 2600) return null;
@@ -301,13 +306,17 @@ function damageEnemy(e, dmg, color, crit) {
 let trigDepth = 0;
 function trigger(name, arg) {
   if (trigDepth > 2) return; trigDepth++;
-  for (const inst of G.inv) { const on = inst.def.on; if (on && on[name]) on[name](inst, ctxOf(inst), arg); }
+  for (const inst of G.runners || G.inv) { const on = inst.def.on; if (on && on[name]) on[name](inst, ctxOf(inst), arg); }
   trigDepth--;
 }
 
 // ---------- item instance ctx ----------
+// A fused item adds 50% of each absorbed item's base damage to its own. An absorbed item keeps firing inside it
+// as a sub-instance with mul 0.5 (half damage).
+function baseDmg(inst) { let d = inst.def.dmg; for (const a of inst.absorbed || []) d += 0.5 * a.dmg; return d * (inst.mul || 1); }
 function ctxOf(inst) {
-  const P = G.player, L = inst.level, E = inst.evo ? 1 : 0;
-  return { L, E, P, x: P.x, y: P.y, d: inst.def.dmg * (1 + 0.3 * (L - 1)) * (E ? 1.8 : 1) * P.might, n: P.amount + E, aim: aimAngle(), face: P.face, col: inst.def.color || EFFECTS[inst.def.effect].color, eff: inst.def.effect, inst };
+  const P = G.player, L = inst.level, E = inst.evo ? 1 : 0, def = inst.def, e2 = def.effect2 || def.effect;
+  return { L, E, P, x: P.x, y: P.y, d: baseDmg(inst) * (1 + 0.3 * (L - 1)) * P.might, n: P.amount + E, aim: aimAngle(), face: P.face,
+    col: def.color || EFFECTS[def.effect].color, col2: EFFECTS[e2].color, eff: def.effect, eff2: e2, inst };
 }
-function itemName(inst) { return inst.evo ? FUSE_PREFIX[inst.def.effect] + ' ' + inst.def.name : inst.def.name; }
+function itemName(inst) { return inst.evo ? FUSE_PREFIX[inst.fuseEff || inst.def.effect] + ' ' + inst.def.name + ((inst.absorbed || []).length > 1 ? ' II' : '') : inst.def.name; }

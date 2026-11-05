@@ -86,7 +86,7 @@ async function loadContent() {
 }
 
 async function start() {
-  if (window.VOIDLIGHT_SANDBOX) return; // admin test canvas: no sign-in, no saves
+  if (window.VOIDLIGHT_SANDBOX || window.VOIDLIGHT_TESTSAVE) return; // admin test canvas / test save: no sign-in, no cloud
   if (!configured) { render(); return; }
   try {
     const [app, auth, fs] = await Promise.all([import(SDK + 'firebase-app.js'), import(SDK + 'firebase-auth.js'), import(SDK + 'firebase-firestore.js')]);

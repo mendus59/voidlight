@@ -7,7 +7,7 @@ An original survivor-style bullet hell for the browser. No build step and no dep
 * open the single-file build `dist/voidlight.html`, or
 * serve the folder: `python3 -m http.server` and visit http://localhost:8000
 
-Progress (gold, upgrades, unlocks) is saved in the browser's localStorage. Players can also sign in with Google from the main menu to keep progress in the cloud and across devices (see below).
+Progress (gold, upgrades, unlocks, item mastery) is saved in the browser's localStorage. Players can also sign in with Google from the main menu to keep progress in the cloud and across devices (see below).
 
 ## Cloud saves (Firebase)
 Signing in is optional. Guests keep playing on localStorage exactly as before.
@@ -30,6 +30,9 @@ Sign-in works on the GitHub Pages site and on `localhost`. It does not work when
 ## Admin panel (`admin.html`)
 https://mendus59.github.io/voidlight/admin.html (or `localhost:8000/admin.html`). Only the Google account `mendus59@gmail.com` can use it: the page shows nothing but a sign-in button until that account signs in, and `firestore.rules` refuse every draft read and every write from any other account.
 
+* **Progression tab**: which categories are open at the start and the achievement that opens each other one, every item's fusion lock (mastery), and a **progress simulator**: set a pretend save (stats, categories, best level per item, or copy your own save), see which items and fusions that player gets and which achievements are waiting, then **Play with this save** opens the real game (`index.html?testsave`) on that pretend save with your unpublished edits. Progress there stays in the test save and can be loaded back.
+* **Item editor**: a second effect (two-effect items), and the fusion lock. Under the test canvas, **Fuse with** picks a partner and shows the real fusion (the selected item remains).
+* **Enemies & difficulty**: the run difficulty curve, with a table of what it means at 0, 3, 5, 10 and 15 minutes.
 * **Tabs** for Weapons, Spells, Orbitals, Deployables, Relics, Characters, Enemies and bosses, Pickups (drop rates) and Forge upgrades, plus an **Overview** with counts, every unlock and its requirement, the edits not yet published, and the publish history.
 * **Items**: name, icon, effect, description, damage, cooldown, unlock (gold cost or achievement), on/off in level-ups, and a **visual style**: color, bullet size, bullet speed, fading trail, and a replacement shape for each kind of bullet the item fires.
 * **Test canvas**: the real game engine (`index.html?sandbox`) in a frame with only the selected item, at any level or fused, firing at training targets (ring, line, scattered or a walking swarm, killable or not). Relics get buttons for their triggers (kill, get hit, level up, crit, pickup). Every edit shows up on it right away, with a damage-per-second readout.
@@ -45,9 +48,10 @@ On touch screens, drag to move and tap with a second finger to dash.
 ## Files
 | File | What's in it |
 |---|---|
-| `DESIGN.md` | Progression design, all 55 items, combination math, unlocks, characters |
+| `DESIGN.md` | Progression design, all 65 items, categories and mastery, fusion, combination math, characters |
 | `src/core.js` | Engine: spatial grid, bullets and their behaviours, effect pool, reactions, damage |
-| `src/items.js` | Content: 55 item definitions (one bullet pattern each), 11 characters, enemies and bosses, pickups, Forge upgrades |
+| `src/items.js` | Content: 65 item definitions (one bullet pattern each), 11 characters, categories, difficulty, enemies and bosses, pickups, Forge upgrades |
+| `src/progress.js` | Save format and migration, unlock rules, achievements (shared by the game and the admin simulator) |
 | `src/content.js` | Applies content published from the admin page on top of items.js |
 | `admin.html`, `src/admin.js` | The admin panel |
 | `src/main.js` | Director (waves, elites, bosses), enemies, player, pickups, level-ups, rendering, menus, save |
@@ -59,6 +63,6 @@ On touch screens, drag to move and tap with a second finger to dash.
 Call `def(slot, id, name, effect, icon, { dmg, cd, pattern, fire(inst, c) {...} })` in `src/items.js`.
 `c` gives you level `c.L`, damage `c.d`, extra projectiles `c.n`, aim angle `c.aim`, and the helper `B(c, {...})` spawns a bullet carrying the item's effect.
 Persistent things use `spawn(inst, c)`, reactive relics use `on: { kill, hurt, crit, pickup, move, levelup }`.
-Keep the plain-data properties (`dmg`, `cd`, `lock`, `pattern`, …) on the `def(` line, so the admin export can rewrite it. Locks are `{ cost: 500 }` or `{ stat: 'totalKills', min: 500, text: 'Defeat 500 enemies (lifetime)' }`.
+Keep the plain-data properties (`dmg`, `cd`, `effect2`, `lock`, `fuseLock`, `pattern`, …) on the `def(` line, so the admin export can rewrite it. `effect2` makes it a two-effect item (`c.col2` is its color). Locks are `{ cost: 500 }`, `{ stat: 'totalKills', min: 500, text }`, `{ effect: 'burn', level: 5, text }` (any item of a category) or `{ item: 'ember_pistol', level: 5, runs: 1, text }`. `fuseLock: { level: 5, runs: 2 }` overrides the default mastery needed to fuse it (`runs: 0` = always).
 
 Debug hook in the console: `VOIDLIGHT.addItem('blood_lance')`, `VOIDLIGHT.G` for the run state.

@@ -19,7 +19,7 @@ A run ends when you die, or when you defeat the 15:00 boss (a win).
 
 ## 2. Slots (5) and sockets
 
-Every item belongs to exactly one of **5 slots**. Each slot has **2 sockets**, so a full loadout holds 10 items.
+Every item belongs to exactly one of **5 slots**. (Section 5 lists the original 55 single-effect items; the 10 two-effect items are in section 3.) Each slot has **2 sockets**, so a full loadout holds 10 items.
 
 | Slot | Role | Fires… |
 |---|---|---|
@@ -61,14 +61,53 @@ So picking up Cinder Ring (Burn, Orbital) makes your Frost Fan shards burn too. 
 | **Conduction** | Shock + Chill | Shock arcs deal double damage |
 | **Contagion** | Shock + Poison | Arcs spread the poison to the new target |
 
-### Fusion (evolution)
-When you hold **two items with the same effect in different slots, both at level 5**, a **Fusion** card
-appears. The chosen item becomes its Fused form (e.g. *Ember Pistol* → *Inferno Ember Pistol*):
-×1.8 damage, −25% cooldown, +1 projectile, and it counts double in the Effect Pool. Boss and elite chests
-strongly favour Fusions.
+### Two-effect items
+10 items carry two effects (`effect2`): Frostfire Bolt (Burn+Chill), Needle Thrower (Poison+Pierce), Storm Front (Shock+Chill),
+Blood Moon (Critical+Vampiric), Plasma Orbs (Burn+Shock), Hive Drones (Homing+Poison), Magma Geyser (Burn+Force),
+Shrapnel Bumper (Ricochet+Split), Thunder Sigil (Shock+Critical), Glacial Shell (Chill+Force).
+They are weaker alone: about 70% of the usual damage, they add 60% of their level to *each* effect pool (not 100% to one),
+and their own bullets get +1 stack of each effect instead of +2. In return they fuse with items of either effect,
+and they need both categories unlocked to show up.
 
-Every item can fuse with any of 4 partners (the same-effect item in each other slot), so there are
-**55 × 4 = 220 fusion routes**.
+### Fusion
+When you hold **two level 5 items that share an effect** (any slots, including the same slot), and **both have their fusion
+unlocked** (see Mastery below), a Fusion card appears. You choose which item remains:
+* The survivor absorbs the other. Its damage becomes its own + 50% of the absorbed item's, it gets −25% cooldown and
+  +1 projectile, and the absorbed item's attack keeps firing inside it at 50% damage.
+* The fused item has every effect of both items (fuse with a two-effect item and you gain its second effect), counts
+  ×2 of its level in the Effect Pool for each, and its bullets get +3 own stacks.
+* The absorbed item's socket is freed for a new item.
+* A fused item can absorb one more item (up to 2 absorbed, named “… II”). An item that has already absorbed something can't be the one that disappears.
+Chests from elites and bosses offer an available fusion first (you still choose which item remains).
+
+## 3b. Progression: categories, mastery and achievements
+* **Categories.** Each effect is a category. A new save starts with only **Burn, Chill and Shock** (Frost and Chill are the
+  same effect in this game, so Shock is the third starting category; it matches the three starting heroes and enables the
+  Shatter and Conduction reactions). That is 18 of 65 items. The others open with achievements:
+
+| Category | Unlocks when |
+|---|---|
+| Poison | Reach level 5 with any Burn item |
+| Force | Reach level 5 with any Chill item |
+| Pierce | Reach level 5 with any Shock item |
+| Ricochet | Reach level 5 with any Pierce item |
+| Homing | Reach level 5 with any Force item |
+| Critical | Survive 5:00 |
+| Split | Defeat a boss |
+| Vampiric | Make 3 fusions |
+
+* **Mastery.** Every item has a mastery achievement: reach level 5 with it in 1 run (editable per item). Fusing an item is
+  locked until its mastery is done, so the first time you max an item you can't fuse it that run.
+* Item-level progress is saved per item (`itemRuns`: how many runs reached each level) and counted when a run ends.
+  New unlocks are listed on the game-over screen and on the Achievements screen (main menu).
+* Item and hero locks from before still apply on top of categories.
+* Saves from before this change (v1) keep everything: items bought with gold also open their categories, and stat
+  achievements are granted on load. Category and mastery achievements that depend on item levels start from zero.
+
+### Difficulty
+Tunable in the admin panel (Enemies & difficulty). Defaults: enemy HP ×(1 + 0.4m + 0.06m²) (was 0.3m + 0.04m²),
+spawns 1 + 0.9m + 0.06m² per second (was 0.8 + 0.75m + 0.05m²), enemy damage +10%/min (was +6.7%), elites every 40 s
+with ×10 HP (was 45 s, ×8), encirclements every 50 s (was 60 s), bosses ×1.4 HP, and a slightly steeper XP curve.
 
 ## 4. Combination math
 
@@ -158,7 +197,7 @@ Legend: 🔒 = locked at start (unlock condition or Armory price shown).
 | 54 | Hydra Scale | Split | On level-up / every 25 kills → cascading splitting rings | 🔒 Defeat a boss |
 | 55 | Vampire Fang | Vampiric | On kill (chance) → homing blood drop that heals on hit | 🔒 600 gold |
 
-**39 items unlocked at start, 16 locked** (8 by achievement, 8 by gold). A character's starting weapon is
+Item locks shown here apply on top of the category locks in section 3b. A character's starting weapon is
 always available to that character even if it's still locked for others.
 
 ## 6. Characters (11, one per weapon)

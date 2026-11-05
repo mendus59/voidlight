@@ -1,8 +1,8 @@
 'use strict';
-// ===== VOIDLIGHT content: 55 items, 11 characters, enemies, pickups, meta upgrades =====
+// ===== VOIDLIGHT content: 65 items (10 with two effects), 11 characters, categories, enemies, pickups, difficulty, meta upgrades =====
 // admin.html edits this content and can export a new copy of this file. For that to work, keep each
-// def(...)'s plain-data properties (dmg, cd, lock, color, vis, disabled, pattern, trig) on its first line,
-// and each character, upgrade, enemy, boss and pickup on a single line.
+// def(...)'s plain-data properties (dmg, cd, effect2, lock, fuseLock, color, vis, disabled, pattern, trig) on its first line,
+// and each character, category, upgrade, enemy, boss, pickup and difficulty entry on a single line.
 const ITEMS = [];
 const ITEM = {};
 function def(slot, id, name, effect, icon, props) {
@@ -65,6 +65,12 @@ def('weapon', 'blood_lance', 'Blood Lance', 'vampiric', '🩸', { dmg: 22, cd: 1
   fire(i, c) { const n = 1 + c.n; for (let k = 0; k < n; k++) B(c, { ang: c.face + (k - (n - 1) / 2) * 0.2, spd: 720, r: 7, life: 0.7, pierce: 999, shape: 'lance', lifesteal: G.char.id === 'vesper' ? 0.02 : 0,
     onHit: () => { if (Math.random() < 0.06 + 0.02 * c.L) heal(1); } }); } });
 
+// two effects: weaker alone, but fuses with items of either effect
+def('weapon', 'frostfire_bolt', 'Frostfire Bolt', 'burn', '🌗', { dmg: 6, cd: 0.8, effect2: 'chill', pattern: 'Paired fire and ice bolts that curve in and cross on the target.',
+  fire(i, c) { const n = 1 + Math.floor(c.L / 2) + c.n; for (let k = 0; k < n; k++) later(k * 0.09, () => { const a = aimAngle(); for (const s of [-1, 1]) B(c, { ang: a - s * 0.35, spd: 460, r: 5, life: 1.1, curve: s * 0.9, color: s < 0 ? c.col : c.col2, shape: s < 0 ? 'orb' : 'shard' }); }); } });
+def('weapon', 'needle_thrower', 'Needle Thrower', 'poison', '🪡', { dmg: 4, cd: 0.75, effect2: 'pierce', pattern: 'Bursts of fast venom needles that pass through several enemies.',
+  fire(i, c) { const n = 2 + Math.floor(c.L / 2) + c.n; for (let k = 0; k < n; k++) later(k * 0.05, () => B(c, { ang: aimAngle() + rand(-0.12, 0.12), spd: 640, r: 3, life: 0.8, pierce: 2 + Math.floor(c.L / 2), shape: 'bolt' })); } });
+
 // ======================= SPELLS =======================
 def('spell', 'flame_nova', 'Flame Nova', 'burn', '☀️', { dmg: 10, cd: 3, pattern: 'Swirling expanding ring of fireballs.',
   fire(i, c) { radial(c, c.x, c.y, 10 + 3 * c.L + c.n * 2, { spd: 280, r: 6, life: 1.1, curve: 0.9 }, rand(0, TAU)); } });
@@ -99,6 +105,14 @@ def('spell', 'soul_leech', 'Soul Leech', 'vampiric', '💀', { dmg: 9, cd: 3.5, 
   fire(i, c) { const m = 8 + c.L + c.n; for (let k = 0; k < m; k++) B(c, { ang: k * TAU / m, spd: 300, r: 6, life: 1.4, boomer: true, pierce: 999, shape: 'skull',
     onHit: b => { b.scored = true; }, onReturn: b => { if (b.scored) heal(0.4 + 0.1 * c.L); } }); } });
 
+// two effects: weaker alone, but fuses with items of either effect
+def('spell', 'storm_front', 'Storm Front', 'shock', '🌪️', { dmg: 5, cd: 3.6, effect2: 'chill', pattern: 'Drifting freezing clouds that call down lightning inside them.',
+  fire(i, c) { const m = 1 + Math.floor(c.L / 3) + c.n; for (let k = 0; k < m; k++) { const a = c.aim + (k - (m - 1) / 2) * 0.6, R = (60 + 4 * c.L) * Math.sqrt(c.P.area);
+    deploy({ x: c.x, y: c.y, life: 3, r: R, kind: 'cloud', color: c.col2, vx: Math.cos(a) * 110, vy: Math.sin(a) * 110, update(d, dt) { d.x += d.vx * dt; d.y += d.vy * dt; d.tick -= dt; if (d.tick > 0) return; d.tick = 0.45;
+      strike(d.x, d.y, d.r, c.d * 0.6, 'chill', { noFx: true, raw: true, owner: i }); const e = randomEnemy(d.x, d.y, d.r * 1.4); if (e) { fxStrikeV(e.x, e.y, c.col); strike(e.x, e.y, 26, c.d, 'shock', { owner: i }); } } }); } } });
+def('spell', 'blood_moon', 'Blood Moon', 'crit', '🌕', { dmg: 6, cd: 3, effect2: 'vampiric', pattern: 'A ring of crescents that sweep outward in a spiral; hits can heal.',
+  fire(i, c) { const m = 6 + c.L + c.n, a0 = rand(0, TAU); for (let k = 0; k < m; k++) B(c, { ang: a0 + k * TAU / m, spd: 240, r: 6, life: 1.5, curve: 1.6, pierce: 3, shape: 'petal', color: k % 2 ? c.col2 : c.col, onHit: () => { if (Math.random() < 0.03 + 0.01 * c.L) heal(1); } }); } });
+
 // ======================= ORBITALS =======================
 def('orbit', 'cinder_ring', 'Cinder Ring', 'burn', '⭕', { dmg: 8, pattern: 'Fireballs in a tight circular orbit.',
   spawn(i, c) { const m = 2 + c.L + c.n; for (let k = 0; k < m; k++) B(c, Object.assign(persistBase(), { orbit: { r: 70, w: 3.2, a: k * TAU / m }, hitCd: 0.4, r: 7 })); } });
@@ -128,6 +142,14 @@ def('orbit', 'gemini_satellites', 'Gemini Satellites', 'split', '🛰️', { dmg
       onExpire: b => { for (const q of [-0.5, 0.5]) B(c, { x: b.x, y: b.y, ang: Math.atan2(b.vy, b.vx) + q, spd: 260, r: 3, life: 0.4, dmg: c.d * 0.5, shape: 'shard', noMods: true }); } }); } } });
 def('orbit', 'bat_swarm', 'Bat Swarm', 'vampiric', '🦇', { dmg: 6, lock: { cost: 800 }, pattern: 'Bats circling you chaotically.',
   spawn(i, c) { const m = 4 + c.L + c.n; for (let k = 0; k < m; k++) B(c, Object.assign(persistBase(), { orbit: { r: 85, w: rand(2, 3.5) * (k % 2 ? 1 : -1), a: rand(0, TAU), pulse: rand(1.5, 3) }, r: 6, hitCd: 0.5, shape: 'bat' })); } });
+
+// two effects: weaker alone, but fuses with items of either effect
+def('orbit', 'plasma_orbs', 'Plasma Orbs', 'burn', '🔆', { dmg: 5, effect2: 'shock', pattern: 'Burning orbs circling you that zap the nearest enemy.',
+  spawn(i, c) { i.state.orbs = []; i.state.t = 0.6; const m = 2 + Math.floor(c.L / 2) + c.n; for (let k = 0; k < m; k++) i.state.orbs.push(B(c, Object.assign(persistBase(), { orbit: { r: 95, w: -2.4, a: k * TAU / m }, r: 7, hitCd: 0.45 }))); },
+  update(i, dt) { i.state.t -= dt; if (i.state.t > 0) return; i.state.t = cdFor(i, 1.4); const c = ctxOf(i); for (const o of i.state.orbs || []) { if (!o || o.dead) continue; const e = nearest(o.x, o.y, 170); if (e) zap(o.x, o.y, e, c.d * 0.8, 'shock', i); } } });
+def('orbit', 'hive_drones', 'Hive Drones', 'homing', '🐝', { dmg: 4, effect2: 'poison', pattern: 'Buzzing drones around you that launch homing venom stingers.',
+  spawn(i, c) { i.state.bees = []; i.state.t = 0.8; const m = 2 + Math.floor(c.L / 2) + c.n; for (let k = 0; k < m; k++) i.state.bees.push(B(c, Object.assign(persistBase(), { orbit: { r: 60, w: 2.8, a: k * TAU / m, pulse: 2 }, r: 5, hitCd: 0.5, shape: 'bat' }))); },
+  update(i, dt) { i.state.t -= dt; if (i.state.t > 0) return; i.state.t = cdFor(i, 1.5); const c = ctxOf(i); for (const s of i.state.bees || []) { if (!s || s.dead) continue; B(c, { x: s.x, y: s.y, ang: rand(0, TAU), spd: 260, home: 5, r: 3.5, life: 1.6, shape: 'dagger', color: c.col2 }); } } });
 
 // ======================= DEPLOYABLES =======================
 def('trap', 'fire_trail', 'Fire Trail', 'burn', '🔥', { dmg: 4, cd: 0.12, pattern: 'Flames left behind as you move.',
@@ -166,6 +188,15 @@ def('trap', 'blood_altar', 'Blood Altar', 'vampiric', '⛩️', { dmg: 7, cd: 8,
   fire(i, c) { deploy({ x: c.x, y: c.y, life: 6, kind: 'altar', color: c.col, a: 0, healT: 1, update(d, dt) { d.healT -= dt; if (d.healT <= 0) { d.healT = 1; if (d2(d.x, d.y, G.player.x, G.player.y) < 100 * 100) heal(1 + 0.25 * c.L); }
     d.tick -= dt; if (d.tick > 0) return; d.tick = 0.08; d.a += 0.21; for (let k = 0; k < 3; k++) B(c, { x: d.x, y: d.y, ang: d.a + k * TAU / 3, spd: 220, r: 5, life: 1.6 }); } }); } });
 
+// two effects: weaker alone, but fuses with items of either effect
+def('trap', 'magma_geyser', 'Magma Geyser', 'burn', '🌋', { dmg: 7, cd: 4.2, effect2: 'knockback', pattern: 'A geyser that erupts in pulses, blasting enemies back and spraying flames.',
+  fire(i, c) { const t = targetPoint(300); deploy({ x: t.x, y: t.y, life: 2.4, kind: 'pod', color: c.col, update(d, dt) { d.tick -= dt; if (d.tick > 0) return; d.tick = 0.6;
+    strike(d.x, d.y, 70 + 4 * c.L, c.d, 'knockback', { kb: 30, owner: i }); radial(c, d.x, d.y, 6 + c.L, { spd: 260, r: 5, life: 0.5, drag: 1.5, shape: 'flame' }, rand(0, TAU)); } }); } });
+def('trap', 'shrapnel_bumper', 'Shrapnel Bumper', 'bounce', '🎱', { dmg: 5, cd: 5, effect2: 'split', pattern: 'Bumper spraying wall-bouncing pellets that split when they stop.',
+  fire(i, c) { deploy({ x: c.x, y: c.y, life: 4, kind: 'totem', color: c.col, a: 0, update(d, dt) { d.tick -= dt; if (d.tick > 0) return; d.tick = 0.45; d.a += 0.7;
+    for (let k = 0; k < 3; k++) B(c, { x: d.x, y: d.y, ang: d.a + k * TAU / 3, spd: 300, bounceWalls: 1 + Math.floor(c.L / 3), life: 1.6, r: 4.5, shape: 'disc',
+      onExpire: b => { for (const q of [-0.6, 0.6]) B(c, { x: b.x, y: b.y, ang: Math.atan2(b.vy, b.vx) + q, spd: 240, r: 3, life: 0.35, dmg: c.d * 0.5, shape: 'shard', noMods: true, color: c.col2 }); } }); } }); } });
+
 // ======================= RELICS =======================
 def('relic', 'phoenix_feather', 'Phoenix Feather', 'burn', '🪶', { dmg: 12, pattern: 'When hit or levelling up: ring of flame feathers.', trig: 'When hit / level up',
   on: { hurt(i, c) { radial(c, c.x, c.y, 12 + 4 * c.L + c.n * 2, { spd: 360, r: 5, life: 0.9, pierce: 2, shape: 'feather' }); c.P.inv += 0.3; },
@@ -196,6 +227,13 @@ function hydra(c) { for (let k = 0; k < 3; k++) later(k * 0.15, () => { const P 
 def('relic', 'vampire_fang', 'Vampire Fang', 'vampiric', '🦷', { dmg: 9, lock: { cost: 600 }, pattern: 'On kill (chance): a homing blood drop that heals on hit.', trig: 'On kill',
   on: { kill(i, c, e) { if (Math.random() > 0.1 + 0.03 * c.L) return; B(c, { x: e.x, y: e.y, ang: rand(0, TAU), spd: 250, home: 7, r: 5, life: 2, shape: 'drop', onHit: () => heal(1) }); } } });
 
+// two effects: weaker alone, but fuses with items of either effect
+def('relic', 'thunder_sigil', 'Thunder Sigil', 'shock', '🔯', { dmg: 9, effect2: 'crit', pattern: 'On crit (chance): lightning strikes another enemy nearby.', trig: 'On critical hit',
+  on: { crit(i, c, e) { if (Math.random() > 0.2 + 0.04 * c.L) return; const n = randomEnemy(e.x, e.y, 260); if (!n || n === e) return; fxStrikeV(n.x, n.y, c.col); strike(n.x, n.y, 34, c.d, 'shock', { owner: i }); } } });
+def('relic', 'glacial_shell', 'Glacial Shell', 'chill', '🐚', { dmg: 8, effect2: 'knockback', pattern: 'When hit or levelling up: a freezing blast that throws enemies back.', trig: 'When hit / level up',
+  on: { hurt(i, c) { glacial(c, i, 1); c.P.inv += 0.2; }, levelup(i, c) { glacial(c, i, 0.6); } } });
+function glacial(c, i, k) { strike(c.x, c.y, 110 + 8 * c.L, c.d * 1.5 * k, 'chill', { kb: 50, owner: i }); radial(c, c.x, c.y, Math.round((10 + 2 * c.L + c.n * 2) * k), { spd: 320, r: 4, life: 0.6, shape: 'shard', color: c.col2 }); }
+
 // ======================= CHARACTERS =======================
 const CHARACTERS = [
   { id: 'kael',  name: 'Kael',  title: 'Ember Warden',  color: '#ff8a3d', weapon: 'ember_pistol',     perk: '+10% damage',            mods: { might: 0.10 } },
@@ -210,6 +248,30 @@ const CHARACTERS = [
   { id: 'nyx',   name: 'Nyx',   title: 'Fractured',     color: '#5affd9', weapon: 'splitter_orb',     perk: '+1 projectile, −20% max HP', mods: { amount: 1, hp: -0.2 }, lock: { stat: 'wins', min: 1, text: 'Win a run' } },
   { id: 'vesper',name: 'Vesper',title: 'Nightblood',    color: '#ff3b5c', weapon: 'blood_lance',      perk: 'Lance hits heal 2% of damage', mods: {}, lock: { cost: 3000 } },
 ];
+
+// ======================= CATEGORIES (effects) =======================
+// A run only offers items whose categories are all unlocked. Categories without a lock are open from the start.
+const CATEGORIES = {
+  burn: {},
+  chill: {},
+  shock: {},
+  poison: { lock: { effect: 'burn', level: 5, text: 'Reach level 5 with any Burn item' } },
+  knockback: { lock: { effect: 'chill', level: 5, text: 'Reach level 5 with any Chill item' } },
+  pierce: { lock: { effect: 'shock', level: 5, text: 'Reach level 5 with any Shock item' } },
+  crit: { lock: { stat: 'bestTime', min: 300, text: 'Survive 5:00' } },
+  bounce: { lock: { effect: 'pierce', level: 5, text: 'Reach level 5 with any Pierce item' } },
+  homing: { lock: { effect: 'knockback', level: 5, text: 'Reach level 5 with any Force item' } },
+  split: { lock: { stat: 'bossKills', min: 1, text: 'Defeat a boss' } },
+  vampiric: { lock: { stat: 'evolves', min: 3, text: 'Make 3 fusions' } },
+};
+
+// ======================= DIFFICULTY =======================
+// m = minutes into the run. Enemy HP ×(1 + hpGrowth·m + hpCurve·m²), spawns/s = spawnBase + spawnGrowth·m + spawnCurve·m²,
+// enemy damage ×(1 + dmgGrowth·m). Elites every eliteEvery s with eliteHp× HP, encirclements every ringEvery s, boss HP ×bossHp.
+// XP for level l: 5 + xpStep·(l−1) + (l−1)^xpCurve.
+const DIFFICULTY = {
+  run: { hpGrowth: 0.4, hpCurve: 0.06, spawnBase: 1, spawnGrowth: 0.9, spawnCurve: 0.06, dmgGrowth: 0.1, eliteEvery: 40, eliteHp: 10, ringEvery: 50, bossHp: 1.4, xpStep: 6, xpCurve: 1.8 },
+};
 
 // ======================= ENEMIES & BOSSES =======================
 const ENEMY_TYPES = {

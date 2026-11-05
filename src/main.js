@@ -2,23 +2,11 @@
 // ===== VOIDLIGHT: run loop, director, enemies, player, rendering, menus, save =====
 
 // ---------------- save data ----------------
-const SAVE_KEY = 'voidlight.save.v1';
-function defaultSave() {
-  return { gold: 0, upg: {}, unlockedItems: [], unlockedChars: ['kael', 'mira', 'volt'],
-    stats: { totalKills: 0, bestTime: 0, bossKills: 0, evolves: 0, wins: 0, runs: 0, maxLevel: 0, totalGold: 0 }, settings: { numbers: true }, lastChar: 'kael' };
-}
+// The save format, migration and unlock rules live in progress.js (shared with the admin simulator).
+// index.html?testsave plays on a separate save the admin panel prepares; it never touches real progress or the cloud.
+const TESTSAVE = !!window.VOIDLIGHT_TESTSAVE;
+const SAVE_KEY = TESTSAVE ? 'voidlight.testsave' : 'voidlight.save.v1';
 let SAVE = defaultSave();
-// Fills in any fields an older or partial save is missing.
-function normalizeSave(s) {
-  const d = defaultSave(); if (!s || typeof s !== 'object') return d;
-  const out = Object.assign(d, s);
-  out.stats = Object.assign(defaultSave().stats, s.stats || {});
-  out.settings = Object.assign(defaultSave().settings, s.settings || {});
-  out.upg = Object.assign({}, s.upg || {});
-  out.unlockedItems = Array.isArray(s.unlockedItems) ? s.unlockedItems.slice() : [];
-  out.unlockedChars = Array.isArray(s.unlockedChars) ? s.unlockedChars.slice() : d.unlockedChars;
-  return out;
-}
 function loadSave() {
   if (SANDBOX) return; // the admin test canvas never touches the player's save
   try { const raw = localStorage.getItem(SAVE_KEY); if (raw) SAVE = normalizeSave(JSON.parse(raw)); } catch (e) { SAVE = defaultSave(); }
@@ -28,20 +16,7 @@ function writeSave() {
   if (SANDBOX) return;
   SAVE.updatedAt = Date.now();
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(SAVE)); } catch (e) { /* storage unavailable */ }
-  if (window.VOIDLIGHT_CLOUD) try { window.VOIDLIGHT_CLOUD.saved(SAVE); } catch (e) { /* cloud is best effort */ }
-}
-// Combines progress a guest made on this device with an account's cloud save, so nothing earned is lost.
-// Gold and counters add up, ranks and records take the higher value, unlocks are the union.
-function mergeSaves(a, b) {
-  a = normalizeSave(a); b = normalizeSave(b);
-  const m = normalizeSave(b);
-  m.gold = (a.gold || 0) + (b.gold || 0);
-  for (const id of new Set([...Object.keys(a.upg), ...Object.keys(b.upg)])) m.upg[id] = Math.max(a.upg[id] || 0, b.upg[id] || 0);
-  m.unlockedItems = [...new Set([...a.unlockedItems, ...b.unlockedItems])];
-  m.unlockedChars = [...new Set([...a.unlockedChars, ...b.unlockedChars])];
-  for (const k of ['totalKills', 'bossKills', 'evolves', 'wins', 'runs', 'totalGold']) m.stats[k] = (a.stats[k] || 0) + (b.stats[k] || 0);
-  for (const k of ['bestTime', 'maxLevel']) m.stats[k] = Math.max(a.stats[k] || 0, b.stats[k] || 0);
-  return m;
+  if (window.VOIDLIGHT_CLOUD && !TESTSAVE) try { window.VOIDLIGHT_CLOUD.saved(SAVE); } catch (e) { /* cloud is best effort */ }
 }
 // Swaps in a whole save (used by cloud sync) and refreshes whatever menu is open.
 function replaceSave(s, { persist = true } = {}) {
@@ -49,17 +24,13 @@ function replaceSave(s, { persist = true } = {}) {
   if (G) G.settings = SAVE.settings;
   if (persist) { try { localStorage.setItem(SAVE_KEY, JSON.stringify(SAVE)); } catch (e) { /* storage unavailable */ } }
   checkUnlocks();
-  if (!G && ['menu', 'chars', 'forge', 'codex'].includes(currentScreen)) showScreen(currentScreen);
+  if (!G && SCREENS_WITH_SAVE.includes(currentScreen)) showScreen(currentScreen);
 }
 const SANDBOX = !!window.VOIDLIGHT_SANDBOX;
-const itemUnlocked = d => !d.lock || SAVE.unlockedItems.includes(d.id);
-// Achievement locks are data: { stat, min, text } unlocks once SAVE.stats[stat] >= min. Gold locks are { cost }.
-const lockMet = (lock, stats) => !!(lock && lock.stat && (stats[lock.stat] || 0) >= lock.min);
-const charUnlocked = c => !c.lock || SAVE.unlockedChars.includes(c.id);
+const SCREENS_WITH_SAVE = ['menu', 'chars', 'forge', 'codex', 'achievements'];
+// Achievement unlocks (see progress.js) are granted on load and at the end of each run.
 function checkUnlocks() {
-  const fresh = [];
-  for (const d of ITEMS) if (lockMet(d.lock, SAVE.stats) && !SAVE.unlockedItems.includes(d.id)) { SAVE.unlockedItems.push(d.id); fresh.push(d.icon + ' ' + d.name); }
-  for (const c of CHARACTERS) if (lockMet(c.lock, SAVE.stats) && !SAVE.unlockedChars.includes(c.id)) { SAVE.unlockedChars.push(c.id); fresh.push('🧍 ' + c.name + ' (character)'); }
+  const fresh = applyUnlocks(SAVE);
   if (fresh.length) writeSave();
   return fresh;
 }
@@ -68,13 +39,14 @@ function checkUnlocks() {
 const SPAWN_TABLE = [['drone', 0, 10], ['swarm', 0, 4], ['darter', 60, 5], ['spitter', 120, 3], ['brute', 210, 3], ['bomber', 270, 3], ['warlock', 390, 2], ['wraith', 480, 4]];
 const RUN_LENGTH = 900;
 const BOSS_TIMES = [[300, 'matriarch'], [600, 'seraph'], [900, 'eclipse']];
-const hpMul = t => 1 + (t / 60) * 0.3 + Math.pow(t / 60, 2) * 0.04;
+const DIFF = () => DIFFICULTY.run; // tunable from the admin panel (Enemies tab)
+const hpMul = t => { const D = DIFF(), m = t / 60; return 1 + m * D.hpGrowth + m * m * D.hpCurve; };
 
 function spawnEnemy(type, x, y, o = {}) {
   const T = ENEMY_TYPES[type] || BOSSES[type] || SANDBOX_TYPES[type];
-  const m = o.boss ? 1 : hpMul(G.time) * (o.elite ? 8 : 1);
+  const m = o.boss ? DIFF().bossHp : hpMul(G.time) * (o.elite ? DIFF().eliteHp : 1);
   const e = { id: G.nextId++, type, T, x, y, r: T.r * (o.elite ? 1.6 : 1), hp: T.hp * m, maxHp: T.hp * m, spd: T.spd * (o.elite ? 0.9 : 1) * (1 + Math.min(0.35, G.time / 2400)),
-    dmg: T.dmg * (1 + G.time / 900), xp: T.xp * (o.elite ? 10 : 1), color: T.color, mass: T.mass || (o.boss ? 50 : o.elite ? 6 : 1), elite: !!o.elite, boss: !!o.boss,
+    dmg: T.dmg * (1 + DIFF().dmgGrowth * G.time / 60), xp: T.xp * (o.elite ? 10 : 1), color: T.color, mass: T.mass || (o.boss ? 50 : o.elite ? 6 : 1), elite: !!o.elite, boss: !!o.boss,
     kx: 0, ky: 0, burnT: 0, burnDps: 0, slowT: 0, slow: 0, poisonT: 0, poison: 0, freezeT: 0, reactCd: 0, dot: 0, dotT: 0, flash: 0, shootT: rand(0.5, 2), at: 0, spin: 0, phase: 0 };
   G.enemies.push(e); return e;
 }
@@ -83,9 +55,9 @@ function viewRadius() { return Math.hypot(VIEW.w, VIEW.h) / 2 + 40; }
 function ebullet(x, y, ang, spd, r = 6, dmg = 8, color = '#ff3b8b') { if (G.ebullets.length < 900) G.ebullets.push({ x, y, vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd, r, dmg, color, t: 0, life: 6 }); }
 
 function director(dt) {
-  const t = G.time;
+  const t = G.time, D = DIFF(), m = t / 60;
   // regular spawns
-  const rate = 0.8 + (t / 60) * 0.75 + Math.pow(t / 60, 2) * 0.05;
+  const rate = D.spawnBase + m * D.spawnGrowth + m * m * D.spawnCurve;
   G.spawnAcc += rate * dt;
   const avail = SPAWN_TABLE.filter(s => t >= s[1]); const totalW = avail.reduce((a, s) => a + s[2], 0);
   while (G.spawnAcc >= 1) {
@@ -95,9 +67,9 @@ function director(dt) {
     for (let k = 0; k < pack; k++) spawnEnemy(type, p.x + rand(-20, 20), p.y + rand(-20, 20));
   }
   // encirclement waves
-  if (t >= G.nextRing) { G.nextRing += 60; const n = 22 + Math.floor(t / 60) * 2; const R = 360; for (let k = 0; k < n; k++) { const a = k * TAU / n; spawnEnemy(t > 400 ? 'darter' : 'swarm', G.player.x + Math.cos(a) * R, G.player.y + Math.sin(a) * R); } banner('Encirclement!', '#ff9e4c'); }
+  if (t >= G.nextRing) { G.nextRing += Math.max(10, D.ringEvery); const n = 22 + Math.floor(t / 60) * 2; const R = 360; for (let k = 0; k < n; k++) { const a = k * TAU / n; spawnEnemy(t > 400 ? 'darter' : 'swarm', G.player.x + Math.cos(a) * R, G.player.y + Math.sin(a) * R); } banner('Encirclement!', '#ff9e4c'); }
   // elites
-  if (t >= G.nextElite) { G.nextElite += 45; const p = spawnRing(viewRadius()); spawnEnemy(pick(avail)[0], p.x, p.y, { elite: true }); banner('An elite approaches', '#ffe14d'); }
+  if (t >= G.nextElite) { G.nextElite += Math.max(5, D.eliteEvery); const p = spawnRing(viewRadius()); spawnEnemy(pick(avail)[0], p.x, p.y, { elite: true }); banner('An elite approaches', '#ffe14d'); }
   // bosses
   for (const [bt, id] of BOSS_TIMES) if (t >= bt && !G.bossSpawned[id]) {
     G.bossSpawned[id] = true; const p = spawnRing(viewRadius() - 60); spawnEnemy(id, p.x, p.y, { boss: true }); banner('⚠ ' + BOSSES[id].name + ' ⚠', '#ff3b5c', 3);
@@ -201,30 +173,81 @@ function collect(p) {
   else if (p.k === 'magnet') { for (const q of G.pickups) if (q.k === 'gem') q.pull = true; banner('Magnetized!', '#7fdcff', 1); }
   else if (p.k === 'chest') openChest(p.v);
 }
-function xpFor(l) { return Math.floor(5 + (l - 1) * 5 + Math.pow(l - 1, 1.75)); }
+function xpFor(l) { const D = DIFF(); return Math.floor(5 + (l - 1) * D.xpStep + Math.pow(l - 1, D.xpCurve)); }
 function gainXp(v) { G.xp += v; while (G.xp >= G.xpNext) { G.xp -= G.xpNext; G.level++; G.xpNext = xpFor(G.level); G.pendingLevels++; } }
 
 // ---------------- inventory ----------------
-function available(def) { return !def.disabled && (itemUnlocked(def) || def.id === G.char.weapon); }
+// Effect pool weights: a single-effect item adds its level to its effect, a two-effect item 60% of its level to each,
+// a fused item twice its level to every effect it has gathered.
+const POOL_W = { single: 1, dual: 0.6, fused: 2 }, OWN_BONUS = { single: 2, dual: 1, fused: 3 };
+const FUSE_MAX = 2; // how many items one item can absorb
+function available(def) { return !def.disabled && (itemUnlocked(SAVE, def) || def.id === G.char.weapon); }
 function slotCount(slot) { return G.inv.filter(i => i.def.slot === slot).length; }
-function recomputePool() { const p = {}; for (const k of EFFECT_KEYS) p[k] = 0; for (const i of G.inv) p[i.def.effect] += i.level * (i.evo ? 2 : 1); G.pool = p; }
-function rebuild(inst) {
+function instEffects(inst) { const out = effectsOf(inst.def).slice(); for (const a of inst.absorbed) for (const k of effectsOf(a)) if (!out.includes(k)) out.push(k); return out; }
+function recomputePool() {
+  const p = {}; for (const k of EFFECT_KEYS) p[k] = 0;
+  const runners = [];
+  for (const i of G.inv) {
+    const effs = instEffects(i), kind = i.evo ? 'fused' : effs.length > 1 ? 'dual' : 'single';
+    i.own = {}; for (const k of effs) { p[k] += i.level * POOL_W[kind]; i.own[k] = OWN_BONUS[kind]; }
+    runners.push(i); for (const sub of i.subs) { sub.own = i.own; runners.push(sub); }
+  }
+  for (const k of EFFECT_KEYS) p[k] = Math.round(p[k]);
+  G.pool = p; G.runners = runners;
+}
+function killOwned(inst) {
   for (const b of G.bullets) if (b.owner === inst && b.persist) b.dead = true;
   for (const d of G.deploys) if (d.owner === inst && d.persist) d.dead = true;
-  if (inst.def.spawn) inst.def.spawn(inst, ctxOf(inst));
 }
-function addItem(def) { const inst = { def, level: 1, timer: 0.3, state: {}, evo: false }; G.inv.push(inst); recomputePool(); rebuild(inst); return inst; }
-function levelItem(inst) { inst.level = Math.min(MAX_LEVEL, inst.level + 1); recomputePool(); rebuild(inst); }
-function fuseItem(inst) { inst.evo = true; G.stats.evolves++; recomputePool(); rebuild(inst); banner('FUSION: ' + itemName(inst), '#ffe14d', 2.5); fxRing(G.player.x, G.player.y, 160, '#ffe14d', 0.6, 6); }
-function fusionPartner(inst) { if (inst.evo || inst.level < MAX_LEVEL) return null; return G.inv.find(o => o !== inst && o.def.effect === inst.def.effect && o.def.slot !== inst.def.slot && o.level >= MAX_LEVEL) || null; }
+function rebuild(inst) { for (const r of [inst, ...inst.subs]) { killOwned(r); if (r.def.spawn) r.def.spawn(r, ctxOf(r)); } }
+function newInst(def, level = 1) { return { def, level, timer: 0.3, state: {}, evo: false, absorbed: [], subs: [], mul: 1, own: null }; }
+function reach(inst) { if (G.reached) G.reached[inst.def.id] = Math.max(G.reached[inst.def.id] || 0, inst.level); }
+function addItem(def) { const inst = newInst(def); G.inv.push(inst); reach(inst); recomputePool(); rebuild(inst); return inst; }
+function levelItem(inst) {
+  inst.level = Math.min(MAX_LEVEL, inst.level + 1); reach(inst); recomputePool(); rebuild(inst);
+  if (inst.level === MAX_LEVEL && !G.sandbox && !fuseUnlocked(SAVE, inst.def)) {
+    const f = fuseLockOf(inst.def), next = f.level <= MAX_LEVEL && runsAt(SAVE, inst.def.id, f.level) + 1 >= f.runs;
+    toast(next ? `✦ ${inst.def.name} maxed! Fusing it unlocks when this run ends.` : `${inst.def.name} maxed: ${runsAt(SAVE, inst.def.id, f.level) + 1}/${f.runs} runs toward fusing it.`);
+  }
+}
+// Fusion: two level-5 items that share an effect, both with fusion unlocked. The player keeps one; it absorbs the
+// other (+50% of its damage, its attack keeps firing at 50%, every effect of both), and the other's socket frees up.
+function sharedEffects(a, b) { const eb = instEffects(b); return instEffects(a).filter(k => eb.includes(k)); }
+function canFuse(a, b) { return a !== b && a.level >= MAX_LEVEL && b.level >= MAX_LEVEL && sharedEffects(a, b).length > 0 && (G.sandbox || (fuseUnlocked(SAVE, a.def) && fuseUnlocked(SAVE, b.def))); }
+const canKeep = (s, d) => s.absorbed.length < FUSE_MAX && !d.absorbed.length;
+function fusionPairs() {
+  const out = [];
+  for (let x = 0; x < G.inv.length; x++) for (let y = x + 1; y < G.inv.length; y++) {
+    const a = G.inv[x], b = G.inv[y]; if (!canFuse(a, b)) continue;
+    const keeps = [a, b].filter(s => canKeep(s, s === a ? b : a)); if (keeps.length) out.push({ a, b, keeps });
+  }
+  return out;
+}
+function fuseInto(s, d, quiet) {
+  const sh = sharedEffects(s, d);
+  if (!s.fuseEff) s.fuseEff = sh.includes(s.def.effect) ? s.def.effect : sh[0] || s.def.effect;
+  const sub = Object.assign(newInst(d.def, d.level), { parent: s, mul: 0.5, timer: d.timer, state: d.state });
+  s.absorbed.push(d.def); s.subs.push(sub); s.evo = true;
+  killOwned(d); G.inv = G.inv.filter(i => i !== d);
+  if (!G.sandbox) G.stats.evolves++;
+  recomputePool(); rebuild(s);
+  if (!quiet) { banner('FUSION: ' + itemName(s), '#ffe14d', 2.5); fxRing(G.player.x, G.player.y, 160, '#ffe14d', 0.6, 6); toast(`${d.def.icon} ${d.def.name} fused into ${s.def.icon} ${itemName(s)}. A ${SLOTS[d.def.slot].name} socket is free.`); }
+  return s;
+}
+const fuseOther = (pair, s) => (s === pair.a ? pair.b : pair.a);
+function keepChoices(pair, back) {
+  const out = pair.keeps.map(s => ({ type: 'keep', s, d: fuseOther(pair, s) }));
+  if (back) out.push({ type: 'back' });
+  return out;
+}
 
 function buildChoices() {
   const opts = [];
-  for (const inst of G.inv) { const p = fusionPartner(inst); if (p) opts.push({ type: 'fuse', inst, partner: p, w: 8 }); }
+  for (const f of fusionPairs()) opts.push({ type: 'fuse', a: f.a, b: f.b, keeps: f.keeps, w: 20 });
   for (const inst of G.inv) if (inst.level < MAX_LEVEL) opts.push({ type: 'up', inst, w: 3 });
   for (const s of SLOT_KEYS) {
     if (slotCount(s) >= SLOTS[s].sockets) continue;
-    const cands = ITEMS.filter(d => d.slot === s && available(d) && !G.inv.some(i => i.def === d));
+    const cands = ITEMS.filter(d => d.slot === s && available(d) && !G.inv.some(i => i.def === d || i.absorbed.includes(d)));
     for (const d of cands) opts.push({ type: 'new', def: d, w: 2.4 / cands.length });
   }
   const k = 3 + (Math.random() < 0.15 + G.player.luck * 2 ? 1 : 0);
@@ -233,7 +256,7 @@ function buildChoices() {
     const tw = opts.reduce((a, o) => a + o.w, 0); let r = Math.random() * tw, idx = 0;
     for (; idx < opts.length; idx++) { r -= opts[idx].w; if (r <= 0) break; }
     idx = Math.min(idx, opts.length - 1); const o = opts.splice(idx, 1)[0];
-    if (o.type === 'fuse') { for (let j = opts.length - 1; j >= 0; j--) if (opts[j].inst === o.inst) opts.splice(j, 1); }
+    if (o.type === 'fuse') { for (let j = opts.length - 1; j >= 0; j--) { const q = opts[j]; if (q.type === 'fuse' && [q.a, q.b].some(x => x === o.a || x === o.b)) opts.splice(j, 1); } }
     out.push(o);
   }
   if (!out.length) out.push({ type: 'heal' }, { type: 'gold' });
@@ -242,16 +265,17 @@ function buildChoices() {
 function applyChoice(o) {
   if (o.type === 'new') addItem(o.def);
   else if (o.type === 'up') levelItem(o.inst);
-  else if (o.type === 'fuse') fuseItem(o.inst);
+  else if (o.type === 'fuse') fuseInto(o.keeps[0], fuseOther(o, o.keeps[0]));
+  else if (o.type === 'keep') fuseInto(o.s, o.d);
   else if (o.type === 'heal') heal(40);
   else if (o.type === 'gold') G.gold += 25;
 }
 function openChest(n) {
   const got = [];
   for (let k = 0; k < n; k++) {
-    let o = null; const fus = G.inv.filter(fusionPartner);
-    if (fus.length) o = { type: 'fuse', inst: fus[0] };
-    else { const c = buildChoices().filter(x => x.type !== 'new'); o = c.length ? pick(c) : { type: 'gold' }; }
+    const pair = !G.fuseQueue.length && fusionPairs()[0];
+    if (pair) { G.fuseQueue.push(pair); got.push('a Fusion'); continue; } // the player picks which item stays
+    const c = buildChoices().filter(x => x.type === 'up' || x.type === 'heal' || x.type === 'gold'); const o = c.length ? pick(c) : { type: 'gold' };
     applyChoice(o); got.push(describeChoice(o).title);
   }
   G.gold += 10 * n;
@@ -319,11 +343,12 @@ function newRun(charId) {
   freshRun(ch);
   addItem(ITEM[ch.weapon]);
   showScreen(null);
+  if (TESTSAVE) toast('🧪 Test save from the admin panel: nothing here touches real progress');
 }
 function freshRun(ch) {
   const g = { time: 0, char: ch, player: null, cam: { x: 0, y: 0 }, enemies: [], bullets: [], ebullets: [], fx: [], texts: [], pickups: [], deploys: [], sched: [], inv: [], pool: {},
     kills: 0, level: 1, xp: 0, xpNext: xpFor(1), gold: 0, pendingLevels: 0, paused: false, over: false, nextId: 1, spawnAcc: 0, nextRing: 90, nextElite: 60, bossSpawned: {},
-    stats: { evolves: 0, bossKills: 0, crits: 0, healed: 0, damage: 0 }, settings: SAVE.settings, banners: [], shake: 0 };
+    stats: { evolves: 0, bossKills: 0, crits: 0, healed: 0, damage: 0 }, settings: SAVE.settings, banners: [], shake: 0, reached: {}, fuseQueue: [], runners: [] };
   g.player = buildPlayer(ch);
   G = g; recomputePool();
   return g;
@@ -337,7 +362,7 @@ function update(dt) {
   if (G.sandbox) sandboxTick(dt); else director(dt);
   gridBuild();
   // items
-  for (const inst of G.inv) {
+  for (const inst of G.runners) { // held items, and the items fused into them
     const d = inst.def;
     if (d.fire) { inst.timer -= dt; if (inst.timer <= 0) { inst.timer = cdFor(inst, d.cd); d.fire(inst, ctxOf(inst)); } }
     if (d.update) d.update(inst, dt);
@@ -357,15 +382,19 @@ function update(dt) {
   for (const b of G.banners) b.t += dt; G.banners = G.banners.filter(b => b.t < b.dur);
   G.shake = Math.max(0, G.shake - dt * 30);
   if (G.pendingLevels > 0 && !G.over) { G.pendingLevels--; trigger('levelup'); openLevelUp(); }
+  else if (G.fuseQueue.length && !G.over) openFuse(G.fuseQueue.shift());
 }
 function endRun(won) {
   if (G.over) return; G.over = true;
   const s = SAVE.stats; const bonus = Math.floor(G.time / 60) * 10 + (won ? 250 : 0);
+  const couldFuse = new Set(ITEMS.filter(d => fuseUnlocked(SAVE, d)).map(d => d.id));
+  for (const [id, L] of Object.entries(G.reached)) { const r = (SAVE.itemRuns[id] || [0, 0, 0, 0, 0]).slice(); for (let k = 0; k < L; k++) r[k]++; SAVE.itemRuns[id] = r; }
   const earned = Math.round(G.gold + bonus);
   SAVE.gold += earned; s.totalGold += earned; s.totalKills += G.kills; s.bestTime = Math.max(s.bestTime, Math.floor(G.time)); s.bossKills += G.stats.bossKills;
   s.evolves += G.stats.evolves; s.runs++; if (won) s.wins++; s.maxLevel = Math.max(s.maxLevel, G.level);
   writeSave();
   const fresh = checkUnlocks();
+  for (const d of ITEMS) if (!d.disabled && !couldFuse.has(d.id) && fuseUnlocked(SAVE, d)) fresh.push(`✦ Fusion: ${d.icon} ${d.name} (${d.name} mastery)`);
   setTimeout(() => showGameOver(won, earned, bonus, fresh), 400);
 }
 
@@ -559,19 +588,21 @@ let currentScreen = 'menu';
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(el => el.classList.toggle('show', el.id === id));
   currentScreen = id;
-  if (id === 'menu') renderMenu(); if (id === 'chars') renderChars(); if (id === 'forge') renderForge(); if (id === 'codex') renderCodex();
+  if (id === 'menu') renderMenu(); if (id === 'chars') renderChars(); if (id === 'forge') renderForge(); if (id === 'codex') renderCodex(); if (id === 'achievements') renderAchievements();
 }
 function goldPill() { return `<span class="gold">● ${Math.floor(SAVE.gold)}</span>`; }
 function renderMenu() {
   const s = SAVE.stats;
-  $('#menu .stats').innerHTML = `${goldPill()} &nbsp; Best ${fmtTime(s.bestTime)} · ${s.totalKills} kills · ${s.wins} wins · ${ITEMS.filter(d => !d.disabled && itemUnlocked(d)).length}/${ITEMS.filter(d => !d.disabled).length} items · ${CHARACTERS.filter(charUnlocked).length}/${CHARACTERS.length} heroes`;
+  const ach = achievementList(SAVE);
+  $('#menu .stats').innerHTML = (TESTSAVE ? '<div class="testsave">🧪 Test save from the admin panel. Nothing here touches real progress.</div>' : '') +
+    `${goldPill()} &nbsp; Best ${fmtTime(s.bestTime)} · ${s.totalKills} kills · ${s.wins} wins · ${ITEMS.filter(d => !d.disabled && itemUnlocked(SAVE, d)).length}/${ITEMS.filter(d => !d.disabled).length} items · ${EFFECT_KEYS.filter(k => catUnlocked(SAVE, k)).length}/${EFFECT_KEYS.length} categories · ${ach.filter(a => a.done).length}/${ach.length} achievements · ${CHARACTERS.filter(c => charUnlocked(SAVE, c)).length}/${CHARACTERS.length} heroes`;
 }
 let selectedChar = null;
 function renderChars() {
   selectedChar = selectedChar || SAVE.lastChar;
   const wrap = $('#charGrid'); wrap.innerHTML = '';
   for (const c of CHARACTERS) {
-    const un = charUnlocked(c), w = ITEM[c.weapon];
+    const un = charUnlocked(SAVE, c), w = ITEM[c.weapon];
     const el = document.createElement('button'); el.className = 'card char' + (un ? '' : ' locked') + (selectedChar === c.id ? ' sel' : '');
     el.style.setProperty('--c', c.color);
     el.innerHTML = `<div class="avatar">${un ? '◆' : '🔒'}</div><b>${c.name}</b><small>${c.title}</small><div class="wpn">${w.icon} ${w.name}</div><div class="perk">${c.perk}</div>` +
@@ -584,7 +615,7 @@ function renderChars() {
   }
   $('#chars .gold-line').innerHTML = goldPill();
   const c = CHARACTERS.find(x => x.id === selectedChar); const w = ITEM[c.weapon];
-  $('#charInfo').innerHTML = `<b style="color:${c.color}">${c.name}, ${c.title}</b> starts with <b>${w.icon} ${w.name}</b> (${EFFECTS[w.effect].icon} ${EFFECTS[w.effect].name}): ${w.pattern}`;
+  $('#charInfo').innerHTML = `<b style="color:${c.color}">${c.name}, ${c.title}</b> starts with <b>${w.icon} ${w.name}</b> (${effTags(w)}): ${w.pattern} Other items come from your unlocked categories: ${EFFECT_KEYS.filter(k => catUnlocked(SAVE, k)).map(k => EFFECTS[k].icon + ' ' + EFFECTS[k].name).join(', ')}.`;
 }
 function renderForge() {
   const wrap = $('#forgeGrid'); wrap.innerHTML = '';
@@ -598,6 +629,7 @@ function renderForge() {
   $('#forge .gold-line').innerHTML = goldPill() + ` <button class="link" id="refund">Refund all</button>`;
   $('#refund').onclick = () => { let back = 0; for (const u of UPGRADES) for (let r = 0; r < (SAVE.upg[u.id] || 0); r++) back += upgradeCost(u, r); SAVE.gold += back; SAVE.upg = {}; writeSave(); renderForge(); toast('Refunded ● ' + back); };
 }
+const effTags = d => effectsOf(d).map(k => `<span style="color:${EFFECTS[k].color}">${EFFECTS[k].icon} ${EFFECTS[k].name}</span>`).join(' + ');
 let codexFilter = 'all';
 function renderCodex() {
   const tabs = $('#codexTabs'); tabs.innerHTML = '';
@@ -605,45 +637,86 @@ function renderCodex() {
   const wrap = $('#codexGrid'); wrap.innerHTML = '';
   for (const d of ITEMS) {
     if (d.disabled || (codexFilter !== 'all' && d.slot !== codexFilter)) continue;
-    const un = itemUnlocked(d), E = EFFECTS[d.effect];
+    const un = itemUnlocked(SAVE, d), E = EFFECTS[d.effect], effs = effectsOf(d);
     const el = document.createElement('div'); el.className = 'card item' + (un ? '' : ' locked'); el.style.setProperty('--c', E.color);
     let lockHtml = '';
-    if (!un) lockHtml = d.lock.cost ? `<button class="buy">Unlock ● ${d.lock.cost}</button>` : `<div class="req">🔒 ${d.lock.text}</div>`;
-    el.innerHTML = `<div class="ico">${d.icon}</div><div class="body"><b>${d.name}</b><div class="tags"><span>${SLOTS[d.slot].icon} ${SLOTS[d.slot].name}</span><span style="color:${E.color}">${E.icon} ${E.name}</span>${d.trig ? `<span>⏯ ${d.trig}</span>` : ''}</div><small>${d.pattern}</small><small class="fuse">Fuses into <i>${FUSE_PREFIX[d.effect]} ${d.name}</i> with any other ${E.name} item.</small>${lockHtml}</div>`;
+    const shut = effs.filter(k => !catUnlocked(SAVE, k));
+    for (const k of shut) lockHtml += `<div class="req">🔒 ${EFFECTS[k].name} items: ${catLock(k).text || lockText(catLock(k))}</div>`;
+    if (d.lock && !SAVE.unlockedItems.includes(d.id)) lockHtml += d.lock.cost ? `<button class="buy">Unlock ● ${d.lock.cost}</button>` : `<div class="req">🔒 ${d.lock.text}</div>`;
+    const fu = fuseUnlocked(SAVE, d), f = fuseLockOf(d);
+    const fuseLine = fu ? `<small class="fuse">✦ Fusion unlocked. At level 5 it fuses with any level 5 ${effs.map(k => EFFECTS[k].name).join(' or ')} item.</small>`
+      : `<small class="fuse">✦ Fusion locked: ${fuseLockText(d)} (${Math.min(runsAt(SAVE, d.id, f.level), f.runs)}/${f.runs}).</small>`;
+    el.innerHTML = `<div class="ico">${d.icon}</div><div class="body"><b>${d.name}</b><div class="tags"><span>${SLOTS[d.slot].icon} ${SLOTS[d.slot].name}</span><span>${effTags(d)}</span>${effs.length > 1 ? '<span>Two effects</span>' : ''}${d.trig ? `<span>⏯ ${d.trig}</span>` : ''}</div><small>${d.pattern}</small>${fuseLine}${lockHtml}</div>`;
     const buy = el.querySelector('.buy');
-    if (buy) buy.onclick = () => { if (SAVE.gold < d.lock.cost) { toast('Not enough gold'); return; } SAVE.gold -= d.lock.cost; SAVE.unlockedItems.push(d.id); writeSave(); toast('Unlocked ' + d.name + '!'); renderCodex(); };
+    if (buy) buy.onclick = () => { if (SAVE.gold < d.lock.cost) { toast('Not enough gold'); return; } SAVE.gold -= d.lock.cost; SAVE.unlockedItems.push(d.id); writeSave(); toast('Unlocked ' + d.name + (shut.length ? `. It shows up once ${shut.map(k => EFFECTS[k].name).join(' and ')} items are unlocked.` : '!')); renderCodex(); };
     wrap.appendChild(el);
   }
   $('#codex .gold-line').innerHTML = goldPill();
 }
+function renderAchievements() {
+  const list = achievementList(SAVE), groups = [['cats', 'Item categories', 'You start with Burn, Chill and Shock items. Each other category opens with an achievement.'],
+    ['mastery', 'Mastery (unlocks fusion)', 'Level an item up to unlock fusing it. Both items in a fusion need their mastery.'], ['unlocks', 'Items and heroes', '']];
+  const box = $('#achBody'); box.innerHTML = '';
+  for (const [g, title, note] of groups) {
+    const rows = list.filter(a => a.group === g); if (!rows.length) continue;
+    const sec = document.createElement('div'); sec.className = 'achSec';
+    sec.innerHTML = `<h3>${title} <small>${rows.filter(a => a.done).length}/${rows.length}</small></h3>${note ? `<p class="note">${note}</p>` : ''}<div class="grid achGrid">` +
+      rows.map(a => `<div class="card ach${a.done ? ' done' : ''}"><div class="ico">${a.done ? a.icon : '🔒'}</div><b>${a.name}</b><small>${a.text}</small><small class="rew">Unlocks: ${a.reward}</small>` +
+        (a.done ? '<div class="bar"><i style="width:100%"></i></div><small class="ok">Done</small>' : `<div class="bar"><i style="width:${Math.round(100 * a.have / Math.max(1, a.need))}%"></i></div><small>${Math.floor(a.have)} / ${a.need}</small>`) + '</div>').join('') + '</div>';
+    box.appendChild(sec);
+  }
+  $('#achievements .gold-line').innerHTML = `${list.filter(a => a.done).length}/${list.length} done`;
+}
+const effNames = ks => ks.map(k => EFFECTS[k].icon + ' ' + EFFECTS[k].name).join(' + ');
 function describeChoice(o) {
-  if (o.type === 'new') { const d = o.def; return { icon: d.icon, title: d.name, tag: 'NEW', slot: d.slot, eff: d.effect, text: d.pattern }; }
-  if (o.type === 'up') { const d = o.inst.def; return { icon: d.icon, title: itemName(o.inst), tag: 'Lv ' + o.inst.level + ' → ' + (o.inst.level + 1), slot: d.slot, eff: d.effect, text: '+30% damage, faster, more projectiles. Adds +1 ' + EFFECTS[d.effect].name + ' to every bullet.' }; }
-  if (o.type === 'fuse') { const d = o.inst.def; return { icon: d.icon, title: FUSE_PREFIX[d.effect] + ' ' + d.name, tag: 'FUSION', slot: d.slot, eff: d.effect, text: `Fuse with ${o.partner ? o.partner.def.name : 'its partner'}: ×1.8 damage, −25% cooldown, +1 projectile, double effect stacks.`, fuse: true }; }
+  if (o.type === 'new') { const d = o.def, effs = effectsOf(d); return { icon: d.icon, title: d.name, tag: 'NEW', slot: d.slot, effs, text: d.pattern + (effs.length > 1 ? ' Two effects: weaker alone, but it fuses with items of either.' : '') }; }
+  if (o.type === 'up') { const d = o.inst.def, effs = instEffects(o.inst); return { icon: d.icon, title: itemName(o.inst), tag: 'Lv ' + o.inst.level + ' → ' + (o.inst.level + 1), slot: d.slot, effs, text: `+30% damage, faster, more projectiles. Adds to ${effs.map(k => EFFECTS[k].name).join(' and ')} on every bullet.` + (o.inst.level + 1 === MAX_LEVEL && !fuseUnlocked(SAVE, d) ? ` Fusing it is still locked (${d.name} mastery).` : '') }; }
+  if (o.type === 'fuse') { const { a, b } = o, effs = [...new Set([...instEffects(a), ...instEffects(b)])];
+    return { icon: '✦', title: `${a.def.name} + ${b.def.name}`, tag: 'FUSION', slot: null, effs, fuse: true,
+      text: (o.keeps.length > 1 ? 'You choose which one remains. ' : `${o.keeps[0].def.name} remains. `) + `It absorbs the other: +50% of its damage, both attacks, both effects, −25% cooldown, +1 projectile. Frees a socket.` }; }
+  if (o.type === 'keep') { const { s, d } = o, effs = [...new Set([...instEffects(s), ...instEffects(d)])], sh = sharedEffects(s, d);
+    const nm = FUSE_PREFIX[s.fuseEff || (sh.includes(s.def.effect) ? s.def.effect : sh[0])] + ' ' + s.def.name + (s.absorbed.length ? ' II' : '');
+    return { icon: s.def.icon, title: 'Keep ' + s.def.name, tag: '→ ' + nm, slot: s.def.slot, effs, fuse: true,
+      text: `${d.def.icon} ${d.def.name} disappears into it: +50% of its damage, and its attack keeps firing at 50% power. −25% cooldown, +1 projectile. Effects: ${effNames(effs)}. Frees a ${SLOTS[d.def.slot].name} socket.` }; }
+  if (o.type === 'back') return { icon: '↩', title: 'Back', tag: 'CHOICES', text: 'Go back to the level-up cards.' };
   if (o.type === 'heal') return { icon: '❤️', title: 'Restore', tag: 'HEAL', text: 'Recover 40 HP.' };
   return { icon: '●', title: 'Void Gold', tag: 'GOLD', text: '+25 gold.' };
 }
-let levelChoices = null;
+let levelChoices = null, luBack = null, luMode = 'level';
 function openLevelUp() {
-  G.paused = true; levelChoices = buildChoices(); renderLevelUp(); showScreen('levelup');
+  G.paused = true; luMode = 'level'; luBack = null; levelChoices = buildChoices(); renderLevelUp(); showScreen('levelup');
+}
+// a fusion from a chest: the player still picks which item stays
+function openFuse(pair) {
+  if (!G.inv.includes(pair.a) || !G.inv.includes(pair.b) || !canFuse(pair.a, pair.b)) return;
+  pair.keeps = [pair.a, pair.b].filter(s => canKeep(s, fuseOther(pair, s))); if (!pair.keeps.length) return;
+  G.paused = true; luMode = 'chest'; luBack = null; levelChoices = keepChoices(pair, false); renderLevelUp(); showScreen('levelup');
 }
 function renderLevelUp() {
   const wrap = $('#luCards'); wrap.innerHTML = '';
   levelChoices.forEach((o, idx) => {
-    const c = describeChoice(o); const E = c.eff ? EFFECTS[c.eff] : null;
+    const c = describeChoice(o); const E = c.effs ? EFFECTS[c.effs[0]] : null;
     const el = document.createElement('button'); el.className = 'card lu' + (c.fuse ? ' fuse' : ''); if (E) el.style.setProperty('--c', E.color);
-    el.innerHTML = `<div class="key">${idx + 1}</div><div class="ico">${c.icon}</div><div class="tag">${c.tag}</div><b>${c.title}</b>${c.slot ? `<div class="tags"><span>${SLOTS[c.slot].icon} ${SLOTS[c.slot].name}</span><span style="color:${E.color}">${E.icon} ${E.name}</span></div>` : ''}<small>${c.text}</small>`;
+    const tags = (c.slot ? `<span>${SLOTS[c.slot].icon} ${SLOTS[c.slot].name}</span>` : '') + (c.effs ? c.effs.map(k => `<span style="color:${EFFECTS[k].color}">${EFFECTS[k].icon} ${EFFECTS[k].name}</span>`).join('') : '');
+    el.innerHTML = `<div class="key">${idx + 1}</div><div class="ico">${c.icon}</div><div class="tag">${c.tag}</div><b>${c.title}</b>${tags ? `<div class="tags">${tags}</div>` : ''}<small>${c.text}</small>`;
     el.onclick = () => chooseLevel(idx);
     wrap.appendChild(el);
   });
-  $('#luTitle').textContent = 'Level ' + G.level + '!';
-  const rr = $('#reroll'); rr.textContent = '🎲 Reroll (' + G.player.rerolls + ')'; rr.disabled = G.player.rerolls <= 0;
+  const picking = levelChoices.some(o => o.type === 'keep');
+  $('#luTitle').textContent = picking ? (luMode === 'chest' ? 'Chest fusion! Which item remains?' : 'Fusion: which item remains?') : 'Level ' + G.level + '!';
+  const rr = $('#reroll'); rr.textContent = '🎲 Reroll (' + G.player.rerolls + ')'; rr.disabled = G.player.rerolls <= 0; rr.style.visibility = picking ? 'hidden' : '';
 }
-function chooseLevel(idx) { if (!levelChoices || !levelChoices[idx]) return; applyChoice(levelChoices[idx]); levelChoices = null; showScreen(null); G.paused = false; }
+function chooseLevel(idx) {
+  const o = levelChoices && levelChoices[idx]; if (!o) return;
+  if (o.type === 'fuse' && o.keeps.length > 1) { luBack = levelChoices; levelChoices = keepChoices(o, true); renderLevelUp(); return; }
+  if (o.type === 'back') { levelChoices = luBack; luBack = null; renderLevelUp(); return; }
+  applyChoice(o); levelChoices = null; luBack = null; showScreen(null); G.paused = false;
+}
+const fusedOf = i => (i.absorbed.length ? ` <small>+ ${i.absorbed.map(a => a.icon + ' ' + a.name).join(', ')}</small>` : '');
 function showGameOver(won, earned, bonus, fresh) {
   $('#goTitle').textContent = won ? 'VICTORY' : 'YOU FELL';
   $('#goTitle').className = won ? 'win' : 'lose';
-  const inv = G.inv.map(i => `<span class="chip" style="--c:${EFFECTS[i.def.effect].color}">${i.def.icon} ${itemName(i)} <b>${i.level}</b></span>`).join('');
+  const inv = G.inv.map(i => `<span class="chip" style="--c:${EFFECTS[i.def.effect].color}">${i.def.icon} ${itemName(i)} <b>${i.level}</b>${fusedOf(i)}</span>`).join('');
   $('#goBody').innerHTML = `<div class="row"><div><small>Time</small><b>${fmtTime(G.time)}</b></div><div><small>Level</small><b>${G.level}</b></div><div><small>Kills</small><b>${G.kills}</b></div><div><small>Gold earned</small><b class="gold">● ${earned}</b></div></div>
     <small>Includes ● ${bonus} survival bonus.</small><div class="chips">${inv}</div>` + (fresh.length ? `<div class="unlocks"><b>Unlocked!</b><br>${fresh.join('<br>')}</div>` : '');
   showScreen('gameover');
@@ -654,7 +727,7 @@ function togglePause() {
   else { G.paused = true; renderPause(); showScreen('pause'); }
 }
 function renderPause() {
-  const inv = G.inv.map(i => `<div class="chip" style="--c:${EFFECTS[i.def.effect].color}">${i.def.icon} ${itemName(i)} <b>Lv${i.level}</b><small>${i.def.pattern}</small></div>`).join('');
+  const inv = G.inv.map(i => `<div class="chip" style="--c:${EFFECTS[i.def.effect].color}">${i.def.icon} ${itemName(i)} <b>Lv${i.level}</b> <span style="font-size:11px">${effNames(instEffects(i))}</span><small>${i.def.pattern}</small>${i.absorbed.length ? `<small>Fused with ${i.absorbed.map(a => a.icon + ' ' + a.name).join(', ')} (attacks at 50%).</small>` : i.level >= MAX_LEVEL && !fuseUnlocked(SAVE, i.def) ? `<small>Fusion locked: ${fuseLockText(i.def)}.</small>` : ''}</div>`).join('');
   const pool = EFFECT_KEYS.filter(k => G.pool[k]).map(k => `<span style="color:${EFFECTS[k].color}">${EFFECTS[k].icon} ${EFFECTS[k].name} ×${G.pool[k]}</span>`).join(' · ') || 'none';
   $('#pauseBody').innerHTML = `<div class="chips col">${inv}</div><p><b>Effect pool</b> (applies to every bullet): ${pool}</p>`;
   $('#numToggle').textContent = 'Damage numbers: ' + (SAVE.settings.numbers ? 'on' : 'off');
@@ -679,9 +752,10 @@ canvas.addEventListener('touchend', e => { for (const t of e.changedTouches) if 
 $('#btnPlay').onclick = () => showScreen('chars');
 $('#btnForge').onclick = () => showScreen('forge');
 $('#btnCodex').onclick = () => showScreen('codex');
+$('#btnAch').onclick = () => showScreen('achievements');
 document.querySelectorAll('[data-back]').forEach(b => b.onclick = () => showScreen('menu'));
-$('#btnStart').onclick = () => { const c = CHARACTERS.find(x => x.id === selectedChar); if (c && charUnlocked(c)) newRun(c.id); };
-$('#reroll').onclick = () => { if (G.player.rerolls <= 0) return; G.player.rerolls--; levelChoices = buildChoices(); renderLevelUp(); };
+$('#btnStart').onclick = () => { const c = CHARACTERS.find(x => x.id === selectedChar); if (c && charUnlocked(SAVE, c)) newRun(c.id); };
+$('#reroll').onclick = () => { if (G.player.rerolls <= 0 || (levelChoices || []).some(o => o.type === 'keep')) return; G.player.rerolls--; levelChoices = buildChoices(); renderLevelUp(); };
 $('#btnResume').onclick = togglePause;
 $('#btnQuit').onclick = () => { G.paused = false; endRun(false); };
 $('#numToggle').onclick = () => { SAVE.settings.numbers = !SAVE.settings.numbers; writeSave(); renderPause(); };
@@ -697,7 +771,7 @@ $('#btnReset').onclick = () => {
 // ---------------- admin test canvas (index.html?sandbox) ----------------
 // admin.html embeds the game in an iframe in this mode to preview one item against training targets.
 // Nothing is saved, nothing drops, the player cannot be hurt. The admin page drives it with postMessage.
-const SB = { item: ITEMS[0].id, level: 1, evo: false, layout: 'ring', tough: true, move: false };
+const SB = { item: ITEMS[0].id, level: 1, fuse: null, layout: 'ring', tough: true, move: false }; // fuse: id of an item to fuse into it
 const SANDBOX_TYPES = {
   target: { name: 'Target', hp: 60, spd: 0, r: 13, dmg: 0, xp: 0, color: '#77729a', shape: 'circle', mass: 3 },
   walker: { name: 'Walker', hp: 60, spd: 55, r: 12, dmg: 0, xp: 0, color: '#8a6fd0', shape: 'tri' },
@@ -715,7 +789,9 @@ function sandboxStart() {
   const ch = Object.assign({}, CHARACTERS.find(c => c.weapon === def.id) || CHARACTERS[0], { mods: {} }); // neutral stats
   freshRun(ch);
   Object.assign(G, { sandbox: true, seen: new Set(), sbTargets: [], sbWait: [], sbLog: [], sbDps: 0, sbPost: 0 });
-  const inst = addItem(def); inst.level = clamp(SB.level | 0, 1, MAX_LEVEL); inst.evo = !!SB.evo; recomputePool(); rebuild(inst);
+  const inst = addItem(def), pd = SB.fuse && ITEM[SB.fuse];
+  if (pd && pd !== def) { inst.level = MAX_LEVEL; const p = addItem(pd); p.level = MAX_LEVEL; fuseInto(inst, p, true); } // fusions happen at level 5
+  else { inst.level = clamp(SB.level | 0, 1, MAX_LEVEL); recomputePool(); rebuild(inst); }
   showScreen(null);
 }
 function sandboxTick(dt) {
@@ -745,7 +821,7 @@ function sandboxTrigger(name) {
 function drawSandboxHUD() {
   const inst = G.inv[0]; if (!inst) return;
   ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.font = 'bold 13px system-ui,sans-serif'; ctx.fillStyle = '#fff';
-  ctx.fillText(`${inst.def.icon} ${itemName(inst)} · Lv ${inst.level}`, 10, 10);
+  ctx.fillText(`${inst.def.icon} ${itemName(inst)} · Lv ${inst.level}` + (inst.absorbed.length ? ` · + ${inst.absorbed.map(a => a.name).join(', ')} at 50%` : '') + ` · ${instEffects(inst).map(k => EFFECTS[k].name).join(' + ')}`, 10, 10);
   ctx.font = '12px system-ui,sans-serif'; ctx.fillStyle = '#9a93c0';
   ctx.fillText(`${Math.round(G.sbDps)} dmg/s · ${G.bullets.length} bullets`, 10, 28);
 }
@@ -755,7 +831,7 @@ function sandboxBoot() {
     const m = e.data; if (e.origin !== location.origin || !m || m.vl !== 'sandbox') return;
     if (m.overrides && window.VOIDLIGHT_CONTENT) { VOIDLIGHT_CONTENT.apply(m.overrides); if (G) for (const i of G.inv) rebuild(i); }
     let restart = !!m.restart || !G;
-    if (m.config) { for (const k of ['item', 'level', 'evo', 'layout', 'tough']) if (k in m.config && m.config[k] !== SB[k]) restart = true; Object.assign(SB, m.config); }
+    if (m.config) { for (const k of ['item', 'level', 'fuse', 'layout', 'tough']) if (k in m.config && m.config[k] !== SB[k]) restart = true; Object.assign(SB, m.config); }
     if ('numbers' in m) SAVE.settings.numbers = !!m.numbers;
     if (restart) sandboxStart();
     if (m.trigger && G) sandboxTrigger(m.trigger);
@@ -777,4 +853,4 @@ if (SANDBOX) sandboxBoot(); else { loadSave(); checkUnlocks(); showScreen('menu'
 requestAnimationFrame(frame);
 
 // debug hooks for testing
-window.VOIDLIGHT = { get G() { return G; }, refresh() { checkUnlocks(); if (!G && ['menu', 'chars', 'forge', 'codex'].includes(currentScreen)) showScreen(currentScreen); }, SAVE: () => SAVE, ITEMS, defaultSave, normalizeSave, mergeSaves, replaceSave, toast, addItem: id => addItem(ITEM[id]), update, newRun, levelItem, fuseItem };
+window.VOIDLIGHT = { get G() { return G; }, refresh() { checkUnlocks(); if (!G && SCREENS_WITH_SAVE.includes(currentScreen)) showScreen(currentScreen); }, SAVE: () => SAVE, ITEMS, defaultSave, normalizeSave, mergeSaves, replaceSave, toast, addItem: id => addItem(ITEM[id]), update, newRun, levelItem, fuseInto, fusionPairs, buildChoices, chooseLevel, get levelChoices() { return levelChoices; } };
