@@ -120,7 +120,14 @@
   .dSec .bar { height: 4px; background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden; margin: 4px 0; } .dSec .bar i { display: block; height: 100%; }
   .chips.left { justify-content: flex-start; margin: 4px 0; } .chip.dim { opacity: 0.5; border-style: dashed; } .chip i { font-style: normal; font-size: 11px; } .chip b { color: #6bff8f; }
   .chip.combo { --c: var(--line); }
-  @media (max-width: 600px) { .panel { padding: 14px; } .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); } #codexGrid { grid-template-columns: 1fr; } }
+  .panel.wide { width: 100%; min-height: calc(100vh - 32px); }
+  .panel.lu { width: min(1400px, 100%); }
+  .panel.wide .grid { grid-template-columns: repeat(auto-fill, minmax(clamp(170px, 10vw, 240px), 1fr)); }
+  .panel.wide #stageGrid { grid-template-columns: repeat(auto-fill, minmax(clamp(118px, 7vw, 170px), 1fr)); }
+  .panel.wide #codexGrid { grid-template-columns: repeat(auto-fill, minmax(clamp(280px, 17vw, 380px), 1fr)); }
+  .panel.wide .achGrid { grid-template-columns: repeat(auto-fill, minmax(clamp(200px, 12vw, 280px), 1fr)); }
+  @media (min-width: 1800px) { .panel.wide .card, .panel.lu .card { font-size: 17px; } .panel.wide .card small, .panel.lu .card small { font-size: 13px; } }
+  @media (max-width: 600px) { .panel { padding: 14px; } .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); } #codexGrid, .panel.wide #codexGrid { grid-template-columns: 1fr; } .panel.wide .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); } }
 </style>
 </head>
 <body>
@@ -143,7 +150,7 @@
   <div class="center" style="margin-top:12px"><button class="link" id="btnReset">Reset save</button></div>
 </div></div>
 
-<div class="screen" id="chars"><div class="panel">
+<div class="screen" id="chars"><div class="panel wide">
   <div class="head"><button data-back class="backBtn">← Back</button><h2>Choose a level</h2><div class="gold-line"></div></div>
   <div class="grid" id="stageGrid"></div>
   <div id="stageInfo"></div>
@@ -153,25 +160,25 @@
   <div class="head" style="justify-content:flex-end"><button class="primary big" id="btnStart">Start run</button></div>
 </div></div>
 
-<div class="screen" id="forge"><div class="panel">
+<div class="screen" id="forge"><div class="panel wide">
   <div class="head"><button data-back class="backBtn">← Back</button><h2>⚒ The Forge</h2><div class="gold-line"></div></div>
   <p style="color:var(--muted);margin-top:0">Permanent upgrades bought with Void Gold. They apply to every hero.</p>
   <p style="color:var(--muted);margin-top:0" id="forgeSockets"></p>
   <div class="grid" id="forgeGrid"></div>
 </div></div>
 
-<div class="screen" id="codex"><div class="panel">
+<div class="screen" id="codex"><div class="panel wide">
   <div class="head"><button data-back class="backBtn">← Back</button><h2>📖 Codex &amp; Armory</h2><div class="gold-line"></div></div>
   <div class="tabs" id="codexTabs"></div>
   <div class="grid" id="codexGrid"></div>
 </div></div>
 
-<div class="screen" id="achievements"><div class="panel">
+<div class="screen" id="achievements"><div class="panel wide">
   <div class="head"><button data-back class="backBtn">← Back</button><h2>🏆 Achievements</h2><div class="gold-line"></div></div>
   <div id="achBody"></div>
 </div></div>
 
-<div class="screen" id="levelup"><div class="panel" style="max-width:900px">
+<div class="screen" id="levelup"><div class="panel lu">
   <h2 class="center" id="luTitle">Level up!</h2>
   <div id="luCards"></div>
   <div class="center" style="margin-top:14px"><button id="reroll">🎲 Reroll</button> <button id="skip" title="Take nothing: heal 15 and get some gold">⏭ Skip</button> <button class="primary" id="luConfirm" disabled>Pick an option first</button></div>
