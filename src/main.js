@@ -766,7 +766,7 @@ function renderCodex() {
     const shut = effs.filter(k => !catUnlocked(SAVE, k));
     for (const k of shut) lockHtml += `<div class="req">🔒 ${EFFECTS[k].name} items: ${lockLabel(catLock(k))}</div>`;
     if (!inRun()) lockHtml += window.lockHtml(d.lock, itemOwned(SAVE, d));
-    el.innerHTML = `<div class="ico">${d.icon}</div><div class="body"><b>${d.name}</b><div class="tags"><span>${SLOTS[d.slot].icon} ${SLOTS[d.slot].name}</span><span>${effTags(d)}</span>${isPassive(d) ? '<span>Passive</span>' : ''}${effs.length > 1 ? '<span>Two effects</span>' : ''}${d.trig ? `<span>⏯ ${d.trig}</span>` : ''}${heldNow(d) ? '<span class="held">In this run</span>' : ''}</div><small>${d.pattern}</small>${isPassive(d) ? `<small class="perk">${passiveText(d)}</small>` : ''}${fuseLine(d)}${histLine(d)}${lockHtml}</div>`;
+    el.innerHTML = `<div class="ico">${d.icon}</div><div class="body"><b>${d.name}</b>${masteryBadge(d, 0)}<div class="tags"><span>${SLOTS[d.slot].icon} ${SLOTS[d.slot].name}</span><span>${effTags(d)}</span>${isPassive(d) ? '<span>Passive</span>' : ''}${effs.length > 1 ? '<span>Two effects</span>' : ''}${d.trig ? `<span>⏯ ${d.trig}</span>` : ''}${heldNow(d) ? '<span class="held">In this run</span>' : ''}</div><small>${d.pattern}</small>${isPassive(d) ? `<small class="perk">${passiveText(d)}</small>` : ''}${fuseLine(d)}${histLine(d)}${lockHtml}</div>`;
     el.classList.add('open'); el.title = 'Open the fusion history of ' + d.name;
     el.onclick = e => { if (!e.target.closest('.buy')) openItemDetail(d); };
     const btn = el.querySelector('.buy');
@@ -800,7 +800,7 @@ function itemDetailHtml(d) {
   const effs = effectsOf(d), mine = new Set(effs);
   const partners = ITEMS.filter(x => !x.disabled && x.id !== d.id && effectsOf(x).some(k => mine.has(k)));
   const done = new Set(fusedSets(SAVE, d.id, 'fused').flat());
-  let h = `<div class="dHead"><div class="ico">${d.icon}</div><div><h3>${d.name}</h3><div class="tags"><span>${SLOTS[d.slot].icon} ${SLOTS[d.slot].name}</span><span>${effTags(d)}</span>${isPassive(d) ? '<span>Passive</span>' : ''}${heldNow(d) ? '<span class="held">In this run</span>' : ''}</div></div><button class="close" data-close aria-label="Close">✕</button></div>`;
+  let h = `<div class="dHead"><div class="ico">${d.icon}</div><div><h3>${d.name}</h3>${masteryBadge(d, 0)}<div class="tags"><span>${SLOTS[d.slot].icon} ${SLOTS[d.slot].name}</span><span>${effTags(d)}</span>${isPassive(d) ? '<span>Passive</span>' : ''}${heldNow(d) ? '<span class="held">In this run</span>' : ''}</div></div><button class="close" data-close aria-label="Close">✕</button></div>`;
   h += `<small>${d.pattern}</small>${fuseLine(d)}`;
   for (let t = 1; t < TIER_KEYS.length; t++) {
     const key = TIER_KEYS[t], F = FUSION[key], sets = fusedSets(SAVE, d.id, key), [a, b] = histProgress(SAVE, d.id, t), col = TIER_COLORS[t];
