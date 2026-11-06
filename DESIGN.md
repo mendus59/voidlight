@@ -390,6 +390,14 @@ more socket bought in total, so 9 extra sockets (19 in all) once Level 10 is ope
 
 Every ~45s an Elite spawns (8× HP, drops a chest). Every 60s an encirclement wave rings you in.
 
+### The map (world.js)
+Each level is a square map `WORLD.size` (36,000 px, about 3 minutes across at base speed; `STAGES[].mapSize` overrides it) that
+**wraps** at its edges. Only fixed things wrap (landmarks, anchors, the Map, zones, shrines): each is drawn and reached at its copy
+nearest the player, so the horde and combat never deal with the wrap. Landmarks and anchor points come from a seed per level, so a
+level looks the same every run; which anchors hold what is rolled per run. A minimap (top right) and a big pause map are centred on
+the player. Every level hides a **Map** at least `WORLD.mapMin` of the map away from the start, with an edge arrow pointing to it;
+finding it is a permanent unlock (`mapsFound` in the save) that shows that level's zones on both maps.
+
 ### Damage types and the Bestiary
 Every hit has a **type**: the effect of the item that fired it, plus its fusion riders (`hitTypes` in core.js). The shared pool
 never changes a hit's type, so holding one Burn item doesn't make every bullet Burn damage. Burn and poison ticks are Burn and
