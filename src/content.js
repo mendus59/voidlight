@@ -13,11 +13,12 @@ const VOIDLIGHT_CONTENT = (() => {
   const CACHE_KEY = window.VOIDLIGHT_TESTSAVE ? 'voidlight.testcontent' : 'voidlight.content.v1';
   const STATS = { totalKills: 'Enemies defeated (lifetime)', bestTime: 'Best survival time in any level (seconds)', bossKills: 'Bosses defeated', evolves: 'Fusions made', supers: 'Super fusions made', megas: 'Mega fusions made', wins: 'Runs won', runs: 'Runs played', maxLevel: 'Highest character level reached', totalGold: 'Gold earned (lifetime)' };
   const SHAPES = ['orb', 'shard', 'bolt', 'lance', 'missile', 'petal', 'disc', 'glaive', 'blade', 'star', 'prism', 'shield', 'skull', 'flame', 'spore', 'aura'];
+  const CHAIN_SHAPES = [...SHAPES, 'feather', 'spark', 'bat', 'dagger'];
   const MODS = STAT_KEYS; // hero perks and passive item stats
   const byId = list => Object.fromEntries(list.map(x => [x.id, x]));
   // Every editable table: where it lives and which fields the admin page may change.
   const TABLES = {
-    items:    { get: () => ITEM, fields: ['name', 'icon', 'effect', 'effect2', 'passive', 'dmg', 'cd', 'pattern', 'trig', 'lock', 'fuseLock', 'color', 'vis', 'disabled'] },
+    items:    { get: () => ITEM, fields: ['name', 'icon', 'effect', 'effect2', 'passive', 'dmg', 'cd', 'pattern', 'trig', 'lock', 'fuseLock', 'color', 'vis', 'disabled', 'chain'] },
     cats:     { get: () => CATEGORIES, fields: ['lock'] },
     stages:   { get: () => byId(STAGES), fields: ['name', 'color', 'hp', 'ramp', 'spawn', 'dmg', 'bossHp', 'xp', 'gold', 'start'] },
     tiers:    { get: () => FUSION, fields: ['name', 'need', 'mul', 'cdMul', 'own', 'pool', 'statMul', 'hist', 'lock'] },
@@ -28,6 +29,7 @@ const VOIDLIGHT_CONTENT = (() => {
     bosses:   { get: () => BOSSES, fields: ['name', 'hp', 'spd', 'r', 'dmg', 'xp', 'color'] },
     drops:    { get: () => DROPS, fields: ['chance', 'min', 'max', 'value', 'elite', 'boss'] },
     options:  { get: () => OPTIONS, fields: ['choices'] },
+    chain:    { get: () => CHAIN_RULES, fields: ['dmg', 'rate', 'depth', 'kids'] },
   };
   const clone = v => v === undefined ? undefined : JSON.parse(JSON.stringify(v));
   // Pristine values from items.js, taken once at load so overrides can always be undone.
@@ -62,6 +64,13 @@ const VOIDLIGHT_CONTENT = (() => {
   }
   // game speeds: 1 to 8 different values from 0.25 to 10
   const validSpeeds = v => Array.isArray(v) && v.length >= 1 && v.length <= 8 && v.every(x => num(x) && x >= 0.25 && x <= 10) && new Set(v).size === v.length;
+  // an item's fusion chain (chain.js): { form, shape, n, size, scale, on }, every part optional
+  function validChain(v) {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
+    const ok = { form: x => x in CHAIN_FORMS, shape: x => CHAIN_SHAPES.includes(x), n: x => num(x) && x >= 1 && x <= 24, size: x => num(x) && x >= 0.3 && x <= 3,
+      scale: x => num(x) && x >= 0 && x <= 5, on: x => x in CHAIN_ONS };
+    return Object.entries(v).every(([k, x]) => ok[k] && ok[k](x));
+  }
   function validVis(v) {
     if (!v || typeof v !== 'object') return false;
     if (v.size !== undefined && !(num(v.size) && v.size > 0 && v.size <= 5)) return false;
@@ -80,7 +89,8 @@ const VOIDLIGHT_CONTENT = (() => {
   }
   // Rejects anything that could break the game; null means "remove this field" (e.g. take a lock off).
   function valid(table, f, v) {
-    if (v === null) return ['arch', 'lock', 'fuseLock', 'effect2', 'color', 'vis', 'trig', 'disabled', 'min', 'max', 'value', 'chance', 'elite', 'boss'].includes(f);
+    if (v === null) return ['arch', 'lock', 'fuseLock', 'effect2', 'color', 'vis', 'trig', 'disabled', 'min', 'max', 'value', 'chance', 'elite', 'boss', 'chain'].includes(f);
+    if (table === 'chain') return f === 'depth' ? num(v) && v >= 0 && v <= 4 && Math.round(v) === v : f === 'rate' ? num(v) && v >= 0.5 && v <= 60 : num(v) && v >= 0 && v <= 3;
     if (table === 'tiers' && f === 'hist') return num(v) && v >= 0 && v <= 50 && Math.round(v) === v;
     if (table === 'tiers' && f === 'need') return num(v) && v >= 1 && v <= 8 && Math.round(v) === v;
     if (table === 'stages' && f === 'start') return num(v) && v >= 1 && v <= 5 && Math.round(v) === v;
@@ -96,6 +106,7 @@ const VOIDLIGHT_CONTENT = (() => {
       case 'choices': return validSpeeds(v);
       case 'vis': return validVis(v);
       case 'arch': return validArch(v);
+      case 'chain': return validChain(v);
       case 'disabled': return typeof v === 'boolean';
       case 'mods': case 'passive': return v && typeof v === 'object' && Object.entries(v).every(([k, x]) => MODS.includes(k) && num(x) && Math.abs(x) <= 100);
       case 'max': case 'min': case 'elite': case 'boss': return num(v) && v >= 0 && v <= 1e6;
@@ -126,7 +137,7 @@ const VOIDLIGHT_CONTENT = (() => {
   let current = '{}', pending = null;
   const running = () => window.VOIDLIGHT && window.VOIDLIGHT.G && !window.VOIDLIGHT.G.over;
   return {
-    TABLES, BASE, STATS, SHAPES, MODS, apply, valid,
+    TABLES, BASE, STATS, SHAPES, CHAIN_SHAPES, MODS, apply, valid,
     // On page load: the last published content this browser saw.
     applyCached() {
       if (window.VOIDLIGHT_SANDBOX) return;

@@ -33,7 +33,7 @@ let ov = {};                                   // what you are editing
 let live = { ov: {}, updatedAt: 0, by: '' };   // content/live, what players get
 let draft = null;                              // content/draft
 let history = [];
-const TABLE_NAMES = { items: 'Item', chars: 'Character', cats: 'Category', stages: 'Level', tiers: 'Fusion tier', difficulty: 'Difficulty', upgrades: 'Forge upgrade', enemies: 'Enemy', bosses: 'Boss', drops: 'Pickup', options: 'Game option' };
+const TABLE_NAMES = { items: 'Item', chars: 'Character', cats: 'Category', stages: 'Level', tiers: 'Fusion tier', difficulty: 'Difficulty', upgrades: 'Forge upgrade', enemies: 'Enemy', bosses: 'Boss', drops: 'Pickup', options: 'Game option', chain: 'Fusion chains' };
 
 // current value of one entry: items.js default with the overrides on top
 function get(t, id) {
@@ -181,6 +181,7 @@ function itemHeader(id, v) {
   if (v.color) props.push('color: ' + lit(v.color));
   if (v.vis) props.push('vis: ' + lit(v.vis));
   if (v.disabled) props.push('disabled: true');
+  if (v.chain) props.push('chain: ' + lit(v.chain));
   props.push('pattern: ' + lit(v.pattern));
   if (v.trig) props.push('trig: ' + lit(v.trig));
   return `def('${d.slot}', '${id}', ${q(v.name)}, '${v.effect}', ${q(v.icon)}, { ${props.join(', ')},`;
@@ -200,7 +201,8 @@ function exportItemsJs(src, o) {
     ['enemies', 'ENEMY_TYPES', id => ENEMY_TYPES[id], (id, x) => `  ${id}: ${lit(x)},`, id => new RegExp(`^\\s*${id}:\\s*\\{`)],
     ['bosses', 'BOSSES', id => BOSSES[id], (id, x) => `  ${id}: ${lit(x)},`, id => new RegExp(`^\\s*${id}:\\s*\\{`)],
     ['drops', 'DROPS', id => DROPS[id], (id, x) => `  ${id}: ${lit(x)},`, id => new RegExp(`^\\s*${id}:\\s*\\{`)],
-    ['options', 'OPTIONS', id => OPTIONS[id], (id, x) => `  ${id}: ${lit(x)},`, id => new RegExp(`^\\s*${id}:\\s*\\{`)]];
+    ['options', 'OPTIONS', id => OPTIONS[id], (id, x) => `  ${id}: ${lit(x)},`, id => new RegExp(`^\\s*${id}:\\s*\\{`)],
+    ['chain', 'CHAIN_RULES', id => CHAIN_RULES[id], (id, x) => `  ${id}: ${lit(x)},`, id => new RegExp(`^\\s*${id}:\\s*\\{`)]];
   for (const [t, name, orig, fmt, re] of tables) {
     const range = block(name);
     for (const id of Object.keys(o[t] || {})) replaceLine(range, re(id), fmt(id, keepOrder(orig(id), get(t, id), C.TABLES[t].fields)));
@@ -325,7 +327,8 @@ window.addEventListener('message', e => {
   if (!sb.frame || e.source !== sb.frame.contentWindow || e.origin !== location.origin || !e.data) return;
   if (e.data.vl === 'sandbox-ready') { sb.ready = true; sbSend({ overrides: ov, config: sb.cfg, numbers: sb.numbers }); }
   if (e.data.vl === 'sandbox-stats') {
-    sb.dps = e.data.dps; const r = $('#readout'); if (r) r.textContent = `${Math.round(sb.dps)} damage/s over the last 5 s · ${e.data.bullets} bullets on screen`;
+    sb.dps = e.data.dps; const r = $('#readout'); if (r) r.textContent = `${Math.round(sb.dps)} damage/s over the last 5 s · ${e.data.bullets} bullets on screen` + (e.data.hit ? ` · one hit ${Math.round(e.data.hit)}` : '');
+    sb.chain = e.data.chain && e.data.chain.length ? 'Chain: ' + e.data.chain.join(' · ') : ''; const co = $('#chainOut'); if (co) co.textContent = sb.chain;
     const fresh = (e.data.shapes || []).filter(s => !sb.shapes.includes(s) && s !== 'beam');
     if (fresh.length) { sb.shapes.push(...fresh); renderShapes(); }
   }
@@ -343,29 +346,49 @@ function sandboxPane() {
       h('div', { class: 'controls' },
         h('div', { class: 'grp' }, h('span', { class: 'lbl' }, 'Level'), [1, 2, 3, 4, 5].map(L => btn(String(L), cfg.level === L, () => conf({ level: L })))),
         h('div', { class: 'grp' }, h('span', { class: 'lbl' }, '✦ Tier'), TIER_KEYS.map((k, t) => btn(t ? get('tiers', k).name : 'Plain', cfg.tier === t, () => conf({ tier: t, fuse: t ? cfg.fuse : [] }), t ? `${get('tiers', k).name}: ×${get('tiers', k).mul} damage` : 'Not fused'))),
-        cfg.tier ? h('div', { class: 'grp' }, h('span', { class: 'lbl' }, 'Fused with'), sel([['', 'a copy of itself'], ...partnersOf(cfg.item).map(d => [d.id, `${get('items', d.id).icon} ${get('items', d.id).name}`])], (cfg.fuse || [])[0] || '', v => conf({ fuse: v ? [v] : [] }))) : null,
+
         h('div', { class: 'grp' }, h('span', { class: 'lbl' }, 'Targets'), sel([['ring', 'Ring'], ['line', 'Line'], ['scatter', 'Scattered'], ['swarm', 'Walking swarm']], cfg.layout, v => conf({ layout: v }))),
         btn('Unkillable', cfg.tough, () => conf({ tough: !cfg.tough }), 'Targets never die, so you can watch hits and status effects'),
         btn('Walk in a circle', cfg.move, () => conf({ move: !cfg.move }), 'Items that react to movement need this. You can also click the canvas and use WASD.'),
         btn('Numbers', sb.numbers, () => { sb.numbers = !sb.numbers; sbSend({ numbers: sb.numbers }); renderControls(); }, 'Damage numbers'),
         btn('↻ Restart', false, () => sbSend({ restart: true }))),
-      cfg.tier ? h('div', { class: 'note' }, fusionSummary(cfg.item, (cfg.fuse || [])[0] || cfg.item, cfg.tier)) : null,
+      cfg.tier ? partnerControls(cfg, conf) : null,
+      cfg.tier ? h('div', { class: 'note' }, fusionSummary(cfg.item, cfg.tier)) : null,
+      cfg.tier ? h('div', { class: 'chainOut', id: 'chainOut' }, sb.chain || '') : null,
       isRelic ? h('div', { class: 'controls' }, h('span', { class: 'lbl' }, 'Trigger'),
         [['kill', 'Kill a target'], ['hurt', 'Get hit'], ['levelup', 'Level up'], ['crit', 'Critical hit'], ['pickup', 'Pick up crystal'], ['dash', 'Dash']].map(([k, l]) => btn(l, false, () => sbSend({ trigger: k })))) : '');
   }
   sb.renderControls = renderControls;
   return h('div', { class: 'canvaspane' }, h('div', { class: 'stage' }, sb.frame), controls, h('div', { class: 'readout', id: 'readout' }, 'Starting…'));
 }
-// what the fusion on the test canvas does, in words (same maths as synthFusion in main.js)
-function fusionSummary(keep, gone, T) {
-  const a = get('items', keep), b = get('items', gone), effs = [...new Set([...effectsOfId(keep), ...effectsOfId(gone)])];
-  const sh = effectsOfId(keep).filter(k => effectsOfId(gone).includes(k)), pre = FUSE_PREFIX[sh.includes(a.effect) ? a.effect : sh[0] || a.effect];
-  let base = a.dmg + 0.5 * b.dmg; const steps = [`${a.dmg} + 50% × ${b.dmg} = ${+base.toFixed(1)}`];
-  for (let t = 2; t <= T; t++) { const need = get('tiers', TIER_KEYS[t]).need, f = 1 + 0.5 * (need - 1); base *= f; steps.push(`× ${f} (${get('tiers', TIER_KEYS[t]).name}: it plus 50% of ${need - 1} more like it) = ${+base.toFixed(1)}`); }
-  const tr = get('tiers', TIER_KEYS[T]), nm = (T > 1 ? tr.name + ' ' : '') + pre + ' ' + a.name;
+// The fusion tester under the test canvas: the items fused into the test item at its tier, and for Super and Mega the items
+// fused into each of those one tier below. Empty = a stand-in as strong as the item it fills in for, with no chain.
+// cfg.fuse entries: 'id' or 'id>sub1+sub2' (see SB in main.js).
+function partnerControls(cfg, conf) {
+  const T = cfg.tier, need = t => Math.max(1, get('tiers', TIER_KEYS[t]).need - 1), rows = [], fuse = (cfg.fuse || []).slice();
+  const opts = id => [['', '— stand-in —'], ...partnersOf(id).map(d => [d.id, `${get('items', d.id).icon} ${get('items', d.id).name}`])];
+  // what can be fused into a partner: not the test item itself, and only passives into a passive
+  const subOpts = id => opts(id).filter(([x]) => !x || (x !== cfg.item && (!get('items', id).passive || get('items', x).passive)));
+  const write = (k, a, subs) => { fuse[k] = a ? a + (subs.filter(Boolean).length ? '>' + subs.filter(Boolean).join('+') : '') : ''; conf({ fuse: fuse.slice() }); };
+  for (let k = 0; k < need(T); k++) {
+    const [a, b] = String(fuse[k] || '').split('>'), subs = (b || '').split('+');
+    const row = [sel(opts(cfg.item), a || '', x => write(k, x, x === a ? subs : []))];
+    if (T >= 2 && a) for (let j = 0; j < need(T - 1); j++) row.push(h('span', { class: 'lbl' }, j ? '+' : '← with'), sel(subOpts(a), subs[j] || '', x => { const n = subs.slice(); n[j] = x; write(k, a, n); }));
+    rows.push(h('div', { class: 'grp' }, h('span', { class: 'lbl' }, k ? 'and' : 'Absorbs'), ...row));
+  }
+  return h('div', { class: 'controls' }, ...rows,
+    h('button', { class: 'small', title: 'Fill every slot with a random item it can fuse with', onclick: () => {
+      const rnd = (id, sub) => { const l = sub ? subOpts(id).map(([x]) => x).filter(Boolean) : partnersOf(id).map(d => d.id); return l.length ? l[Math.floor(Math.random() * l.length)] : ''; };
+      conf({ fuse: Array.from({ length: need(T) }, () => { const a = rnd(cfg.item); if (!a || T < 2) return a; return a + '>' + Array.from({ length: need(T - 1) }, () => rnd(a, true)).filter(Boolean).join('+'); }) });
+    } }, '🎲 Random'));
+}
+// what the fusion on the test canvas does, in words (the numbers come from the canvas, which uses the game's own maths)
+function fusionSummary(keep, T) {
+  const a = get('items', keep), tr = get('tiers', TIER_KEYS[T]);
   const made = TIER_KEYS.slice(1, T + 1).reduce((n, k) => n * get('tiers', k).need, 1);
-  return `${nm} (made from ${made} items): base damage ${steps.join(', ')}; × ${tr.mul} for the tier = ${Math.round(base * tr.mul)} at level 1, +30% per level. ` +
-    `${Math.round(100 * (1 - tr.cdMul))}% faster, +${T} projectile${T > 1 ? 's' : ''}. Its own bullets get ${tr.own} stacks of each of ${effs.map(k => EFFECTS[k].icon + ' ' + EFFECTS[k].name).join(', ')}.` +
+  return `${T > 1 ? tr.name + ' ' : ''}${a.name}, made from ${made} level 5 items. It keeps 100% of what it hit for and adds 50% of what the items it absorbed hit for, ` +
+    `then its own damage × ${tr.mul} grows 30% per level on top. ${Math.round(100 * (1 - tr.cdMul))}% faster, +${T} projectile${T > 1 ? 's' : ''}, ${tr.own} own stacks of every effect it carries. ` +
+    `Each absorbed attacking item plays its own attack off ${a.name}'s at ${Math.round(100 * CHAIN_RULES.rules.dmg)}% of its damage (its form is under “Fusion chain” on its own page); their absorbed items chain one step further out.` +
     (a.passive ? ' A passive can only absorb passives.' : '');
 }
 function selectSandboxItem(def) {
@@ -438,7 +461,7 @@ function itemView(slot) {
       def.slot === 'relic' ? field('Trigger text', txt(T, id, 'trig'), T, id, 'trig', { wide: true }) : null),
     h('h3', {}, 'Stats'),
     def.passive ? passiveFields(id) : h('div', { class: 'fields' },
-      field('Base damage', num(T, id, 'dmg', { step: 1 }), T, id, 'dmg', { hint: '+30% per level. A fusion adds 50% of every other item\'s base damage, then the tier multiplies it' }),
+      field('Base damage', num(T, id, 'dmg', { step: 1 }), T, id, 'dmg', { hint: '+30% per level, × the fusion tier. A fusion also carries over 100% of what the kept item hit for and 50% of what the others hit for, as flat damage' }),
       def.fire ? field('Cooldown (s)', num(T, id, 'cd', { step: 0.05 }), T, id, 'cd', { hint: '−7% per level, times the fusion tier\'s cooldown factor' }) : null),
     h('h3', {}, 'Unlock'),
     h('div', { class: 'fields' }, lockFields(T, id, { buyable: true }),
@@ -446,11 +469,29 @@ function itemView(slot) {
     h('h3', {}, 'Fusion'),
     h('div', { class: 'fields' },
       field('Fusion unlock', h('div', { class: 'inline' }, h('span', {}, 'Reach level'), fuseLockInput(id, 'level'), h('span', {}, 'with it in'), fuseLockInput(id, 'runs'), h('span', {}, 'runs')), T, id, 'fuseLock',
-        { wide: true, hint: `Players see this as the “${v.name} mastery” achievement. 0 runs = can always fuse. Both items in a fusion need their mastery.` }),
+        { wide: true, hint: `Players see this as the “${v.name} mastery” achievement. 0 runs = always mastered. Only a mastered item can remain in a fusion; it can absorb items that are not mastered yet.` }),
       h('div', { class: 'f wide note' }, `Fuses with (any level 5 item sharing ${effectsOf(v).map(k => EFFECTS[k].name).join(' or ')}): ${partnersOf(id).map(d => get('items', d.id).icon + ' ' + get('items', d.id).name).join(', ') || 'nothing yet'}. Try a fusion tier under the test canvas.${v.passive ? ' As a passive it can only absorb other passives.' : ''}`)),
+    def.passive ? null : chainFields(def, v),
     h('h3', {}, 'Visual style'),
     visualFields(def, v, E));
   ed.list.replaceChildren(list); ed.form.replaceChildren(form);
+}
+// How this item plays when another item absorbs it: its fusion chain (chain.js). Stored as the item's `chain` field.
+function chainFields(def, v) {
+  const T = 'items', id = def.id, cur = v.chain || {}, d = CHAIN_DEFAULTS[id] || [], dflt = { form: d[0] || CHAIN_SLOT[def.slot], shape: d[1] || 'orb' };
+  const c = chainOf(Object.assign({}, def, { chain: cur })), F = CHAIN_FORMS[c.form];
+  const setC = (k, x) => { const n = clone(get(T, id).chain || {}); if (x === null || x === '' || x === undefined) delete n[k]; else n[k] = x; set(T, id, 'chain', Object.keys(n).length ? n : null, { rerender: true }); };
+  const numIn = (k, step, min, max, ph) => h('input', { type: 'number', step, min, max, value: cur[k] ?? '', placeholder: ph, onchange: e => { const x = parseFloat(e.target.value); setC(k, isFinite(x) && x >= min && x <= max ? x : null); } });
+  return h('div', {},
+    h('h3', {}, 'Fusion chain (when another item absorbs it)'),
+    h('div', { class: 'fields' },
+      field('Form', sel(CHAIN_FORM_KEYS.map(k => [k, CHAIN_FORMS[k].name + (CHAIN_FORMS[k].travel ? ' (rides on bullets)' : '') + (k === dflt.form ? ' · default' : '')]), c.form, x => setC('form', x === dflt.form ? null : x)), T, id, 'chain', { sub: 'form', hint: `Default: ${CHAIN_FORMS[dflt.form].name}` }),
+      field('Plays when a bullet', F.travel ? h('div', { class: 'hint' }, `Rides on the bullets while they fly. A keeper without bullets plays a ${CHAIN_FORMS[F.alt].name.toLowerCase()} where it hits.`) : sel(Object.entries(CHAIN_ONS).map(([k, l]) => [k, l]), c.on, x => setC('on', x === 'end' ? null : x)), T, id, 'chain', { sub: 'on' }),
+      field('Shape', sel(C.CHAIN_SHAPES.map(x => [x, x + (x === dflt.shape ? ' · default' : '')]), c.shape, x => setC('shape', x === dflt.shape ? null : x)), T, id, 'chain', { sub: 'shape' }),
+      field('Count', numIn('n', 1, 1, 24, String(d[2] || F.n)), T, id, 'chain', { sub: 'n', hint: 'Shots, satellites or arc jumps' }),
+      field('Size ×', numIn('size', 0.1, 0.3, 3, '1'), T, id, 'chain', { sub: 'size', hint: 'Shot size, orbit and halo radius' }),
+      field('Damage ×', numIn('scale', 0.05, 0, 5, '1'), T, id, 'chain', { sub: 'scale', hint: `On top of the chain rules (Progression tab): ${Math.round(100 * CHAIN_RULES.rules.dmg)}% of what it hit for` }),
+      h('div', { class: 'f wide note' }, `Absorbed into another item, ${v.name} ${F.travel ? '' : `plays when one of that item's bullets ${CHAIN_ONS[c.on]}: it `}${F.text}. Try it on the test canvas: pick the item that absorbs it, a tier, and ${v.name} as a partner.`)));
 }
 // a passive item's stat boosts, per item level (×level, ×the fusion tier's statMul)
 function passiveFields(id) {
@@ -596,7 +637,23 @@ function difficultyView() {
 // ---------- progression: categories, fusion locks and a progress simulator ----------
 let sim = null; // a pretend player save, to see what a player at some point of progress gets
 const simSave = () => (sim = sim || normalizeSave(null));
-function progressView() { return h('div', { style: 'display:grid;gap:16px' }, stagesCard(), tiersCard(), categoryCard(), fusionCard(), simulatorCard()); }
+function progressView() { return h('div', { style: 'display:grid;gap:16px' }, stagesCard(), tiersCard(), chainCard(), categoryCard(), fusionCard(), simulatorCard()); }
+// the fusion chain rules (CHAIN_RULES in chain.js) and every item's chain form at a glance
+function chainCard() {
+  const T = 'chain', id = 'rules', R = get(T, id);
+  const f = (k, label, hint, step) => field(label, h('input', { type: 'number', step, min: 0, value: R[k], onchange: e => { const x = parseFloat(e.target.value); if (C.valid(T, k, x)) set(T, id, k, x, { rerender: true }); else toast('Out of range', true); } }), T, id, k, { hint });
+  const rows = ITEMS.filter(d => !d.passive && !get('items', d.id).disabled).map(d => { const c = chainOf(Object.assign({}, d, { chain: get('items', d.id).chain })); return [d, c]; });
+  return h('div', { class: 'card' }, h('h2', {}, 'Fusion chains', h('span', { class: 'spacer' }), entryChanged(T, id) ? h('button', { class: 'small', onclick: () => resetEntry(T, id) }, 'Reset') : null),
+    h('p', { class: 'note', style: 'margin-top:-6px' }, 'Every attacking item a fusion absorbs plays its own attack, in a small form, off the bullets of the item that remains: when one of its bullets first hits or runs out (volley, burst, orbit ring, zone, arc, blast), or riding on each bullet while it flies (halo, satellites, trail). The shots a link makes trigger the links of the item it came from, so Super and Mega fusions nest. Each item\'s form is under “Fusion chain” on its own page; try any combination on the test canvas.'),
+    h('div', { class: 'fields' },
+      f('dmg', 'Damage share', 'Of what the absorbed item hit for. 0.5 = 50%', 0.05),
+      f('rate', 'Plays per second (each link)', 'Rate limit, so fast weapons and orbitals stay readable', 0.5),
+      f('depth', 'Nesting depth', '1 = only the items fused straight in. 3 = a Mega\'s grandchildren still play', 1),
+      f('kids', 'Damage × per nesting step', '1 = every step deals its own 50%', 0.05)),
+    h('div', { class: 'tablewrap', style: 'max-height:300px;overflow-y:auto;margin-top:8px' }, h('table', {}, h('tr', {}, h('th', {}, 'Item'), h('th', {}, 'Chains as'), h('th', {}, 'Shape'), h('th', {}, 'Count')),
+      rows.map(([d, c]) => h('tr', {}, h('td', {}, h('button', { class: 'link', onclick: () => { tab = d.slot; pickId[tab] = d.id; render(); window.scrollTo(0, 0); } }, `${get('items', d.id).icon} ${get('items', d.id).name}`)),
+        h('td', { class: changed('items', d.id, 'chain') ? 'changed' : '' }, CHAIN_FORMS[c.form].name + (CHAIN_FORMS[c.form].travel ? '' : ` (${c.on})`)), h('td', {}, c.shape), h('td', {}, String(c.n)))))));
+}
 function stagesCard() {
   const cols = [{ f: 'name', label: 'Name', kind: 'text' }, { f: 'color', label: 'Color', kind: 'color' }, { f: 'hp', label: 'Enemy HP ×' }, { f: 'ramp', label: 'HP ramp by 15:00' }, { f: 'spawn', label: 'Spawns ×' }, { f: 'dmg', label: 'Enemy dmg ×' },
     { f: 'bossHp', label: 'Boss HP ×' }, { f: 'xp', label: 'XP ×' }, { f: 'gold', label: 'Gold ×' }, { f: 'start', label: 'Items arrive at Lv', step: 1 }];
@@ -633,7 +690,7 @@ function categoryCard() {
 function fusionCard() {
   const all = lock => { for (const d of ITEMS) set('items', d.id, 'fuseLock', lock); render(); toast('Fusion locks updated for every item.'); };
   return h('div', { class: 'card' }, h('h2', {}, 'Fusion locks (mastery achievements)'),
-    h('p', { class: 'note', style: 'margin-top:-6px' }, 'Fusing an item unlocks once a player has reached the level below with it in that many runs (counted when the run ends). Every item in a base fusion needs it. 0 runs means it can always fuse. Players see each one as “<item> mastery” on the Achievements screen. Super and Mega fusion have their own locks in the Fusion tiers card.'),
+    h('p', { class: 'note', style: 'margin-top:-6px' }, 'Fusing an item unlocks once a player has reached the level below with it in that many runs (counted when the run ends). Only a mastered item can remain in a base fusion; it can absorb items that are not mastered yet. 0 runs means it is always mastered. Players see each one as “<item> mastery” on the Achievements screen. Super and Mega fusion have their own locks in the Fusion tiers card.'),
     h('div', { class: 'controls' }, h('span', { class: 'lbl' }, 'Set every item:'), h('button', { class: 'small', onclick: () => all(null) }, `Default (level ${FUSE_LOCK.level}, ${FUSE_LOCK.runs} run)`),
       h('button', { class: 'small', onclick: () => all({ level: 5, runs: 2 }) }, 'Level 5 in 2 runs'), h('button', { class: 'small', onclick: () => all({ level: 5, runs: 3 }) }, 'Level 5 in 3 runs'), h('button', { class: 'small', onclick: () => all({ level: 5, runs: 0 }) }, 'No lock')),
     h('div', { class: 'tablewrap', style: 'max-height:420px;overflow-y:auto;margin-top:8px' }, h('table', {}, h('tr', {}, h('th', {}, 'Item'), h('th', {}, 'Slot'), h('th', {}, 'Effects'), h('th', {}, 'Fusion unlocks at'), h('th', {}, 'Fuses with')),

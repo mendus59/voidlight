@@ -70,18 +70,54 @@ Shrapnel Charm, Thunder Sigil and Glacial Shell. They need both of their categor
 
 ### Fusion (4 tiers)
 Fusion needs several **level 5 items of the same tier that share at least one effect** (any slots). You choose which one remains:
-* The survivor takes **50% of every other item's damage and passive stats**. It does not take their attacks: their effects are
-  added to its own bullets instead.
+* **Mastery decides who can remain.** Only a mastered item (or an item that is already fused) can be the survivor. It can absorb
+  items that are not mastered yet, so one mastered item is enough for a fusion.
+* **A fusion always makes the survivor stronger.** It keeps **100% of what it had** and adds **50% of what each absorbed item
+  had**: its hit damage at the moment of fusion becomes flat `carry` damage, and its passive stats become flat `flat` stats.
+  On top of that its own base damage (× the new tier) and per-level stats grow again as it is levelled back up to 5.
+* **Absorbed attacks chain** off the survivor's own (see *Fusion chains* below). Their effects are also carried on its bullets.
 * The other items' sockets are freed.
 * The survivor moves up one tier and starts again at the level's start level, so it has to be levelled to 5 before the next tier.
 * A passive item can't keep a fusion that consumes an attacking item.
+
+### Fusion chains
+Inspired by spell-chaining games: every attacking item a fusion absorbs becomes a **link** on the survivor, and plays its own
+attack, in a small form, off the survivor's attacks at **50% of the damage it did**. The engine (`src/chain.js`) never handles
+pairs of items. Each item only names the **form** its link takes, and each form knows how to play itself:
+
+| Form | Plays | Default for |
+|---|---|---|
+| Volley | where a bullet first hits or runs out: a few of its shots at the nearest enemy | most weapons, homing items |
+| Burst | same place: a ring of its shots | most spells and relics |
+| Orbit ring | same place: its shots spin outward in a widening orbit | Cinder Ring, Blade Wheel, Bat Swarm... |
+| Zone | same place: a lingering damaging patch | Plague Cloud, Spore Pod, Cinder Mortar |
+| Arc | same place: lightning jumping to nearby enemies | Arc Rifle, Thunder Call, Tesla Coil |
+| Blast | same place: an area hit (knocks back for Force) | Blizzard, Shockwave, Gravity Well |
+| Halo | rides on every bullet while it flies, hurting what it passes | Frost Halo |
+| Satellites | small copies circle every bullet | Pinball Wisp, Guardian Shield, Gemini Satellites |
+| Trail | every bullet leaves a trail | Fire Trail, Venom Moth, Static Boots |
+
+So Cinder Ring fused into Ember Pistol: every fireball, when it hits or expires, releases a small cinder ring spinning out from
+that point. Frost Halo fused into Frost Fan: every shard carries a frost halo. Area attacks (strikes, clouds, zaps) play end forms
+where they hit; a keeper with no bullets plays a travel form's end form instead (halo → blast, satellites → orbit ring, trail → zone).
+
+**Super and Mega nest.** A link remembers the links of the item it came from, and the shots a link makes trigger those. A Super
+item that absorbed a Fused Ember Pistol (which had absorbed Cinder Ring) plays the pistol's volley off its bullets, and every
+volley shot then releases its own cinder ring. A Mega goes three steps deep. Each link has a rate limit (8 plays per second by
+default) so fast weapons and orbitals stay readable. Rules (`CHAIN_RULES` in items.js: damage share, rate, nesting depth, damage
+per nesting step) and each item's form, shape, count, size, damage × and trigger (hit, expiry or both) are editable in the admin
+panel (Progression > Fusion chains, and "Fusion chain" on every item page).
+
+**Testing them.** The admin test canvas has a fusion tester: pick a tier and the items it absorbs, and for Super and Mega the
+items each of those was made from (or 🎲 Random). Players have the **🧪 Fusion Lab** on the main menu: the same canvas with the
+items, tiers and fusions they have unlocked, nothing saved.
 
 | Tier | Needs | Damage | Cooldown | Own stacks per effect | Pool per level | Stats | Unlock |
 |---|---|---|---|---|---|---|---|
 | Base | | ×1 | ×1 | 2 | 1 | ×1 | |
 | Fused | 2 base items | ×1.6 | ×0.75 | 3 | 1.5 | ×1.25 | Mastery of each item |
 | Super | 3 fused items | ×3.2 | ×0.65 | 6 | 4 | ×1.5 | Beat Level 3 |
-| Mega | 5 super items | ×16 | ×0.55 | 12 | 12 | ×2 | Beat Level 6 |
+| Mega | 5 super items | ×16 | ×0.55 | 12 | 12 | ×2 | Beat Level 7 |
 
 **Fusion history (across runs).** Each item remembers what it has fused with (`fuseLog` in the save; the item kept and the ones
 consumed are all credited). Super and Mega fusion ask for it on top of their tier unlock, for **every item in the fusion**:
@@ -316,17 +352,28 @@ spawn rate, enemy damage and boss HP, and also XP and gold so a build can keep u
 | Level | Name | Enemy HP | Late ramp | Spawns | Damage | Boss HP | XP | Gold | Items start at |
 |---|---|---|---|---|---|---|---|---|---|
 | 1 | The Rift | ×1 | 0 | ×1 | ×1 | ×1 | ×1 | ×1 | 1 |
-| 2 | Ashen Verge | ×1.2 | 0.5 | ×1.05 | ×1.1 | ×1.6 | ×1.4 | ×1.2 | 1 |
-| 3 | Frostbound Deep | ×1.4 | 1.2 | ×1.1 | ×1.2 | ×2.6 | ×1.9 | ×1.4 | 2 |
-| 4 | Storm Spire | ×1.6 | 2.1 | ×1.15 | ×1.3 | ×4 | ×2.6 | ×1.6 | 2 |
-| 5 | Blight Garden | ×1.8 | 3.4 | ×1.2 | ×1.4 | ×6.5 | ×3.4 | ×1.8 | 3 |
-| 6 | Mirror Wastes | ×2 | 5 | ×1.25 | ×1.5 | ×10 | ×4.4 | ×2 | 3 |
-| 7 | Hunter's Moon | ×2.3 | 9 | ×1.3 | ×1.6 | ×20 | ×6 | ×2.3 | 4 |
-| 8 | Shattered Crown | ×2.6 | 16 | ×1.35 | ×1.7 | ×40 | ×8 | ×2.6 | 4 |
-| 9 | Crimson Expanse | ×3 | 27 | ×1.4 | ×1.8 | ×85 | ×11 | ×3 | 5 |
-| 10 | The Void Heart | ×3.5 | 68 | ×1.45 | ×1.9 | ×1500 | ×16 | ×3.5 | 5 |
+| 2 | Ashen Verge | ×1.44 | 0.5 | ×1.05 | ×1.1 | ×1.92 | ×1.4 | ×1.2 | 1 |
+| 3 | Frostbound Deep | ×1.89 | 1.2 | ×1.1 | ×1.2 | ×3.51 | ×1.9 | ×1.4 | 2 |
+| 4 | Storm Spire | ×2.24 | 2.1 | ×1.15 | ×1.3 | ×5.6 | ×2.6 | ×1.6 | 2 |
+| 5 | Blight Garden | ×2.61 | 3.4 | ×1.2 | ×1.4 | ×9.42 | ×3.4 | ×1.8 | 3 |
+| 6 | Mirror Wastes | ×3 | 5 | ×1.25 | ×1.5 | ×15 | ×4.4 | ×2 | 3 |
+| 7 | Hunter's Moon | ×3.45 | 9 | ×1.3 | ×1.6 | ×30 | ×6 | ×2.3 | 4 |
+| 8 | Shattered Crown | ×3.9 | 16 | ×1.35 | ×1.7 | ×60 | ×8 | ×2.6 | 4 |
+| 9 | Crimson Expanse | ×4.35 | 27 | ×1.4 | ×1.8 | ×123 | ×11 | ×3 | 5 |
+| 10 | The Void Heart | ×4.73 | 68 | ×1.45 | ×1.9 | ×2025 | ×16 | ×3.5 | 5 |
+| 11 | The Echo Loom | ×5.4 | 90 | ×1.5 | ×2 | ×3200 | ×20 | ×4 | 5 |
+| 12 | Singularity Choir | ×6.6 | 120 | ×1.55 | ×2.1 | ×5200 | ×24 | ×4.5 | 5 |
 
 Enemy HP is `hp × (1 + ramp × f³)`, where f goes from 0 at 0:00 to 1 at 15:00. All values are editable in the admin panel (Progression > Levels).
+
+**Fusion chain rebalance (v0.18).** Fusions now keep 100% of the kept item and add chained attacks, so fused builds hit harder.
+Measured on the test canvas (14 random keepers, random partners, level 5, the same targets) against the old rules: Fused items
+deal about **1.6×** the damage they used to, Super about **1.7×**, Mega about **1.3×**, and the chains add area damage on top,
+which helps most against crowds. Level 1, where fusion is first learned, is unchanged; enemy HP and boss HP of Levels 2 to 10
+went up by ×1.2 (Level 2) to ×1.5 (Levels 6 to 8), and ×1.35 on Level 10. Mega fusion now opens with **Beat Level 7** (was 6),
+since Super builds now carry Level 6 more easily. **Levels 11 (The Echo Loom) and 12 (Singularity Choir)** are new endgame levels
+for chained Mega builds, about ×1.5 and ×2.4 the end-of-run enemy HP of Level 10. First-pass numbers from measurements, not
+hand playtests.
 
 ### Level items (9 new)
 | Item | Slot | Effect | Achievement | Price |

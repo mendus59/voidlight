@@ -206,8 +206,9 @@ function recomputePool() {
   G.pool = p; G.runners = G.inv.filter(i => !isPassive(i.def));
   recomputeStats();
 }
-// passive stats an item gives right now: its per-level stats × level × its tier's statMul
-function instStats(i) { const out = {}, k = i.level * tierOf(i).statMul; for (const [s, v] of Object.entries(i.stats || {})) if (v) out[s] = v * k; return out; }
+// passive stats an item gives right now: its per-level stats × level × its tier's statMul, plus the flat stats its
+// fusions carried over (absorb() in chain.js)
+function instStats(i) { const out = Object.assign({}, i.flat || {}), k = i.level * tierOf(i).statMul; for (const [s, v] of Object.entries(i.stats || {})) if (v) out[s] = (out[s] || 0) + v * k; return out; }
 function recomputeStats() {
   const P = G.player; if (!P) return;
   const m = Object.assign({}, P.baseMods);
@@ -219,9 +220,10 @@ function killOwned(inst) {
   for (const d of G.deploys) if (d.owner === inst && d.persist) d.dead = true;
 }
 function rebuild(inst) { killOwned(inst); if (inst.def.spawn && !isPassive(inst.def)) inst.def.spawn(inst, ctxOf(inst)); }
-// base: damage before the tier multiplier. stats: passive stats per level. riders: effects carried from fusions.
+// base: its own damage before the tier multiplier. stats: its own passive stats per level. riders: effects carried from
+// fusions. carry / flat: damage and passive stats carried over by fusions. links: the absorbed items' chains (chain.js).
 // gone: the items fused into it.
-function newInst(def, level = 1) { return { def, level, timer: 0.3, state: {}, tier: 0, base: def.dmg || 0, riders: [], stats: Object.assign({}, def.passive || {}), gone: [], own: null }; }
+function newInst(def, level = 1) { return { def, level, timer: 0.3, state: {}, tier: 0, base: def.dmg || 0, riders: [], stats: Object.assign({}, def.passive || {}), gone: [], own: null, carry: 0, flat: {}, links: [] }; }
 function reach(inst) { if (G.reached) G.reached[inst.def.id] = Math.max(G.reached[inst.def.id] || 0, inst.level); }
 // New items (and new fusions) arrive at the level's start level (STAGES in items.js).
 const arrivalLevel = () => (G.sandbox ? 1 : clamp(STAGE().start | 0, 1, MAX_LEVEL));
@@ -230,19 +232,23 @@ function levelItem(inst) {
   inst.level = Math.min(MAX_LEVEL, inst.level + 1); reach(inst); recomputePool(); rebuild(inst);
   if (inst.level === MAX_LEVEL && !inst.tier && !G.sandbox && !fuseUnlocked(SAVE, inst.def)) {
     const f = fuseLockOf(inst.def), next = f.level <= MAX_LEVEL && runsAt(SAVE, inst.def.id, f.level) + 1 >= f.runs;
-    toast(next ? `✦ ${inst.def.name} maxed! Fusing it unlocks when this run ends.` : `${inst.def.name} maxed: ${runsAt(SAVE, inst.def.id, f.level) + 1}/${f.runs} runs toward fusing it.`);
+    toast((next ? `✦ ${inst.def.name} maxed! Mastered when this run ends.` : `${inst.def.name} maxed: ${runsAt(SAVE, inst.def.id, f.level) + 1}/${f.runs} runs toward mastering it.`) + ' Until then a mastered item can still absorb it.');
   }
 }
 // Fusion tiers (FUSION in items.js). `need` level 5 items of one tier that all share at least one effect become one item
-// of the next tier: the player picks the one that stays. It takes 50% of every other one's base damage and passive stats,
-// carries all of their effects on its own bullets, and starts the new tier at the level's start level. The other sockets free up.
-// Base items need their mastery to fuse; Super and Mega fusion each open with an achievement, and every item in a Super or
-// Mega fusion also needs its fusion history (FUSION[tier].hist, kept across runs in SAVE.fuseLog, see progress.js).
+// of the next tier: the player picks the one that stays. It keeps 100% of what it had and takes 50% of every other one's
+// damage and passive stats, carries all of their effects on its own bullets, and plays each absorbed item's attack as a
+// chain on its own (chain.js). It starts the new tier at the level's start level. The other sockets free up.
+// Base items need their mastery to REMAIN: a mastered item can absorb items that are not mastered yet, but a fusion
+// needs at least one mastered item to keep. Super and Mega fusion each open with an achievement, and every item in a Super
+// or Mega fusion also needs its fusion history (FUSION[tier].hist, kept across runs in SAVE.fuseLog, see progress.js).
 // A passive item can only stay if everything fused into it is passive too.
 const tierOpen = t => G.sandbox || tierUnlocked(SAVE, TIER_KEYS[t]);
-const fusable = i => i.level >= MAX_LEVEL && i.tier < TIER_KEYS.length - 1 && tierOpen(i.tier + 1) && (G.sandbox || i.tier > 0 || fuseUnlocked(SAVE, i.def)) && (G.sandbox || histMet(SAVE, i.def.id, i.tier + 1));
+const fusable = i => i.level >= MAX_LEVEL && i.tier < TIER_KEYS.length - 1 && tierOpen(i.tier + 1) && (G.sandbox || histMet(SAVE, i.def.id, i.tier + 1));
+// can this item be the one that remains? (its mastery, for a base item)
+const canKeep = i => G.sandbox || i.tier > 0 || fuseUnlocked(SAVE, i.def);
 function commonEffects(group) { let c = instEffects(group[0]); for (const i of group.slice(1)) { const e = instEffects(i); c = c.filter(k => e.includes(k)); } return c; }
-const keepersOf = group => group.filter(s => !isPassive(s.def) || group.every(o => isPassive(o.def)));
+const keepersOf = group => group.filter(s => canKeep(s) && (!isPassive(s.def) || group.every(o => isPassive(o.def))));
 function combos(arr, k, limit) {
   const out = [];
   const rec = (st, cur) => { if (out.length >= limit) return; if (cur.length === k) { out.push(cur.slice()); return; } for (let i = st; i < arr.length; i++) { cur.push(arr[i]); rec(i + 1, cur); cur.pop(); } };
@@ -264,26 +270,24 @@ function fusionGroups() {
   return out;
 }
 const tierName = t => FUSION[TIER_KEYS[t]].name;
+const isPassiveInst = i => isPassive(i.def);
 function fuse(keep, others, quiet) {
   const T = keep.tier + 1, sh = commonEffects([keep, ...others]);
   // fusion history (counts right away, also toward later fusions in this run)
   const ready = G.sandbox ? [] : recordFusion(SAVE, TIER_KEYS[T], [keep, ...others].map(i => i.def.id));
   if (!G.sandbox) writeSave();
   if (!keep.fuseEff) keep.fuseEff = sh.includes(keep.def.effect) ? keep.def.effect : sh[0] || keep.def.effect;
-  for (const o of others) {
-    keep.base += 0.5 * o.base;
-    for (const [s, v] of Object.entries(o.stats)) keep.stats[s] = (keep.stats[s] || 0) + 0.5 * v;
-    for (const k of instEffects(o)) if (!effectsOf(keep.def).includes(k) && !keep.riders.includes(k)) keep.riders.push(k);
-    keep.gone.push(o.def, ...o.gone); killOwned(o);
-  }
+  absorb(keep, others, arrivalLevel()); // chain.js: 100% of keep + 50% of the others, their attacks become chain links
+  for (const o of others) killOwned(o);
   G.inv = G.inv.filter(i => !others.includes(i));
-  keep.tier = T; keep.level = arrivalLevel(); keep.timer = Math.min(keep.timer, 0.3);
+  keep.timer = Math.min(keep.timer, 0.3);
   if (!G.sandbox) G.stats[T === 1 ? 'evolves' : T === 2 ? 'supers' : 'megas']++;
   recomputePool(); rebuild(keep);
   if (!quiet) {
     banner(`${T > 1 ? tierName(T).toUpperCase() + ' ' : ''}FUSION: ${itemName(keep)}`, TIER_COLORS[T], 2.5); fxRing(G.player.x, G.player.y, 160 + 60 * T, TIER_COLORS[T], 0.6, 6);
     const freed = [...new Set(others.map(o => SLOTS[o.def.slot].name))].join(', ');
-    toast(`${others.map(o => o.def.icon).join(' ')} fused into ${keep.def.icon} ${itemName(keep)}. Its bullets now carry ${effNames(instEffects(keep))}. Free sockets: ${freed}.`);
+    const ch = others.filter(o => !isPassive(o.def)).map(o => o.def.icon + ' ' + CHAIN_FORMS[chainOf(o.def).form].name.toLowerCase());
+    toast(`${others.map(o => o.def.icon).join(' ')} fused into ${keep.def.icon} ${itemName(keep)}. Its bullets now carry ${effNames(instEffects(keep))}${ch.length ? ` and chain ${ch.join(', ')}` : ''}. Free sockets: ${freed}.`);
   }
   for (const id of ready) toast(`✦ ${ITEM[id].icon} ${ITEM[id].name} can now ${tierName(T + 1)} Fuse.`);
   return keep;
@@ -498,6 +502,7 @@ function elong(x, y, ang, len, w, col) {
   ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.ellipse(len * 0.2, 0, len * 0.5, w * 0.45, 0, 0, TAU); ctx.fill(); ctx.restore();
 }
 function drawBullet(b, x, y) {
+  if (b.travel) drawChainTravel(b, x, y); // fusion chain halos (chain.js)
   const col = b.rainbow ? `hsl(${(G.time * 400 + b.t * 700) % 360},100%,65%)` : b.color;
   let ang = Math.atan2(b.vy, b.vx);
   if (b.orbit) ang = b.orbit.a + Math.PI / 2 * Math.sign(b.orbit.w);
@@ -674,7 +679,7 @@ let currentScreen = 'menu';
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(el => el.classList.toggle('show', el.id === id));
   currentScreen = id;
-  if (id === 'menu') renderMenu(); if (id === 'chars') renderChars(); if (id === 'forge') renderForge(); if (id === 'codex') renderCodex(); if (id === 'achievements') renderAchievements();
+  if (id === 'menu') renderMenu(); if (id === 'lab') renderLab(); if (id === 'chars') renderChars(); if (id === 'forge') renderForge(); if (id === 'codex') renderCodex(); if (id === 'achievements') renderAchievements();
 }
 function goldPill() { return `<span class="gold">● ${Math.floor(SAVE.gold)}</span>`; }
 function renderMenu() {
@@ -788,8 +793,9 @@ function renderCodex() {
 }
 function fuseLine(d) {
   const effs = effectsOf(d), f = fuseLockOf(d);
-  return fuseUnlocked(SAVE, d) ? `<small class="fuse">✦ Fusion unlocked. At level 5 it fuses with any level 5 ${effs.map(k => EFFECTS[k].name).join(' or ')} item${isPassive(d) ? ' (as a passive it can only absorb other passives)' : ''}.</small>`
-    : `<small class="fuse">✦ Fusion locked: ${fuseLockText(d)} (${Math.min(runsAt(SAVE, d.id, f.level), f.runs)}/${f.runs}).</small>`;
+  const c = isPassive(d) ? null : chainOf(d), as = c ? ` Absorbed into another item, it chains as a ${CHAIN_FORMS[c.form].name.toLowerCase()}: ${CHAIN_FORMS[c.form].text}.` : '';
+  return fuseUnlocked(SAVE, d) ? `<small class="fuse">✦ Mastered. At level 5 it can absorb any level 5 ${effs.map(k => EFFECTS[k].name).join(' or ')} item${isPassive(d) ? ' (as a passive it can only absorb other passives)' : ''}.${as}</small>`
+    : `<small class="fuse">✦ Not mastered: ${fuseLockText(d)} (${Math.min(runsAt(SAVE, d.id, f.level), f.runs)}/${f.runs}). Until then a mastered item can still absorb it.${as}</small>`;
 }
 // one line per tier with a history requirement: "Super 1/3 · Mega 0/5"
 function histLine(d) {
@@ -817,7 +823,7 @@ function itemDetailHtml(d) {
     const open = tierUnlocked(SAVE, key);
     h += `<div class="dSec" style="--c:${col}"><h4>✦ ${F.name} fusion <small>${F.need} level 5 ${FUSION[TIER_KEYS[t - 1]].name.toLowerCase()} items that share an effect</small></h4>`;
     const req = [];
-    if (t === 1) req.push(`<span class="part${fuseUnlocked(SAVE, d) ? ' ok' : ''}">${fuseUnlocked(SAVE, d) ? '✓' : '○'} ${d.name} mastery</span>`);
+    if (t === 1) req.push(`<span class="part${fuseUnlocked(SAVE, d) ? ' ok' : ''}">${fuseUnlocked(SAVE, d) ? '✓' : '○'} ${d.name} mastery (to remain; it can absorb unmastered items)</span>`);
     if (F.lock) req.push(`<span class="part${open ? ' ok' : ''}">${open ? '✓' : '○'} ${lockLabel(F.lock)}</span>`);
     if (b) req.push(`<span class="part${a >= b ? ' ok' : ''}">${a >= b ? '✓' : '○'} ${d.name} ${histText(t)} (${Math.min(a, b)}/${b})</span>`);
     if (req.length) h += `<div class="req">${req.join('')}</div>`;
@@ -861,7 +867,7 @@ function renderAchievements() {
   section('Heroes', 'Each hero is earned with another hero: beat a level with them and master a weapon. A hero also needs the categories of their starting weapon.', list.filter(a => a.group === 'heroes'));
   for (const S of STAGES) section(`Level ${S.id}: ${S.name}`, stageUnlocked(SAVE, S.id) ? '' : `Opens when you beat Level ${S.id - 1}.`, list.filter(a => a.stage === S.id && a.group !== 'stages' && a.group !== 'tiers' && a.group !== 'heroes'));
   section('Other', '', list.filter(a => !a.stage && (a.group === 'cats' || a.group === 'unlocks')));
-  section('Mastery (unlocks fusion)', 'Level an item up to unlock fusing it. Every item in a fusion needs its mastery.', list.filter(a => a.group === 'mastery'));
+  section('Mastery (unlocks fusion)', 'Level an item up to master it. Only a mastered item can remain in a fusion; it can absorb items that are not mastered yet.', list.filter(a => a.group === 'mastery'));
   $('#achievements .gold-line').innerHTML = `${list.filter(a => a.done).length}/${list.length} done`;
 }
 const effNames = ks => ks.map(k => EFFECTS[k].icon + ' ' + EFFECTS[k].name).join(' + ');
@@ -871,9 +877,9 @@ const tierLine = T => (T ? `${tierName(T)}: ×${FUSION[TIER_KEYS[T]].mul} damage
 function masteryBadge(d, tier) {
   if (!d || tier) return '';
   const f = fuseLockOf(d); if (f.runs <= 0) return '';
-  if (fuseUnlocked(SAVE, d)) return `<div class="mast done" title="${d.name} mastery earned: it can fuse">★ Mastered</div>`;
+  if (fuseUnlocked(SAVE, d)) return `<div class="mast done" title="${d.name} mastery earned: it can remain in a fusion and absorb others">★ Mastered</div>`;
   const have = runsAt(SAVE, d.id, f.level), now = ((G && G.reached) || {})[d.id] >= f.level;
-  const tip = `${d.name} mastery: reach level ${f.level} with it in ${f.runs} run${f.runs > 1 ? 's' : ''} to unlock fusing it`;
+  const tip = `${d.name} mastery: reach level ${f.level} with it in ${f.runs} run${f.runs > 1 ? 's' : ''} to unlock fusing it (until then a mastered item can still absorb it)`;
   if (now && have + 1 >= f.runs) return `<div class="mast soon" title="${tip}">✓ Mastered when this run ends</div>`;
   const prog = f.runs > 1 ? ` · ${have + (now ? 1 : 0)}/${f.runs} runs` : '';
   return `<div class="mast" title="${tip}">☆ Not mastered (reach Lv ${f.level}${prog})</div>`;
@@ -890,15 +896,15 @@ function describeChoice(o) {
   if (o.type === 'up') { const i = o.inst, d = i.def, effs = instEffects(i);
     return { icon: d.icon, title: itemName(i), tag: 'Lv ' + i.level + ' → ' + (i.level + 1), slot: d.slot, effs, mast: masteryBadge(d, i.tier),
       text: (isPassive(d) && !Object.keys(i.stats).length ? '' : isPassive(d) ? `Now ${statText(instStats(i))}; next level ${statText(i.stats, (i.level + 1) * tierOf(i).statMul)}.` : `+30% damage, faster, more projectiles. Adds to ${EFFECTS[d.effect].name} on every bullet.`) +
-        (i.level + 1 === MAX_LEVEL && !i.tier && !fuseUnlocked(SAVE, d) ? ` Fusing it is still locked (${d.name} mastery).` : '') }; }
+        (i.level + 1 === MAX_LEVEL && !i.tier && !fuseUnlocked(SAVE, d) ? ` Not mastered yet: only a mastered item can absorb it.` : '') }; }
   if (o.type === 'fuse') { const effs = [...new Set(o.group.flatMap(instEffects))], T = o.tier;
     return { icon: '✦', title: o.group.map(i => i.def.name).join(' + '), tag: (T > 1 ? tierName(T).toUpperCase() + ' ' : '') + 'FUSION', slot: null, effs, fuse: true, tier: T,
-      text: (o.keeps.length > 1 ? 'You choose which one remains. ' : `${o.keeps[0].def.name} remains. `) + `It takes 50% of the others' damage and stats, and its bullets carry every effect. ${tierLine(T)}. Frees ${o.group.length - 1} socket${o.group.length > 2 ? 's' : ''}.` }; }
+      text: (o.keeps.length > 1 ? 'You choose which one remains. ' : `${o.keeps[0].def.name} remains${o.keeps.length < o.group.length && !o.group.every(isPassiveInst) ? ' (the only mastered one)' : ''}. `) + `It keeps all it has, takes 50% of the others' damage and stats, carries every effect, and their attacks chain off its own. ${tierLine(T)}. Frees ${o.group.length - 1} socket${o.group.length > 2 ? 's' : ''}.` }; }
   if (o.type === 'keep') { const { s, others } = o, T = o.tier, effs = [...new Set([s, ...others].flatMap(instEffects))], sh = commonEffects([s, ...others]);
     const pre = FUSE_PREFIX[s.fuseEff || (sh.includes(s.def.effect) ? s.def.effect : sh[0])], nm = (T > 1 ? tierName(T) + ' ' : '') + pre + ' ' + s.def.name;
-    const dmg = (s.base + 0.5 * others.reduce((a, x) => a + x.base, 0)) * FUSION[TIER_KEYS[T]].mul;
-    return { icon: s.def.icon, title: 'Keep ' + itemName(s), tag: '→ ' + nm, slot: s.def.slot, effs, fuse: true, tier: T,
-      text: `${others.map(x => x.def.icon + ' ' + itemName(x)).join(', ')} ${others.length > 1 ? 'disappear' : 'disappears'} into it. ` + (isPassive(s.def) ? `Passive stats: ${statText(s.stats)} + 50% of theirs, per level.` : `Base damage ${Math.round(dmg)}. Its bullets carry ${effNames(effs)}.`) + ` ${tierLine(T)}. Starts at level ${arrivalLevel()}.` }; }
+    const after = virtualInv(o).hit[1], P = G.player, newLinks = after.links.slice((s.links || []).length);
+    return { icon: s.def.icon, title: 'Keep ' + itemName(s), tag: '→ ' + nm, slot: s.def.slot, effs, fuse: true, tier: T, chain: chainHtml(newLinks, P.might),
+      text: `${others.map(x => x.def.icon + ' ' + itemName(x)).join(', ')} ${others.length > 1 ? 'are' : 'is'} absorbed into it. ` + (isPassive(s.def) ? `Passive stats: ${statText(instStats(s))} now, ${statText(instStats(after))} after (and more per level).` : `Hits for ${Math.round(hitDmg(after, P))} (now ${Math.round(hitDmg(s, P))}). Its bullets carry ${effNames(effs)}.`) + ` ${tierLine(T)}. Starts at level ${arrivalLevel()}.` + (newLinks.length ? ' Chains:' : '') }; }
   if (o.type === 'back') return { icon: '↩', title: 'Back', tag: 'CHOICES', text: 'Go back to the level-up cards.' };
   if (o.type === 'heal') return { icon: '❤️', title: 'Restore', tag: 'HEAL', text: 'Recover 40 HP.' };
   return { icon: '●', title: 'Void Gold', tag: 'GOLD', text: '+25 gold.' };
@@ -923,7 +929,7 @@ function renderLevelUp() {
     const c = describeChoice(o); const E = c.effs ? EFFECTS[c.effs[0]] : null;
     const el = document.createElement('button'); el.className = 'card lu' + (c.fuse ? ' fuse' : '') + (c.tier > 1 ? ' t' + c.tier : '') + (luSel === idx ? ' sel' : ''); if (E) el.style.setProperty('--c', E.color);
     const tags = (c.slot ? `<span>${SLOTS[c.slot].icon} ${SLOTS[c.slot].name}</span>` : '') + (c.effs ? c.effs.map(k => `<span style="color:${EFFECTS[k].color}">${EFFECTS[k].icon} ${EFFECTS[k].name}</span>`).join('') : '');
-    el.innerHTML = `<div class="key">${idx + 1}</div><div class="ico">${c.icon}</div><div class="tag">${c.tag}</div><b>${c.title}</b>${tags ? `<div class="tags">${tags}</div>` : ''}${c.mast || ''}<small>${c.text}</small>`;
+    el.innerHTML = `<div class="key">${idx + 1}</div><div class="ico">${c.icon}</div><div class="tag">${c.tag}</div><b>${c.title}</b>${tags ? `<div class="tags">${tags}</div>` : ''}${c.mast || ''}<small>${c.text}</small>${c.chain ? `<div class="chain">${c.chain}</div>` : ''}`;
     el.onclick = () => selectLevel(idx);
     wrap.appendChild(el);
   });
@@ -962,20 +968,16 @@ function skipLevel() {
 // ---------------- stats panel (level-up preview and pause menu) ----------------
 // The inventory as it would be after a level-up choice, as light copies, so nothing in the run changes.
 function virtualInv(o) {
-  const cp = i => ({ def: i.def, level: i.level, tier: i.tier || 0, base: i.base, stats: Object.assign({}, i.stats), riders: i.riders.slice(), src: i });
+  const cp = i => ({ def: i.def, level: i.level, tier: i.tier || 0, base: i.base, stats: Object.assign({}, i.stats), riders: i.riders.slice(), carry: i.carry || 0, flat: Object.assign({}, i.flat || {}), links: (i.links || []).slice(), gone: (i.gone || []).slice(), src: i });
   let inv = G.inv.map(cp);
   const find = i => inv.find(x => x.src === i);
   if (!o) return { inv, hit: null };
-  if (o.type === 'new') { const x = { def: o.def, level: arrivalLevel(), tier: 0, base: o.def.dmg || 0, stats: Object.assign({}, o.def.passive || {}), riders: [] }; inv.push(x); return { inv, hit: [null, x] }; }
+  if (o.type === 'new') { const x = { def: o.def, level: arrivalLevel(), tier: 0, base: o.def.dmg || 0, stats: Object.assign({}, o.def.passive || {}), riders: [], carry: 0, flat: {}, links: [] }; inv.push(x); return { inv, hit: [null, x] }; }
   if (o.type === 'up') { const x = find(o.inst); x.level = Math.min(MAX_LEVEL, x.level + 1); return { inv, hit: [o.inst, x] }; }
   if (o.type === 'fuse' || o.type === 'keep') {
     const keep = o.type === 'keep' ? o.s : o.keeps[0], others = o.type === 'keep' ? o.others : o.group.filter(x => x !== keep), k = find(keep);
-    for (const oi of others) {
-      const x = find(oi); k.base += 0.5 * x.base;
-      for (const [s, v] of Object.entries(x.stats)) k.stats[s] = (k.stats[s] || 0) + 0.5 * v;
-      for (const e of instEffects(x)) if (!effectsOf(k.def).includes(e) && !k.riders.includes(e)) k.riders.push(e);
-    }
-    inv = inv.filter(x => !others.includes(x.src)); k.tier++; k.level = arrivalLevel();
+    absorb(k, others.map(find), arrivalLevel());
+    inv = inv.filter(x => !others.includes(x.src));
     return { inv, hit: [keep, k] };
   }
   return { inv, hit: null };
@@ -1000,7 +1002,7 @@ const STAT_ROWS = [
   ['Pickup range', P => P.magnet / 90 - 1, pctOf], ['XP', P => P.growth - 1, pctOf], ['Gold', P => P.greed - 1, pctOf],
 ];
 // damage of one hit of an attacking item (before crits and effects)
-const hitDmg = (i, P) => (i && !isPassive(i.def) ? baseDmg(i) * (1 + 0.3 * (i.level - 1)) * P.might * archSlotMul(i.def) : 0);
+const hitDmg = (i, P) => (i && !isPassive(i.def) ? itemPower(i) * P.might * archSlotMul(i.def) : 0);
 // The stats panel. o: a level-up choice to preview (null = just the current stats). With a choice, changed rows show now → after.
 function statsPanel(o, preview) {
   const now = statsOf(G.inv), P = G.player;
@@ -1059,10 +1061,10 @@ function cycleSpeed() { const c = speedChoices(); SAVE.settings.speed = c[(c.ind
 // one held item, for the pause screen: tier, effects its bullets carry, passive stats, what was fused into it
 function invChip(i) {
   const T = i.tier || 0, next = T < TIER_KEYS.length - 1 ? FUSION[TIER_KEYS[T + 1]] : null, st = instStats(i);
-  const fuseNote = i.level < MAX_LEVEL || !next ? '' : !T && !fuseUnlocked(SAVE, i.def) ? `Fusion locked: ${fuseLockText(i.def)}.` : !tierUnlocked(SAVE, TIER_KEYS[T + 1]) ? `${next.name} fusion locked: ${lockLabel(next.lock)}.` : !histMet(SAVE, i.def.id, T + 1) ? `${next.name} fusion locked for ${i.def.name}: ${histText(T + 1)} first (${histProgress(SAVE, i.def.id, T + 1).join('/')}). See its Codex page.` : `Ready: ${next.need} level 5 ${tierName(T).toLowerCase()} items sharing an effect make a ${next.name} item.`;
+  const fuseNote = i.level < MAX_LEVEL || !next ? '' : !T && !fuseUnlocked(SAVE, i.def) ? `Not mastered (${fuseLockText(i.def)}): a mastered item can absorb it, but it can't remain.` : !tierUnlocked(SAVE, TIER_KEYS[T + 1]) ? `${next.name} fusion locked: ${lockLabel(next.lock)}.` : !histMet(SAVE, i.def.id, T + 1) ? `${next.name} fusion locked for ${i.def.name}: ${histText(T + 1)} first (${histProgress(SAVE, i.def.id, T + 1).join('/')}). See its Codex page.` : `Ready: ${next.need} level 5 ${tierName(T).toLowerCase()} items sharing an effect make a ${next.name} item.`;
   return `<div class="chip" style="--c:${T ? TIER_COLORS[T] : EFFECTS[i.def.effect].color}">${i.def.icon} ${itemName(i)} <b>Lv${i.level}</b>${T ? ` <b style="color:${TIER_COLORS[T]}">${tierName(T)}</b>` : ''}${isPassive(i.def) ? ' <b style="color:#c9f">Passive</b>' : ''} <span style="font-size:11px">${effNames(instEffects(i))}</span>` +
     `<small>${isPassive(i.def) ? 'Passive: ' + (statText(st) || 'no stats') : i.def.pattern}</small>` + (i.riders.length && !isPassive(i.def) ? `<small>Its bullets also carry ${effNames(i.riders)}.</small>` : '') +
-    (!isPassive(i.def) && Object.keys(st).length ? `<small>Stats from fused passives: ${statText(st)}.</small>` : '') + (i.gone.length ? `<small>Made from ${i.gone.length + 1} items: ${[i.def, ...i.gone].map(d => d.icon).join('')}</small>` : '') + (fuseNote ? `<small>${fuseNote}</small>` : '') + '</div>';
+    (!isPassive(i.def) && Object.keys(st).length ? `<small>Stats from fused passives: ${statText(st)}.</small>` : '') + (i.gone.length ? `<small>Made from ${i.gone.length + 1} items: ${[i.def, ...i.gone].map(d => d.icon).join('')}</small>` : '') + ((i.links || []).length ? `<div class="chain">${chainHtml(i.links, G.player.might)}</div>` : '') + (fuseNote ? `<small>${fuseNote}</small>` : '') + '</div>';
 }
 function renderPause() {
   const inv = G.inv.map(invChip).join('');
@@ -1098,6 +1100,8 @@ $('#btnPlay').onclick = () => showScreen('chars');
 $('#btnForge').onclick = () => showScreen('forge');
 $('#btnCodex').onclick = () => showScreen('codex');
 $('#btnAch').onclick = () => showScreen('achievements');
+$('#btnLab').onclick = () => { SB.lab = true; labStart(); };
+$('#btnLabBack').onclick = labExit;
 document.querySelectorAll('[data-back]').forEach(b => b.onclick = () => (b.closest('#codex') ? codexBack() : showScreen('menu')));
 $('#btnPauseCodex').onclick = () => { if (G && G.paused) { codexFilter = 'run'; showScreen('codex'); } };
 $('#btnStart').onclick = () => { const c = CHARACTERS.find(x => x.id === selectedChar); if (c && charPlayable(SAVE, c)) newRun(c.id, selectedStage); else toast('Pick a hero you have unlocked'); };
@@ -1121,7 +1125,8 @@ $('#btnReset').onclick = () => {
 // ---------------- admin test canvas (index.html?sandbox) ----------------
 // admin.html embeds the game in an iframe in this mode to preview one item against training targets.
 // Nothing is saved, nothing drops, the player cannot be hurt. The admin page drives it with postMessage.
-// fuse: ids of items fused into it; tier: 0 = plain item, 1 Fused, 2 Super, 3 Mega
+// fuse: the items fused into it, one entry per partner: 'cinder_ring', or 'cinder_ring>frost_halo+arc_halo' for a partner that
+// itself had items fused into it (Super and Mega); tier: 0 = plain item, 1 Fused, 2 Super, 3 Mega
 const SB = { item: ITEMS[0].id, level: 1, fuse: [], tier: 0, layout: 'ring', tough: true, move: false };
 const SANDBOX_TYPES = {
   target: { name: 'Target', hp: 60, spd: 0, r: 13, dmg: 0, xp: 0, color: '#77729a', shape: 'circle', mass: 3 },
@@ -1139,23 +1144,35 @@ function sandboxStart() {
   const def = ITEM[SB.item] || ITEMS[0];
   const ch = Object.assign({}, CHARACTERS.find(c => c.weapon === def.id) || CHARACTERS[0], { mods: {}, arch: null }); // neutral stats, no archetype
   freshRun(ch);
-  Object.assign(G, { sandbox: true, seen: new Set(), sbTargets: [], sbWait: [], sbLog: [], sbDps: 0, sbPost: 0 });
-  const inst = addItem(def), partners = sbPartners(def);
-  if (SB.tier > 0) synthFusion(inst, partners, clamp(SB.tier | 0, 1, TIER_KEYS.length - 1));
+  Object.assign(G, { sandbox: true, lab: !!SB.lab, seen: new Set(), sbTargets: [], sbWait: [], sbLog: [], sbDps: 0, sbPost: 0 });
+  const inst = addItem(def);
+  if (SB.tier > 0) synthFusion(inst, sbPartners(def), clamp(SB.tier | 0, 1, TIER_KEYS.length - 1));
   inst.level = clamp(SB.level | 0, 1, MAX_LEVEL); recomputePool(); rebuild(inst);
-  showScreen(null);
+  showScreen(G.lab ? 'lab' : null);
 }
-const sbPartners = def => (Array.isArray(SB.fuse) ? SB.fuse : SB.fuse ? [SB.fuse] : []).map(id => ITEM[id]).filter(d => d && d !== def);
-// What a tier-T item made from `def` looks like, for the test canvas and the admin's numbers: the partners are fused in at
-// the first tier, and every later tier assumes the other items in that fusion were as strong as this one.
+// SB.fuse → [{ def, sub: [defs] }]
+const parsePartner = x => { const [a, b] = String(x).split('>'); return { def: ITEM[a], sub: (b || '').split('+').map(id => ITEM[id]).filter(Boolean) }; };
+const sbPartners = def => (Array.isArray(SB.fuse) ? SB.fuse : SB.fuse ? [SB.fuse] : []).map(parsePartner).filter(p => p.def && p.def !== def);
+// What a tier-T item made from `def` looks like, for the test canvases and the admin's numbers, built with the real fusion
+// maths (absorb in chain.js) from level 5 items: partners is a list of { def, sub }, the items fused straight into it at
+// tier T, each one made at tier T-1 from its own `sub` items. Missing items are stand-ins as strong as the one they fill in
+// for, with no chain of their own (a plain copy of the keeper, for example).
 function synthFusion(inst, partners, T) {
-  const def = inst.def, ps = partners.length ? partners : [def];
-  inst.base = def.dmg + 0.5 * ps.reduce((a, d) => a + d.dmg, 0);
-  for (const d of ps) for (const [k, v] of Object.entries(d.passive || {})) inst.stats[k] = (inst.stats[k] || 0) + 0.5 * v;
-  for (let t = 2; t <= T; t++) { const f = 1 + 0.5 * (FUSION[TIER_KEYS[t]].need - 1); inst.base *= f; for (const k of Object.keys(inst.stats)) inst.stats[k] *= f; }
-  for (const d of partners) for (const k of effectsOf(d)) if (!effectsOf(def).includes(k) && !inst.riders.includes(k)) inst.riders.push(k);
-  const sh = partners.length ? effectsOf(def).filter(k => effectsOf(partners[0]).includes(k)) : [];
-  inst.fuseEff = sh[0] || def.effect; inst.tier = T; inst.gone = partners.slice();
+  const ghost = (like, t) => Object.assign(synthItem(like.def, [], t), { def: Object.assign({}, like.def, { ghostOf: like.def.id }) });
+  function synthItem(def, parts, t) {
+    const x = newInst(def, MAX_LEVEL); if (!t) return x;
+    const keep = t === 1 ? x : synthItem(def, [], t - 1);
+    const need = Math.max(1, FUSION[TIER_KEYS[t]].need - 1), others = parts.slice(0, need).map(p => synthItem(p.def, p.sub.map(d => ({ def: d, sub: [] })), t - 1));
+    while (others.length < need) others.push(ghost(keep, t - 1));
+    absorb(keep, others, MAX_LEVEL);
+    keep.links = keep.links.filter(l => !l.def.ghostOf); keep.gone = keep.gone.filter(d => !d.ghostOf);
+    return keep;
+  }
+  const made = synthItem(inst.def, partners, T);
+  for (const k of ['base', 'stats', 'carry', 'flat', 'links', 'tier', 'gone']) inst[k] = made[k];
+  inst.riders = []; for (const d of made.gone) for (const k of effectsOf(d)) if (!effectsOf(inst.def).includes(k) && !inst.riders.includes(k)) inst.riders.push(k);
+  const first = partners[0] && partners[0].def, sh = first ? effectsOf(inst.def).filter(k => effectsOf(first).includes(k)) : [];
+  inst.fuseEff = sh[0] || inst.def.effect;
   return inst;
 }
 function sandboxTick(dt) {
@@ -1173,7 +1190,8 @@ function sandboxTick(dt) {
   G.sbPost -= dt; if (G.sbPost > 0) return; G.sbPost = 0.5;
   G.sbLog.push([G.time, G.stats.damage]); while (G.sbLog.length > 11) G.sbLog.shift();
   const [t0, d0] = G.sbLog[0]; G.sbDps = G.time > t0 ? (G.stats.damage - d0) / (G.time - t0) : 0;
-  if (window.parent !== window) window.parent.postMessage({ vl: 'sandbox-stats', dps: G.sbDps, shapes: [...G.seen], bullets: G.bullets.length }, location.origin);
+  if (G.lab) labReadout();
+  if (SANDBOX && window.parent !== window) window.parent.postMessage({ vl: 'sandbox-stats', dps: G.sbDps, shapes: [...G.seen], bullets: G.bullets.length, hit: G.inv[0] ? hitDmg(G.inv[0], G.player) : 0, chain: G.inv[0] ? chainLines(G.inv[0].links) : [] }, location.origin);
 }
 function sandboxTrigger(name) {
   const live = G.enemies.filter(e => !e.dead && !e.boss), P = G.player;
@@ -1204,6 +1222,75 @@ function sandboxBoot() {
   sandboxStart();
   if (window.parent !== window) window.parent.postMessage({ vl: 'sandbox-ready' }, location.origin);
 }
+
+// ---------------- Fusion Lab (players) ----------------
+// A practice canvas from the main menu: pick an item you have unlocked, a fusion tier you have opened and the items to fuse
+// into it, and watch the result, chains and all, against training targets. It runs on the admin test canvas engine
+// (SB, sandboxStart) in this page, and nothing in it is saved or rewarded.
+const LAB = { item: null, tier: 1, fuse: [], level: 5, layout: 'ring' };
+const labOwned = d => !d.disabled && (itemUnlocked(SAVE, d) || CHARACTERS.some(c => c.weapon === d.id && charPlayable(SAVE, c)));
+const labKeepers = () => ITEMS.filter(d => labOwned(d) && !isPassive(d));
+// items that can fuse into `id` (they share an effect; a passive only takes passives), never the lab's own item twice
+const labPartners = id => { const me = ITEM[id], mine = effectsOf(me); return ITEMS.filter(d => d.id !== id && d.id !== LAB.item && labOwned(d) && effectsOf(d).some(k => mine.includes(k)) && (!isPassive(me) || isPassive(d))); };
+// tiers this save can try with this item: plain always, Fused once it is mastered, Super and Mega once they are unlocked
+const labTiers = id => TIER_KEYS.map((k, t) => t === 0 || (fuseUnlocked(SAVE, ITEM[id]) && (t === 1 || tierUnlocked(SAVE, k))));
+function labStart() {
+  const keep = labKeepers(); if (!keep.length) return;
+  if (!LAB.item || !keep.some(d => d.id === LAB.item)) LAB.item = (keep.find(d => fuseUnlocked(SAVE, d)) || keep[0]).id;
+  const ok = labTiers(LAB.item); if (!ok[LAB.tier]) LAB.tier = ok.lastIndexOf(true) >= 1 ? 1 : 0;
+  const def = ITEM[LAB.item];
+  Object.assign(SB, { lab: true, item: LAB.item, level: LAB.level, tier: LAB.tier, fuse: LAB.tier ? LAB.fuse : [], layout: LAB.layout, tough: true,
+    move: !!(def.on && def.on.move) || /P\.moving|moveAng/.test(String(def.fire || '')) });
+  sandboxStart();
+}
+function labExit() { SB.lab = false; G = null; showScreen('menu'); }
+function labReadout() {
+  const el = $('#labOut'), i = G && G.inv[0]; if (!el || !i) return;
+  el.innerHTML = `<b>${i.def.icon} ${itemName(i)}</b> · Lv ${i.level} · one hit ${Math.round(hitDmg(i, G.player))} · ${Math.round(G.sbDps)} damage/s` +
+    ((i.links || []).length ? `<div class="chain">${chainHtml(i.links, G.player.might)}</div>` : i.tier ? '<div class="note">Only stand-ins or passives were fused in, so there is no chain. Pick partners below.</div>' : '<div class="note">Not fused. Pick a tier to fuse items into it.</div>');
+}
+function renderLab() {
+  const keep = labKeepers();
+  if (!keep.length) { $('#labBody').innerHTML = '<p class="note">Unlock an item first.</p>'; return; }
+  const ok = labTiers(LAB.item), T = LAB.tier, need = t => Math.max(1, FUSION[TIER_KEYS[t]].need - 1), opt = (v, l, on) => `<option value="${v}"${on ? ' selected' : ''}>${l}</option>`;
+  const itemOpt = (d, cur) => opt(d.id, `${d.icon} ${d.name}${isPassive(d) ? ' (passive)' : ''}${!isPassive(d) && fuseUnlocked(SAVE, d) ? ' ★' : ''}`, d.id === cur);
+  let h = `<div class="labRow"><label>Item <select data-lab="item">${keep.map(d => itemOpt(d, LAB.item)).join('')}</select></label>` +
+    `<span class="labGrp">${TIER_KEYS.map((k, t) => `<button class="small${t === T ? ' on' : ''}" data-tier="${t}" ${ok[t] ? '' : 'disabled'} title="${ok[t] ? '' : t === 1 ? 'Master this item first' : lockLabel(FUSION[k].lock)}">${t ? FUSION[k].name : 'Plain'}</button>`).join('')}</span>` +
+    `<span class="labGrp">Lv ${[1, 2, 3, 4, 5].map(L => `<button class="small${L === LAB.level ? ' on' : ''}" data-lvl="${L}">${L}</button>`).join('')}</span>` +
+    `<label>Targets <select data-lab="layout">${[['ring', 'Ring'], ['line', 'Line'], ['scatter', 'Scattered'], ['swarm', 'Walking swarm']].map(([v, l]) => opt(v, l, v === LAB.layout)).join('')}</select></label></div>`;
+  if (T) {
+    const parts = labPartners(LAB.item), pOpt = (list, cur) => opt('', '— stand-in —', !cur) + list.map(d => itemOpt(d, cur)).join('');
+    for (let k = 0; k < need(T); k++) {
+      const [a, b] = String(LAB.fuse[k] || '').split('>'), subs = (b || '').split('+');
+      h += `<div class="labRow"><span class="lbl">${k ? 'and' : 'Absorbs'}</span><select data-p="${k}">${pOpt(parts, a)}</select>`;
+      if (T >= 2 && a) for (let j = 0; j < need(T - 1); j++) h += `<span class="lbl">${j ? '+' : '← made with'}</span><select data-p="${k}" data-s="${j}">${pOpt(labPartners(a), subs[j])}</select>`;
+      h += '</div>';
+    }
+    h += `<div class="labRow"><button class="small" data-lab-rnd>🎲 Random partners</button><span class="note">Stand-ins are as strong as the item they replace but add no chain. ★ = mastered. In a run, ${T >= 2 ? `${FUSION[TIER_KEYS[T]].name} fusion also needs fusion history, and ` : ''}only a mastered item can remain.</span></div>`;
+  }
+  $('#labBody').innerHTML = h + '<div id="labOut" class="labOut"></div>';
+  labReadout();
+}
+$('#labBody').addEventListener('change', e => {
+  const t = e.target;
+  if (t.dataset.lab === 'item') { LAB.item = t.value; LAB.fuse = []; }
+  else if (t.dataset.lab === 'layout') LAB.layout = t.value;
+  else if (t.dataset.p !== undefined) {
+    const k = +t.dataset.p, [a, b] = String(LAB.fuse[k] || '').split('>'), subs = (b || '').split('+');
+    if (t.dataset.s === undefined) LAB.fuse[k] = t.value; else { subs[+t.dataset.s] = t.value; LAB.fuse[k] = a + (subs.filter(Boolean).length ? '>' + subs.filter(Boolean).join('+') : ''); }
+  } else return;
+  labStart();
+});
+$('#labBody').addEventListener('click', e => {
+  const t = e.target.closest('button'); if (!t || t.disabled) return;
+  if (t.dataset.tier !== undefined) { LAB.tier = +t.dataset.tier; LAB.fuse = []; }
+  else if (t.dataset.lvl !== undefined) LAB.level = +t.dataset.lvl;
+  else if (t.dataset.labRnd !== undefined) {
+    const T = LAB.tier, need = x => Math.max(1, FUSION[TIER_KEYS[x]].need - 1), rnd = id => { const l = labPartners(id); return l.length ? pick(l).id : ''; };
+    LAB.fuse = Array.from({ length: need(T) }, () => { const a = rnd(LAB.item); if (!a || T < 2) return a; return a + '>' + Array.from({ length: need(T - 1) }, () => rnd(a)).filter(Boolean).join('+'); });
+  } else return;
+  labStart();
+});
 
 // ---------------- main loop ----------------
 let last = performance.now();
