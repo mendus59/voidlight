@@ -49,9 +49,9 @@ const hpMul = t => { const D = DIFF(), S = STAGE(), m = t / 60, f = Math.min(1, 
 
 function spawnEnemy(type, x, y, o = {}) {
   const T = ENEMY_TYPES[type] || BOSSES[type] || SANDBOX_TYPES[type];
-  const S = STAGE(), m = o.boss ? DIFF().bossHp * S.bossHp : hpMul(G.time) * (o.elite ? DIFF().eliteHp : 1);
+  const S = STAGE(), m = (o.boss ? DIFF().bossHp * S.bossHp * nexusMul('boss') : hpMul(G.time) * (o.elite ? DIFF().eliteHp : 1) * nexusMul('hp'));
   const e = { id: G.nextId++, type, T, x, y, r: T.r * (o.elite ? 1.6 : 1), hp: T.hp * m, maxHp: T.hp * m, spd: T.spd * (o.elite ? 0.9 : 1) * (1 + Math.min(0.35, G.time / 2400)),
-    dmg: T.dmg * (1 + DIFF().dmgGrowth * G.time / 60) * S.dmg, xp: T.xp * (o.elite ? 10 : 1), color: T.color, mass: T.mass || (o.boss ? 50 : o.elite ? 6 : 1), elite: !!o.elite, boss: !!o.boss,
+    dmg: T.dmg * (1 + DIFF().dmgGrowth * G.time / 60) * S.dmg * nexusMul('dmg'), xp: T.xp * (o.elite ? 10 : 1), color: T.color, mass: T.mass || (o.boss ? 50 : o.elite ? 6 : 1), elite: !!o.elite, boss: !!o.boss,
     kx: 0, ky: 0, burnT: 0, burnDps: 0, slowT: 0, slow: 0, poisonT: 0, poison: 0, freezeT: 0, reactCd: 0, dot: 0, dotT: 0, flash: 0, shootT: rand(0.5, 2), at: 0, spin: 0, phase: 0 };
   G.enemies.push(e); return e;
 }
@@ -62,7 +62,7 @@ function ebullet(x, y, ang, spd, r = 6, dmg = 8, color = '#ff3b8b') { if (G.ebul
 function director(dt) {
   const t = G.time, D = DIFF(), m = t / 60;
   // regular spawns
-  const rate = (D.spawnBase + m * D.spawnGrowth + m * m * D.spawnCurve) * STAGE().spawn * (1 + overtime(t) * (D.overtimeSpawn || 0));
+  const rate = (D.spawnBase + m * D.spawnGrowth + m * m * D.spawnCurve) * STAGE().spawn * (1 + overtime(t) * (D.overtimeSpawn || 0)) * nexusMul('spawn');
   G.spawnAcc += rate * dt;
   const avail = SPAWN_TABLE.filter(s => t >= s[1]); const totalW = avail.reduce((a, s) => a + s[2], 0);
   while (G.spawnAcc >= 1) {
@@ -196,14 +196,14 @@ function instEffects(inst) { const out = effectsOf(inst.def).slice(); for (const
 const effOpen = k => !G || G.sandbox || catUnlocked(SAVE, k);
 function recomputePool() {
   const p = {}; for (const k of EFFECT_KEYS) p[k] = 0;
-  for (const i of G.inv) {
+  for (const i of activeInsts()) { // held items and the parts inside a Nexus (nexus.js)
     const T = tierOf(i); i.own = {};
     if (isPassive(i.def)) continue;
     for (const k of effectsOf(i.def)) if (effOpen(k)) { p[k] += i.level * T.pool; i.own[k] = T.own; }
     for (const k of i.riders) if (effOpen(k)) i.own[k] = (i.own[k] || 0) + T.own;
   }
   for (const k of EFFECT_KEYS) p[k] = Math.round(p[k]);
-  G.pool = p; G.runners = G.inv.filter(i => !isPassive(i.def));
+  G.pool = p; G.runners = activeInsts().filter(i => !isPassive(i.def)); G.threat = nexusThreat();
   recomputeStats();
 }
 // passive stats an item gives right now: its per-level stats × level × its tier's statMul, plus the flat stats its
@@ -212,7 +212,7 @@ function instStats(i) { const out = Object.assign({}, i.flat || {}), k = i.level
 function recomputeStats() {
   const P = G.player; if (!P) return;
   const m = Object.assign({}, P.baseMods);
-  for (const i of G.inv) for (const [s, v] of Object.entries(instStats(i))) m[s] = (m[s] || 0) + v;
+  for (const i of activeInsts()) for (const [s, v] of Object.entries(instStats(i))) m[s] = (m[s] || 0) + v;
   applyStats(P, m); G.bonus = m;
 }
 function killOwned(inst) {
@@ -229,7 +229,9 @@ function reach(inst) { if (G.reached) G.reached[inst.def.id] = Math.max(G.reache
 const arrivalLevel = () => (G.sandbox ? 1 : clamp(STAGE().start | 0, 1, MAX_LEVEL));
 function addItem(def, level) { const inst = newInst(def, level || arrivalLevel()); G.inv.push(inst); reach(inst); recomputePool(); rebuild(inst); return inst; }
 function levelItem(inst) {
-  inst.level = Math.min(MAX_LEVEL, inst.level + 1); reach(inst); recomputePool(); rebuild(inst);
+  inst.level = Math.min(MAX_LEVEL, inst.level + 1); reach(inst);
+  for (const p of inst.parts || []) { p.level = inst.level; reach(p); }
+  recomputePool(); rebuild(inst); for (const p of inst.parts || []) rebuild(p);
   if (inst.level === MAX_LEVEL && !inst.tier && !G.sandbox && !fuseUnlocked(SAVE, inst.def)) {
     const f = fuseLockOf(inst.def), next = f.level <= MAX_LEVEL && runsAt(SAVE, inst.def.id, f.level) + 1 >= f.runs;
     toast((next ? `✦ ${inst.def.name} maxed! Mastered when this run ends.` : `${inst.def.name} maxed: ${runsAt(SAVE, inst.def.id, f.level) + 1}/${f.runs} runs toward mastering it.`) + ' Until then a mastered item can still absorb it.');
@@ -244,7 +246,7 @@ function levelItem(inst) {
 // or Mega fusion also needs its fusion history (FUSION[tier].hist, kept across runs in SAVE.fuseLog, see progress.js).
 // A passive item can only stay if everything fused into it is passive too.
 const tierOpen = t => G.sandbox || tierUnlocked(SAVE, TIER_KEYS[t]);
-const fusable = i => i.level >= MAX_LEVEL && i.tier < TIER_KEYS.length - 1 && tierOpen(i.tier + 1) && (G.sandbox || histMet(SAVE, i.def.id, i.tier + 1));
+const fusable = i => !i.nexus && i.level >= MAX_LEVEL && i.tier < TIER_KEYS.length - 1 && tierOpen(i.tier + 1) && (G.sandbox || histMet(SAVE, i.def.id, i.tier + 1));
 // can this item be the one that remains? (its mastery, for a base item)
 const canKeep = i => G.sandbox || i.tier > 0 || fuseUnlocked(SAVE, i.def);
 function commonEffects(group) { let c = instEffects(group[0]); for (const i of group.slice(1)) { const e = instEffects(i); c = c.filter(k => e.includes(k)); } return c; }
@@ -255,7 +257,7 @@ function combos(arr, k, limit) {
   rec(0, []); return out;
 }
 function fusionGroups() {
-  const out = [], seen = new Set();
+  const out = nexusGroups(), seen = new Set(); // Nexus recipes the player can form come first (nexus.js)
   for (let t = 0; t < TIER_KEYS.length - 1; t++) {
     const need = FUSION[TIER_KEYS[t + 1]].need, cands = G.inv.filter(i => i.tier === t && fusable(i));
     if (need < 2 || cands.length < need) continue;
@@ -272,6 +274,7 @@ function fusionGroups() {
 const tierName = t => FUSION[TIER_KEYS[t]].name;
 const isPassiveInst = i => isPassive(i.def);
 function fuse(keep, others, quiet) {
+  const nx = nexusRecipe([keep, ...others], keep.tier + 1, keep); if (nx) return formNexus(keep, others, nx, quiet); // nexus.js
   const T = keep.tier + 1, sh = commonEffects([keep, ...others]);
   // fusion history (counts right away, also toward later fusions in this run)
   const ready = G.sandbox ? [] : recordFusion(SAVE, TIER_KEYS[T], [keep, ...others].map(i => i.def.id));
@@ -300,7 +303,7 @@ function keepChoices(f, back) {
 
 function buildChoices() {
   const opts = [];
-  for (const f of fusionGroups()) opts.push({ type: 'fuse', group: f.group, keeps: f.keeps, tier: f.tier, w: 20 + 10 * f.tier });
+  for (const f of fusionGroups()) opts.push({ type: 'fuse', group: f.group, keeps: f.keeps, tier: f.tier, nexus: f.nexus || (f.keeps.length === 1 ? nexusRecipe(f.group, f.tier, f.keeps[0]) : null), w: (f.nexus ? 40 : 20) + 10 * f.tier });
   for (const inst of G.inv) if (inst.level < MAX_LEVEL) opts.push({ type: 'up', inst, w: 3 });
   for (const s of SLOT_KEYS) {
     if (slotCount(s) >= socketsFor(s)) continue;
@@ -634,6 +637,7 @@ function drawHUD() {
   ctx.fillStyle = '#300'; ctx.fillRect(L, 36, hpW, 10); ctx.fillStyle = '#ff3b5c'; ctx.fillRect(L, 36, hpW * clamp(P.hp / P.maxHp, 0, 1), 10);
   ctx.fillStyle = '#fff'; ctx.font = '11px system-ui,sans-serif'; ctx.fillText(Math.ceil(P.hp) + ' / ' + P.maxHp, L + 4, 36);
   ctx.font = '12px system-ui,sans-serif'; ctx.fillStyle = P.dashCd > 0 ? '#888' : '#7fdcff'; ctx.fillText(P.dashCd > 0 ? 'Dash ' + P.dashCd.toFixed(1) : 'Dash ready', L, 52);
+  if (G.threat) { ctx.fillStyle = '#ff4cc3'; ctx.fillText(`✴ Nexus threat ${+G.threat.toFixed(1)}: enemies +${Math.round((nexusMul('hp') - 1) * 100)}% HP`, L, 68); }
   // timer
   ctx.textAlign = 'center'; ctx.font = 'bold 26px system-ui,sans-serif'; ctx.fillStyle = overtime(G.time) > 0 ? '#ff3b5c' : '#fff'; ctx.fillText(fmtTime(G.time), W / 2, 16);
   if (!G.enemies.some(e => e.boss)) { ctx.font = '11px system-ui,sans-serif'; ctx.fillStyle = STAGE().color; ctx.fillText(`Level ${G.stage} · ${STAGE().name}`, W / 2, 46); }
@@ -659,9 +663,10 @@ function drawHUD() {
       for (let k = 0; k < n; k++) {
         const it = items[k], x = x0 + k * (sz + 2), T = it ? it.tier || 0 : 0;
         ctx.fillStyle = 'rgba(20,16,40,0.85)'; ctx.fillRect(x, y0, sz, sz);
-        ctx.strokeStyle = it ? (T ? TIER_COLORS[T] : EFFECTS[it.def.effect].color) : k >= SLOTS[s].sockets ? 'rgba(255,210,76,0.3)' : 'rgba(255,255,255,0.15)'; ctx.lineWidth = T ? 1.5 + T : 1.2; ctx.strokeRect(x + 0.5, y0 + 0.5, sz - 1, sz - 1);
+        ctx.strokeStyle = it ? (it.nexus ? (nexusDef(it.nexus) || {}).color || TIER_COLORS[T] : T ? TIER_COLORS[T] : EFFECTS[it.def.effect].color) : k >= SLOTS[s].sockets ? 'rgba(255,210,76,0.3)' : 'rgba(255,255,255,0.15)'; ctx.lineWidth = T ? 1.5 + T : 1.2; ctx.strokeRect(x + 0.5, y0 + 0.5, sz - 1, sz - 1);
         if (it) { ctx.font = `${sz * 0.55}px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif`; ctx.fillStyle = '#fff'; ctx.fillText(it.def.icon, x + sz / 2, y0 + sz / 2 - 2);
           if (isPassive(it.def)) { ctx.font = 'bold 8px system-ui'; ctx.fillStyle = '#c9f'; ctx.fillText('P', x + 5, y0 + 6); }
+          if (it.nexus) { ctx.font = 'bold 9px system-ui'; ctx.fillStyle = '#ff4cc3'; ctx.fillText('✴', x + sz - 5, y0 + 6); }
           for (let l = 0; l < it.level; l++) { ctx.fillStyle = T ? TIER_COLORS[T] : '#fff'; ctx.fillRect(x + 3 + l * ((sz - 6) / 5), y0 + sz - 4, (sz - 6) / 5 - 1, 2); } }
         else { ctx.font = `${sz * 0.4}px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif`; ctx.globalAlpha = 0.25; ctx.fillStyle = '#fff'; ctx.fillText(SLOTS[s].icon, x + sz / 2, y0 + sz / 2); ctx.globalAlpha = 1; }
       }
@@ -770,10 +775,11 @@ const heldNow = d => inRun() && G.inv.some(i => i.def === d || i.gone.includes(d
 function renderCodex() {
   if (codexFilter === 'run' && !inRun()) codexFilter = 'all';
   const tabs = $('#codexTabs'); tabs.innerHTML = '';
-  const keys = [...(inRun() ? ['run'] : []), 'all', ...SLOT_KEYS];
-  for (const k of keys) { const b = document.createElement('button'); b.className = 'tab' + (codexFilter === k ? ' sel' : ''); b.textContent = k === 'run' ? '▶ This run' : k === 'all' ? 'All ' + ITEMS.filter(d => !d.disabled).length : SLOTS[k].icon + ' ' + SLOTS[k].name; b.onclick = () => { codexFilter = k; renderCodex(); }; tabs.appendChild(b); }
+  const keys = [...(inRun() ? ['run'] : []), 'all', ...SLOT_KEYS, 'nexus'];
+  for (const k of keys) { const b = document.createElement('button'); b.className = 'tab' + (codexFilter === k ? ' sel' : ''); b.textContent = k === 'nexus' ? '✴ Nexus ' + NEXUS.filter(nexusOk).length : k === 'run' ? '▶ This run' : k === 'all' ? 'All ' + ITEMS.filter(d => !d.disabled).length : SLOTS[k].icon + ' ' + SLOTS[k].name; b.onclick = () => { codexFilter = k; renderCodex(); }; tabs.appendChild(b); }
   const wrap = $('#codexGrid'); wrap.innerHTML = '';
-  for (const d of ITEMS) {
+  if (codexFilter === 'nexus') renderNexusCodex(wrap); // nexus.js
+  else for (const d of ITEMS) {
     if (d.disabled || (codexFilter === 'run' ? !heldNow(d) : codexFilter !== 'all' && d.slot !== codexFilter)) continue;
     const un = itemUnlocked(SAVE, d), E = EFFECTS[d.effect], effs = effectsOf(d);
     const el = document.createElement('div'); el.className = 'card item' + (un ? '' : ' locked'); el.style.setProperty('--c', E.color);
@@ -865,8 +871,9 @@ function renderAchievements() {
   };
   section('Levels and fusion tiers', 'Beat a level to open the next one. Each level you open also adds one socket you can buy in the Forge.', list.filter(a => a.group === 'stages' || a.group === 'tiers'));
   section('Heroes', 'Each hero is earned with another hero: beat a level with them and master a weapon. A hero also needs the categories of their starting weapon.', list.filter(a => a.group === 'heroes'));
-  for (const S of STAGES) section(`Level ${S.id}: ${S.name}`, stageUnlocked(SAVE, S.id) ? '' : `Opens when you beat Level ${S.id - 1}.`, list.filter(a => a.stage === S.id && a.group !== 'stages' && a.group !== 'tiers' && a.group !== 'heroes'));
+  for (const S of STAGES) section(`Level ${S.id}: ${S.name}`, stageUnlocked(SAVE, S.id) ? '' : `Opens when you beat Level ${S.id - 1}.`, list.filter(a => a.stage === S.id && a.group !== 'stages' && a.group !== 'tiers' && a.group !== 'heroes' && a.group !== 'nexus'));
   section('Other', '', list.filter(a => !a.stage && (a.group === 'cats' || a.group === 'unlocks')));
+  section('Nexus recipes', 'A Nexus is a fusion of specific items, keeping the first one. Nothing is halved, but enemies grow stronger while you hold it. Recipes are in the Codex (✴ Nexus).', list.filter(a => a.group === 'nexus'));
   section('Mastery (unlocks fusion)', 'Level an item up to master it. Only a mastered item can remain in a fusion; it can absorb items that are not mastered yet.', list.filter(a => a.group === 'mastery'));
   $('#achievements .gold-line').innerHTML = `${list.filter(a => a.done).length}/${list.length} done`;
 }
@@ -897,9 +904,13 @@ function describeChoice(o) {
     return { icon: d.icon, title: itemName(i), tag: 'Lv ' + i.level + ' → ' + (i.level + 1), slot: d.slot, effs, mast: masteryBadge(d, i.tier),
       text: (isPassive(d) && !Object.keys(i.stats).length ? '' : isPassive(d) ? `Now ${statText(instStats(i))}; next level ${statText(i.stats, (i.level + 1) * tierOf(i).statMul)}.` : `+30% damage, faster, more projectiles. Adds to ${EFFECTS[d.effect].name} on every bullet.`) +
         (i.level + 1 === MAX_LEVEL && !i.tier && !fuseUnlocked(SAVE, d) ? ` Not mastered yet: only a mastered item can absorb it.` : '') }; }
+  if (o.type === 'fuse' && o.nexus) { const nx = o.nexus, effs = [...new Set(o.group.flatMap(instEffects))];
+    return { icon: nx.icon, title: nx.name, tag: `✴ ${tierName(o.tier).toUpperCase()} NEXUS`, slot: null, effs, fuse: true, tier: o.tier, nexus: true, text: nexusCardText(nx) }; }
   if (o.type === 'fuse') { const effs = [...new Set(o.group.flatMap(instEffects))], T = o.tier;
     return { icon: '✦', title: o.group.map(i => i.def.name).join(' + '), tag: (T > 1 ? tierName(T).toUpperCase() + ' ' : '') + 'FUSION', slot: null, effs, fuse: true, tier: T,
-      text: (o.keeps.length > 1 ? 'You choose which one remains. ' : `${o.keeps[0].def.name} remains${o.keeps.length < o.group.length && !o.group.every(isPassiveInst) ? ' (the only mastered one)' : ''}. `) + `It keeps all it has, takes 50% of the others' damage and stats, carries every effect, and their attacks chain off its own. ${tierLine(T)}. Frees ${o.group.length - 1} socket${o.group.length > 2 ? 's' : ''}.` }; }
+      text: (o.keeps.length > 1 ? 'You choose which one remains. ' : `${o.keeps[0].def.name} remains${o.keeps.length < o.group.length && !o.group.every(isPassiveInst) ? ' (the only mastered one)' : ''}. `) + `It keeps all it has, takes 50% of the others' damage and stats, carries every effect, and their attacks chain off its own. ${tierLine(T)}. Frees ${o.group.length - 1} socket${o.group.length > 2 ? 's' : ''}.` + nexusHint(o.group, T) }; }
+  if (o.type === 'keep') { const nx = nexusRecipe([o.s, ...o.others], o.tier, o.s);
+    if (nx) return { icon: nx.icon, title: 'Keep ' + itemName(o.s), tag: `→ ✴ ${nx.name}`, slot: o.s.def.slot, effs: [...new Set([o.s, ...o.others].flatMap(instEffects))], fuse: true, tier: o.tier, nexus: true, text: nexusCardText(nx) }; }
   if (o.type === 'keep') { const { s, others } = o, T = o.tier, effs = [...new Set([s, ...others].flatMap(instEffects))], sh = commonEffects([s, ...others]);
     const pre = FUSE_PREFIX[s.fuseEff || (sh.includes(s.def.effect) ? s.def.effect : sh[0])], nm = (T > 1 ? tierName(T) + ' ' : '') + pre + ' ' + s.def.name;
     const after = virtualInv(o).hit[1], P = G.player, newLinks = after.links.slice((s.links || []).length);
@@ -927,7 +938,7 @@ function renderLevelUp() {
   const wrap = $('#luCards'); wrap.innerHTML = '';
   levelChoices.forEach((o, idx) => {
     const c = describeChoice(o); const E = c.effs ? EFFECTS[c.effs[0]] : null;
-    const el = document.createElement('button'); el.className = 'card lu' + (c.fuse ? ' fuse' : '') + (c.tier > 1 ? ' t' + c.tier : '') + (luSel === idx ? ' sel' : ''); if (E) el.style.setProperty('--c', E.color);
+    const el = document.createElement('button'); el.className = 'card lu' + (c.fuse ? ' fuse' : '') + (c.tier > 1 ? ' t' + c.tier : '') + (c.nexus ? ' nexus' : '') + (luSel === idx ? ' sel' : ''); if (E) el.style.setProperty('--c', E.color);
     const tags = (c.slot ? `<span>${SLOTS[c.slot].icon} ${SLOTS[c.slot].name}</span>` : '') + (c.effs ? c.effs.map(k => `<span style="color:${EFFECTS[k].color}">${EFFECTS[k].icon} ${EFFECTS[k].name}</span>`).join('') : '');
     el.innerHTML = `<div class="key">${idx + 1}</div><div class="ico">${c.icon}</div><div class="tag">${c.tag}</div><b>${c.title}</b>${tags ? `<div class="tags">${tags}</div>` : ''}${c.mast || ''}<small>${c.text}</small>${c.chain ? `<div class="chain">${c.chain}</div>` : ''}`;
     el.onclick = () => selectLevel(idx);
@@ -969,13 +980,18 @@ function skipLevel() {
 // The inventory as it would be after a level-up choice, as light copies, so nothing in the run changes.
 function virtualInv(o) {
   const cp = i => ({ def: i.def, level: i.level, tier: i.tier || 0, base: i.base, stats: Object.assign({}, i.stats), riders: i.riders.slice(), carry: i.carry || 0, flat: Object.assign({}, i.flat || {}), links: (i.links || []).slice(), gone: (i.gone || []).slice(), src: i });
-  let inv = G.inv.map(cp);
+  let inv = activeInsts().map(cp);
   const find = i => inv.find(x => x.src === i);
   if (!o) return { inv, hit: null };
   if (o.type === 'new') { const x = { def: o.def, level: arrivalLevel(), tier: 0, base: o.def.dmg || 0, stats: Object.assign({}, o.def.passive || {}), riders: [], carry: 0, flat: {}, links: [] }; inv.push(x); return { inv, hit: [null, x] }; }
-  if (o.type === 'up') { const x = find(o.inst); x.level = Math.min(MAX_LEVEL, x.level + 1); return { inv, hit: [o.inst, x] }; }
+  if (o.type === 'up') { const x = find(o.inst); x.level = Math.min(MAX_LEVEL, x.level + 1); for (const p of o.inst.parts || []) find(p).level = x.level; return { inv, hit: [o.inst, x] }; }
   if (o.type === 'fuse' || o.type === 'keep') {
     const keep = o.type === 'keep' ? o.s : o.keeps[0], others = o.type === 'keep' ? o.others : o.group.filter(x => x !== keep), k = find(keep);
+    if (nexusRecipe([keep, ...others], keep.tier + 1, keep)) { // a Nexus: nothing is halved, every part goes up a tier
+      const all = [k, ...others.map(find)], effs = [...new Set(all.flatMap(instEffects))];
+      for (const x of all) { x.tier++; x.level = arrivalLevel(); x.riders = effs.filter(e => !effectsOf(x.def).includes(e)); }
+      return { inv, hit: [keep, k] };
+    }
     absorb(k, others.map(find), arrivalLevel());
     inv = inv.filter(x => !others.includes(x.src));
     return { inv, hit: [keep, k] };
@@ -1040,7 +1056,7 @@ const fusedOf = i => (i.gone.length ? ` <small>+ ${i.gone.length} fused in</smal
 function showGameOver(won, earned, bonus, fresh) {
   $('#goTitle').textContent = won ? `LEVEL ${G.stage} BEATEN` : 'YOU FELL';
   $('#goTitle').className = won ? 'win' : 'lose';
-  const inv = G.inv.map(i => `<span class="chip" style="--c:${i.tier ? TIER_COLORS[i.tier] : EFFECTS[i.def.effect].color}">${i.def.icon} ${itemName(i)} <b>${i.level}</b>${fusedOf(i)}</span>`).join('');
+  const inv = G.inv.map(i => `<span class="chip" style="--c:${i.tier ? TIER_COLORS[i.tier] : EFFECTS[i.def.effect].color}">${i.nexus ? (nexusDef(i.nexus) || {}).icon || i.def.icon : i.def.icon} ${itemName(i)} <b>${i.level}</b>${fusedOf(i)}</span>`).join('');
   $('#goBody').innerHTML = `<div class="row"><div><small>Time</small><b>${fmtTime(G.time)}</b></div><div><small>Level ${G.stage}</small><b>${STAGE().name}</b></div><div><small>Character level</small><b>${G.level}</b></div><div><small>Kills</small><b>${G.kills}</b></div><div><small>Gold earned</small><b class="gold">● ${earned}</b></div></div>
     <small>Includes ● ${bonus} survival bonus.</small><div class="chips">${inv}</div>` + (fresh.length ? `<div class="unlocks"><b>Unlocked!</b><br>${fresh.join('<br>')}</div>` : '');
   showScreen('gameover');
@@ -1060,15 +1076,15 @@ function gameSpeed() { const v = SAVE.settings.speed, c = speedChoices(); return
 function cycleSpeed() { const c = speedChoices(); SAVE.settings.speed = c[(c.indexOf(gameSpeed()) + 1) % c.length]; writeSave(); }
 // one held item, for the pause screen: tier, effects its bullets carry, passive stats, what was fused into it
 function invChip(i) {
-  const T = i.tier || 0, next = T < TIER_KEYS.length - 1 ? FUSION[TIER_KEYS[T + 1]] : null, st = instStats(i);
+  const T = i.tier || 0, next = T < TIER_KEYS.length - 1 ? FUSION[TIER_KEYS[T + 1]] : null, st = [i, ...(i.parts || [])].map(instStats).reduce((a, x) => { for (const [k, v] of Object.entries(x)) a[k] = (a[k] || 0) + v; return a; }, {});
   const fuseNote = i.level < MAX_LEVEL || !next ? '' : !T && !fuseUnlocked(SAVE, i.def) ? `Not mastered (${fuseLockText(i.def)}): a mastered item can absorb it, but it can't remain.` : !tierUnlocked(SAVE, TIER_KEYS[T + 1]) ? `${next.name} fusion locked: ${lockLabel(next.lock)}.` : !histMet(SAVE, i.def.id, T + 1) ? `${next.name} fusion locked for ${i.def.name}: ${histText(T + 1)} first (${histProgress(SAVE, i.def.id, T + 1).join('/')}). See its Codex page.` : `Ready: ${next.need} level 5 ${tierName(T).toLowerCase()} items sharing an effect make a ${next.name} item.`;
   return `<div class="chip" style="--c:${T ? TIER_COLORS[T] : EFFECTS[i.def.effect].color}">${i.def.icon} ${itemName(i)} <b>Lv${i.level}</b>${T ? ` <b style="color:${TIER_COLORS[T]}">${tierName(T)}</b>` : ''}${isPassive(i.def) ? ' <b style="color:#c9f">Passive</b>' : ''} <span style="font-size:11px">${effNames(instEffects(i))}</span>` +
     `<small>${isPassive(i.def) ? 'Passive: ' + (statText(st) || 'no stats') : i.def.pattern}</small>` + (i.riders.length && !isPassive(i.def) ? `<small>Its bullets also carry ${effNames(i.riders)}.</small>` : '') +
-    (!isPassive(i.def) && Object.keys(st).length ? `<small>Stats from fused passives: ${statText(st)}.</small>` : '') + (i.gone.length ? `<small>Made from ${i.gone.length + 1} items: ${[i.def, ...i.gone].map(d => d.icon).join('')}</small>` : '') + ((i.links || []).length ? `<div class="chain">${chainHtml(i.links, G.player.might)}</div>` : '') + (fuseNote ? `<small>${fuseNote}</small>` : '') + '</div>';
+    (!isPassive(i.def) && Object.keys(st).length ? `<small>Stats from fused passives: ${statText(st)}.</small>` : '') + (i.gone.length ? `<small>Made from ${i.gone.length + 1} items: ${[i.def, ...i.gone].map(d => d.icon).join('')}</small>` : '') + ((i.links || []).length ? `<div class="chain">${chainHtml(i.links, G.player.might)}</div>` : '') + (i.nexus ? nexusPauseLine(i) : fuseNote ? `<small>${fuseNote}</small>` : '') + '</div>';
 }
 function renderPause() {
   const inv = G.inv.map(invChip).join('');
-  const pas = {}; for (const i of G.inv) for (const [k, v] of Object.entries(instStats(i))) pas[k] = (pas[k] || 0) + v;
+  const pas = {}; for (const i of activeInsts()) for (const [k, v] of Object.entries(instStats(i))) pas[k] = (pas[k] || 0) + v;
   $('#pauseBody').innerHTML = `<p class="center" style="color:${STAGE().color}">Level ${G.stage}: ${STAGE().name}</p><div class="stats-box">${statsPanel(null, false)}</div><div class="chips col">${inv}</div>` +
     (Object.keys(pas).length ? `<p><b>From passive stats</b>: ${statText(pas)}</p>` : '');
   $('#numToggle').textContent = 'Damage numbers: ' + (SAVE.settings.numbers ? 'on' : 'off');

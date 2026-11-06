@@ -55,6 +55,7 @@ On touch screens, drag to move and tap with a second finger to dash.
 | `DESIGN.md` | Progression design: 10 levels, 74 items, passive items, categories and mastery, the 4 fusion tiers, combination math, characters |
 | `src/core.js` | Engine: spatial grid, bullets and their behaviours, effect pool, reactions, damage |
 | `src/items.js` | Content: 74 item definitions (one bullet pattern each, or a passive stat map), 15 characters, categories, 10 levels, fusion tiers, difficulty, enemies and bosses, pickups, Forge upgrades |
+| `src/nexus.js` | Nexus items: recipe matching, forming a Nexus, threat scaling, the Codex Nexus tab |
 | `src/progress.js` | Save format and migration, unlock rules, achievements (shared by the game and the admin simulator) |
 | `src/content.js` | Applies content published from the admin page on top of items.js |
 | `admin.html`, `src/admin.js` | The admin panel |

@@ -308,7 +308,7 @@ const CATEGORIES = {
 };
 
 // ======================= LEVELS =======================
-// Twelve levels. Level 1 is open; each other one opens when the level before it is beaten (its 15:00 boss defeated).
+// Fourteen levels (13 and 14 are the Nexus levels). Level 1 is open; each other one opens when the level before it is beaten (its 15:00 boss defeated).
 // On top of DIFFICULTY.run: enemy HP ×hp, rising to ×hp·(1 + ramp) by 15:00 (it grows with the cube of the clock, so the
 // late game is where it bites, when fused builds are at their strongest);
 // spawns ×spawn, enemy damage ×dmg, boss HP ×bossHp, XP crystals ×xp, gold ×gold. start = the level new items
@@ -326,6 +326,8 @@ const STAGES = [
   { id: 10, name: 'The Void Heart',    color: '#ffffff', hp: 4.73, ramp: 68, spawn: 1.45, dmg: 1.9, bossHp: 2025, xp: 16, gold: 3.5, start: 5 },
   { id: 11, name: 'The Echo Loom',     color: '#ffb84c', hp: 5.4, ramp: 90, spawn: 1.5, dmg: 2, bossHp: 3200, xp: 20, gold: 4, start: 5 },
   { id: 12, name: 'Singularity Choir', color: '#ff4cc3', hp: 6.6, ramp: 120, spawn: 1.55, dmg: 2.1, bossHp: 5200, xp: 24, gold: 4.5, start: 5 },
+  { id: 13, name: 'Nexus Spire',       color: '#ff6be0', hp: 7.4, ramp: 150, spawn: 1.6, dmg: 2.2, bossHp: 8000, xp: 30, gold: 5, start: 5 },
+  { id: 14, name: 'Event Horizon',     color: '#5affd9', hp: 8.4, ramp: 190, spawn: 1.65, dmg: 2.3, bossHp: 12000, xp: 36, gold: 5.6, start: 5 },
 ];
 
 // ======================= FUSION TIERS =======================
@@ -353,6 +355,40 @@ const CHAIN_RULES = {
   rules: { dmg: 0.5, rate: 8, depth: 3, kids: 1 },
 };
 const tierOf = inst => FUSION[TIER_KEYS[(inst && inst.tier) || 0]];
+
+// ======================= NEXUS ITEMS =======================
+// A Nexus is a named fusion of specific items. When a fusion of `tier` is made from exactly the items in `recipe` and the
+// player keeps the first one (the core), the group becomes that Nexus instead of a normal fusion: nothing is halved.
+// Every component keeps 100% of its own damage, attack, cooldown and passive stats, all at the new tier's strength, and
+// they live on in one socket in recipe order (core first). Every component's bullets carry every effect in the Nexus.
+// super / mega recipes name the cores of the Fused / Super items that go in. A Nexus can't fuse any further.
+// threat: how much stronger enemies get while you hold it (NEXUS_THREAT says per threat point). lock: the achievement
+// that teaches the recipe (until then the same group is just a normal fusion).
+const NEXUS = [
+  { id: 'solar_requiem',   name: 'Solar Requiem',      icon: '🌞', tier: 'fused', recipe: ['ember_pistol', 'flame_nova'], color: '#ffb347', threat: 1, lock: { stage: 2, stat: 'wins', min: 1, text: 'Beat Level 2' } },
+  { id: 'whiteout_choir',  name: 'Whiteout Choir',     icon: '🏔️', tier: 'fused', recipe: ['frost_fan', 'blizzard'], color: '#bfefff', threat: 1, lock: { stage: 2, stat: 'wins', min: 1, text: 'Beat Level 2' } },
+  { id: 'thunderhead',     name: 'Thunderhead Engine', icon: '🌩️', tier: 'fused', recipe: ['arc_rifle', 'thunder_call'], color: '#fff36b', threat: 1, lock: { stage: 2, stat: 'wins', min: 1, text: 'Beat Level 2' } },
+  { id: 'rotbloom',        name: 'Rotbloom Sermon',    icon: '🥀', tier: 'fused', recipe: ['thorn_spitter', 'plague_cloud'], color: '#8cff5a', threat: 1, lock: { stage: 3, stat: 'wins', min: 1, text: 'Beat Level 3' } },
+  { id: 'siegebreaker',    name: 'Siegebreaker',       icon: '🔨', tier: 'fused', recipe: ['scrap_blaster', 'shockwave'], color: '#c9a0ff', threat: 1, lock: { stage: 4, stat: 'wins', min: 1, text: 'Beat Level 4' } },
+  { id: 'endless_spiral',  name: 'Endless Spiral',     icon: '🌀', tier: 'fused', recipe: ['boomerang_glaive', 'spiral_sigil'], color: '#9fe8ff', threat: 1, lock: { stage: 5, stat: 'wins', min: 1, text: 'Beat Level 5' } },
+  { id: 'verdict',         name: 'The Verdict',        icon: '⚖️', tier: 'fused', recipe: ['deadeye_bow', 'judgment_cross'], color: '#ffe9a0', threat: 1, lock: { stage: 6, stat: 'wins', min: 1, text: 'Beat Level 6' } },
+  { id: 'kaleidoscope',    name: 'Kaleidoscope',       icon: '🔮', tier: 'fused', recipe: ['ricochet_disc', 'mirror_storm'], color: '#ff9cf0', threat: 1, lock: { stage: 7, stat: 'wins', min: 1, text: 'Beat Level 7' } },
+  { id: 'starhunter',      name: 'Starhunter Array',   icon: '🛸', tier: 'fused', recipe: ['seeker_swarm', 'star_fall'], color: '#a0b4ff', threat: 1, lock: { stage: 8, stat: 'wins', min: 1, text: 'Beat Level 8' } },
+  { id: 'infinite_bloom',  name: 'Infinite Bloom',     icon: '🏵️', tier: 'fused', recipe: ['splitter_orb', 'fractal_bloom'], color: '#7affea', threat: 1, lock: { stage: 9, stat: 'wins', min: 1, text: 'Beat Level 9' } },
+  { id: 'red_covenant',    name: 'Red Covenant',       icon: '📜', tier: 'fused', recipe: ['blood_lance', 'crimson_tide'], color: '#ff4f6d', threat: 1, lock: { stage: 9, stat: 'wins', min: 1, text: 'Beat Level 9' } },
+  { id: 'cataclysm',       name: 'Cataclysm Furnace',  icon: '🏭', tier: 'super', recipe: ['cinder_ring', 'phoenix_feather', 'fire_trail'], color: '#ff7a2f', threat: 2, lock: { all: [{ stat: 'nexus', min: 3 }, { stage: 4, stat: 'wins', min: 1 }], text: 'Form 3 Nexus items and beat Level 4' } },
+  { id: 'absolute_zero',   name: 'Absolute Zero',      icon: '🧊', tier: 'super', recipe: ['frost_halo', 'ice_mine', 'rime_lance'], color: '#7fdcff', threat: 2, lock: { all: [{ stat: 'nexus', min: 3 }, { stage: 4, stat: 'wins', min: 1 }], text: 'Form 3 Nexus items and beat Level 4' } },
+  { id: 'storm_cathedral', name: 'Storm Cathedral',    icon: '⛪', tier: 'super', recipe: ['arc_halo', 'tesla_coil', 'storm_sprite'], color: '#fff36b', threat: 2, lock: { all: [{ stat: 'nexus', min: 3 }, { stage: 4, stat: 'wins', min: 1 }], text: 'Form 3 Nexus items and beat Level 4' } },
+  { id: 'blight_mother',   name: 'Blight Mother',      icon: '🕸️', tier: 'super', recipe: ['venom_moth', 'spore_pod', 'venom_gland'], color: '#8cff5a', threat: 2, lock: { all: [{ stat: 'nexus', min: 5 }, { stage: 5, stat: 'wins', min: 1 }], text: 'Form 5 Nexus items and beat Level 5' } },
+  { id: 'iron_maelstrom',  name: 'Iron Maelstrom',     icon: '🌪️', tier: 'super', recipe: ['blade_wheel', 'spike_line', 'piercing_gaze'], color: '#d8d8ff', threat: 2, lock: { all: [{ stat: 'nexus', min: 5 }, { stage: 6, stat: 'wins', min: 1 }], text: 'Form 5 Nexus items and beat Level 6' } },
+  { id: 'night_parliament', name: 'Night Parliament',  icon: '🦉', tier: 'super', recipe: ['owl_familiar', 'hunter_turret', 'comet_lash'], color: '#b48cff', threat: 2, lock: { all: [{ stat: 'nexus', min: 5 }, { stage: 7, stat: 'wins', min: 1 }], text: 'Form 5 Nexus items and beat Level 7' } },
+  { id: 'last_sun',        name: 'The Last Sun',       icon: '🌅', tier: 'mega', recipe: ['flame_nova', 'ember_pistol', 'cinder_ring', 'cinder_mortar', 'phoenix_feather'], color: '#ff8a3d', threat: 4, lock: { all: [{ stat: 'nexus', min: 8 }, { stage: 8, stat: 'wins', min: 1 }], text: 'Form 8 Nexus items and beat Level 8' } },
+  { id: 'godstorm',        name: 'Godstorm',           icon: '🌐', tier: 'mega', recipe: ['thunder_call', 'arc_rifle', 'arc_halo', 'tesla_coil', 'static_boots'], color: '#fff36b', threat: 4, lock: { all: [{ stat: 'nexus', min: 8 }, { stage: 9, stat: 'wins', min: 1 }], text: 'Form 8 Nexus items and beat Level 9' } },
+  { id: 'crimson_throne',  name: 'Crimson Throne',     icon: '👑', tier: 'mega', recipe: ['crimson_tide', 'blood_lance', 'bat_swarm', 'blood_altar', 'vampire_fang'], color: '#ff3b5c', threat: 4, lock: { all: [{ stat: 'nexus', min: 8 }, { stage: 10, stat: 'wins', min: 1 }], text: 'Form 8 Nexus items and beat Level 10' } },
+];
+// Per threat point held (summed over every Nexus you hold): enemy HP +hp, boss HP +boss, enemy damage +dmg, spawns +spawn.
+// surge = elites that answer a Nexus the moment it forms, per threat point.
+const NEXUS_THREAT = { hp: 0.04, boss: 0.05, dmg: 0.02, spawn: 0.015, surge: 2 };
 
 // ======================= DIFFICULTY =======================
 // m = minutes into the run. Enemy HP ×(1 + hpGrowth·m + hpCurve·m²), spawns/s = spawnBase + spawnGrowth·m + spawnCurve·m²,

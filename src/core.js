@@ -2,7 +2,7 @@
 // ===== VOIDLIGHT core engine: math, state, bullets, effects, enemies helpers =====
 // Game version shown on the title screen. Beta, so 0.MINOR.PATCH: bump MINOR for a feature PR, PATCH for a fix/tweak.
 // Add a matching line to CHANGELOG.md whenever you bump it.
-const VERSION = '0.18.0';
+const VERSION = '0.19.0';
 const TAU = Math.PI * 2;
 const rand = (a, b) => a + Math.random() * (b - a);
 const randi = (a, b) => Math.floor(a + Math.random() * (b - a + 1));
@@ -377,6 +377,7 @@ function ctxOf(inst) {
     col: def.color || EFFECTS[def.effect].color, col2: EFFECTS[e2].color, eff: def.effect, eff2: e2, inst };
 }
 function itemName(inst) {
+  if (inst.nexus && typeof nexusDef === 'function' && nexusDef(inst.nexus)) return nexusDef(inst.nexus).name; // a Nexus (nexus.js)
   const T = inst.tier || 0; if (!T) return inst.def.name;
   const fused = (FUSE_PREFIX[inst.fuseEff || inst.def.effect] || 'Fused') + ' ' + inst.def.name;
   return T === 1 ? fused : tierOf(inst).name + ' ' + fused;

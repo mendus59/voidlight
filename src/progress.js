@@ -16,8 +16,8 @@ const stageDef = n => STAGES[Math.max(1, Math.min(stageCount(), n | 0)) - 1];
 const emptyStage = () => ({ kills: 0, best: 0, wins: 0, bosses: 0, runs: 0 });
 
 function defaultSave() {
-  return { ver: SAVE_VERSION, gold: 0, upg: {}, unlockedItems: [], unlockedCats: [], unlockedChars: ['kael', 'mira', 'volt'], itemRuns: {}, fuseLog: {}, stages: {}, charStages: {}, lastStage: 1,
-    stats: { totalKills: 0, bestTime: 0, bossKills: 0, evolves: 0, supers: 0, megas: 0, wins: 0, runs: 0, maxLevel: 0, totalGold: 0 }, settings: { numbers: true }, lastChar: 'kael' };
+  return { ver: SAVE_VERSION, gold: 0, upg: {}, unlockedItems: [], unlockedCats: [], unlockedChars: ['kael', 'mira', 'volt'], itemRuns: {}, fuseLog: {}, nexusMade: {}, stages: {}, charStages: {}, lastStage: 1,
+    stats: { totalKills: 0, bestTime: 0, bossKills: 0, evolves: 0, supers: 0, megas: 0, nexus: 0, wins: 0, runs: 0, maxLevel: 0, totalGold: 0 }, settings: { numbers: true }, lastChar: 'kael' };
 }
 const strList = v => (Array.isArray(v) ? v.filter(x => typeof x === 'string') : []);
 const cnt = v => Math.max(0, Math.floor(+v || 0));
@@ -96,6 +96,9 @@ function normalizeSave(s) {
   out.itemRuns = {};
   for (const [id, r] of Object.entries(s.itemRuns || {})) if (Array.isArray(r)) out.itemRuns[id] = [0, 1, 2, 3, 4].map(k => cnt(r[k]));
   out.fuseLog = fuseLogMap(s.fuseLog);
+  // nexusMade[nexusId] = how many times that Nexus was formed (nexus.js)
+  out.nexusMade = {};
+  for (const [id, n] of Object.entries(s.nexusMade || {})) if (cnt(n)) out.nexusMade[id] = cnt(n);
   out.stages = stageMap(s.stages);
   // charStages[heroId][level] = the same per-level stats, counted only for runs played as that hero (tracked since v3.1)
   out.charStages = {};
@@ -127,7 +130,7 @@ function mergeSaves(a, b) {
   m.unlockedItems = [...new Set([...a.unlockedItems, ...b.unlockedItems])];
   m.unlockedCats = [...new Set([...a.unlockedCats, ...b.unlockedCats])];
   m.unlockedChars = [...new Set([...a.unlockedChars, ...b.unlockedChars])];
-  for (const k of ['totalKills', 'bossKills', 'evolves', 'supers', 'megas', 'wins', 'runs', 'totalGold']) m.stats[k] = (a.stats[k] || 0) + (b.stats[k] || 0);
+  for (const k of ['totalKills', 'bossKills', 'evolves', 'supers', 'megas', 'nexus', 'wins', 'runs', 'totalGold']) m.stats[k] = (a.stats[k] || 0) + (b.stats[k] || 0);
   for (const k of ['bestTime', 'maxLevel']) m.stats[k] = Math.max(a.stats[k] || 0, b.stats[k] || 0);
   for (const id of new Set([...Object.keys(a.itemRuns), ...Object.keys(b.itemRuns)])) {
     const x = a.itemRuns[id] || [0, 0, 0, 0, 0], y = b.itemRuns[id] || [0, 0, 0, 0, 0]; m.itemRuns[id] = x.map((v, k) => v + y[k]);
@@ -138,6 +141,8 @@ function mergeSaves(a, b) {
     for (const k of new Set([...Object.keys(x), ...Object.keys(y)])) z[k] = [...new Set([...(x[k] || []), ...(y[k] || [])])].slice(0, FUSE_LOG_CAP);
     m.fuseLog[id] = z;
   }
+  m.nexusMade = {};
+  for (const id of new Set([...Object.keys(a.nexusMade), ...Object.keys(b.nexusMade)])) m.nexusMade[id] = (a.nexusMade[id] || 0) + (b.nexusMade[id] || 0);
   m.stages = addStageMaps(a.stages, b.stages);
   m.charStages = {};
   for (const c of new Set([...Object.keys(a.charStages), ...Object.keys(b.charStages)])) m.charStages[c] = addStageMaps(a.charStages[c], b.charStages[c]);
@@ -226,6 +231,7 @@ function reqText(l) {
     case 'evolves': return one ? 'Fuse an item' : `Make ${l.min} fusions`;
     case 'supers': return one ? 'Make a Super fusion' : `Make ${l.min} Super fusions`;
     case 'megas': return one ? 'Make a Mega fusion' : `Make ${l.min} Mega fusions`;
+    case 'nexus': return one ? 'Form a Nexus' : `Form ${l.min} Nexus items`;
     case 'wins': return one ? 'Win a run' : `Win ${l.min} runs`;
     case 'runs': return `Play ${l.min} runs`;
     case 'maxLevel': return `Reach character level ${l.min} in a run`;
@@ -282,12 +288,13 @@ function applyUnlocks(s) {
 // Everything a player could see change at the end of a run: compare a snapshot before and after with progressDiff.
 function progressSnapshot(s) {
   return { buy: [...ITEMS.filter(d => !d.disabled && itemBuyable(s, d)).map(d => 'i:' + d.id), ...CHARACTERS.filter(c => charBuyable(s, c)).map(c => 'c:' + c.id)],
-    stages: stagesUnlocked(s), tiers: TIER_KEYS.filter(k => tierUnlocked(s, k)) };
+    stages: stagesUnlocked(s), tiers: TIER_KEYS.filter(k => tierUnlocked(s, k)), nexus: NEXUS.filter(nx => !nx.disabled && (!nx.lock || lockMet(nx.lock, s))).map(nx => nx.id) };
 }
 function progressDiff(a, b) {
   const out = [];
   for (let n = a.stages + 1; n <= b.stages; n++) out.push(`🗺 Level ${n}: ${stageDef(n).name} is open. The Forge has another socket for sale.`);
   for (const k of b.tiers) if (!a.tiers.includes(k)) out.push(`✦ ${FUSION[k].name} fusion: ${FUSION[k].need} level 5 ${FUSION[TIER_KEYS[TIER_KEYS.indexOf(k) - 1]].name.toLowerCase()} items that share an effect become one.`);
+  for (const id of b.nexus || []) if (!(a.nexus || []).includes(id)) { const nx = NEXUS.find(n => n.id === id); out.push(`✴ Nexus recipe: ${nx.icon} ${nx.name} = ${nx.recipe.map(r => ITEM[r] ? ITEM[r].name : r).join(' → ')} (${FUSION[nx.tier].name} fusion, keep ${ITEM[nx.recipe[0]] ? ITEM[nx.recipe[0]].name : nx.recipe[0]})`); }
   for (const id of b.buy) if (!a.buy.includes(id)) {
     if (id[0] === 'i') { const d = ITEM[id.slice(2)]; out.push(`🛒 ${d.icon} ${d.name} can be bought in the Codex for ● ${lockCost(d.lock)}`); }
     else { const c = CHARACTERS.find(x => x.id === id.slice(2)); out.push(`🛒 ${c.name} can be hired on the hero screen for ● ${lockCost(c.lock)}`); }
@@ -303,6 +310,7 @@ function achievementList(s) {
     out.push({ group, stage: lockStage(lock), icon, name, text: lockLabel(lock), have: Math.min(have, need), need, done, owned, cost: lockCost(lock), reward, parts }); };
   for (let n = 2; n <= stageCount(); n++) add('stages', '🗺', `Level ${n}: ${stageDef(n).name}`, { stage: n - 1, stat: 'wins', min: 1 }, `Level ${n} and a Forge socket`, stageUnlocked(s, n));
   for (const k of TIER_KEYS) { const l = FUSION[k].lock; if (l) add('tiers', '✦', `${FUSION[k].name} fusion`, l, `${FUSION[k].name} fusion (${FUSION[k].need} items → 1)`, tierUnlocked(s, k)); }
+  for (const nx of NEXUS) if (!nx.disabled && hasReq(nx.lock)) add('nexus', nx.icon, `Nexus: ${nx.name}`, nx.lock, `${nx.name} recipe (${FUSION[nx.tier].name} Nexus)`, lockMet(nx.lock, s));
   for (const k of EFFECT_KEYS) { const l = catLock(k); if (l) add('cats', EFFECTS[k].icon, `${EFFECTS[k].name} awakened`, l, `${EFFECTS[k].name} items`, catUnlocked(s, k)); }
   for (const d of ITEMS) if (!d.disabled) { const f = fuseLockOf(d); if (f.runs > 0) add('mastery', d.icon, `${d.name} mastery`, { item: d.id, level: f.level, runs: f.runs }, `Fusing ${d.name}`, fuseUnlocked(s, d)); }
   for (const d of ITEMS) if (!d.disabled && hasReq(d.lock)) add('unlocks', d.icon, d.name, d.lock, d.name, lockMet(d.lock, s), itemOwned(s, d));
