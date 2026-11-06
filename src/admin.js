@@ -552,7 +552,9 @@ function upgradeView() {
 
 const DIFF_FIELDS = [['hpGrowth', 'Enemy HP growth', 'per minute'], ['hpCurve', 'Enemy HP curve', 'per minute²'], ['spawnBase', 'Spawns per second at 0:00', ''], ['spawnGrowth', 'Spawn growth', 'per minute'],
   ['spawnCurve', 'Spawn curve', 'per minute²'], ['dmgGrowth', 'Enemy damage growth', 'per minute, 0.1 = +10%'], ['eliteEvery', 'Elite every (s)', ''], ['eliteHp', 'Elite HP ×', ''],
-  ['ringEvery', 'Encirclement every (s)', ''], ['bossHp', 'Boss HP ×', 'on top of the boss table'], ['xpStep', 'XP per level step', ''], ['xpCurve', 'XP curve exponent', '']];
+  ['ringEvery', 'Encirclement every (s)', ''], ['bossHp', 'Boss HP ×', 'on top of the boss table'], ['xpStep', 'XP per level step', ''], ['xpCurve', 'XP curve exponent', ''],
+  ['overtimeAt', 'Overtime starts at (min)', 'if the 15:00 boss is alive; 0 = off'], ['overtimeDmg', 'Overtime damage taken ×', 'per minute, compounding'], ['overtimeHp', 'Overtime enemy HP ×', 'per minute, compounding'],
+  ['overtimeSpawn', 'Overtime extra spawns', 'per minute, 0.5 = +50%']];
 function difficultyView() {
   const T = 'difficulty', id = 'run', D = get(T, id), at = m => ({ hp: 1 + m * D.hpGrowth + m * m * D.hpCurve, sp: D.spawnBase + m * D.spawnGrowth + m * m * D.spawnCurve, dmg: 1 + m * D.dmgGrowth });
   const xp = l => Math.floor(5 + (l - 1) * D.xpStep + Math.pow(l - 1, D.xpCurve));
@@ -562,7 +564,8 @@ function difficultyView() {
     h('div', { class: 'fields', style: 'grid-template-columns: repeat(auto-fill, minmax(190px, 1fr))' }, DIFF_FIELDS.map(([f, label, hint]) =>
       field(label, h('input', { type: 'number', step: 'any', min: 0, value: D[f], onchange: e => { const v = parseFloat(e.target.value); if (isFinite(v) && v >= 0) set(T, id, f, v, { rerender: true }); } }), T, id, f, { hint }))),
     h('div', { class: 'tablewrap', style: 'margin-top:12px' }, h('table', {}, h('tr', {}, h('th', {}, 'Time'), h('th', {}, 'Enemy HP'), h('th', {}, 'Spawns/s'), h('th', {}, 'Enemy damage')), [0, 3, 5, 10, 15].map(row))),
-    h('p', { class: 'note' }, `XP to reach level 2: ${xp(1)}, level 10: ${xp(9)}, level 20: ${xp(19)}, level 30: ${xp(29)}. Elites have ×${D.eliteHp} HP; bosses ×${D.bossHp} of the boss table.`));
+    h('p', { class: 'note' }, `XP to reach level 2: ${xp(1)}, level 10: ${xp(9)}, level 20: ${xp(19)}, level 30: ${xp(29)}. Elites have ×${D.eliteHp} HP; bosses ×${D.bossHp} of the boss table.`),
+    D.overtimeAt > 0 ? h('p', { class: 'note' }, `Overtime from ${D.overtimeAt}:00 while the 15:00 boss lives: after 1 minute damage taken ×${D.overtimeDmg}, enemy HP ×${D.overtimeHp}; after 5 minutes ×${+Math.pow(D.overtimeDmg, 5).toFixed(1)} and ×${+Math.pow(D.overtimeHp, 5).toFixed(1)}, with ${+(1 + 5 * D.overtimeSpawn).toFixed(1)}× spawns.`) : null);
 }
 
 // ---------- progression: categories, fusion locks and a progress simulator ----------

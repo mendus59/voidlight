@@ -41,7 +41,11 @@ const RUN_LENGTH = 900;
 const BOSS_TIMES = [[300, 'matriarch'], [600, 'seraph'], [900, 'eclipse']];
 const DIFF = () => DIFFICULTY.run; // tunable from the admin panel (Enemies tab)
 const STAGE = () => (G && G.stageDef) || STAGES[0]; // the level being played (STAGES in items.js), tunable on the Progression tab
-const hpMul = t => { const D = DIFF(), S = STAGE(), m = t / 60, f = Math.min(1, t / RUN_LENGTH); return (1 + m * D.hpGrowth + m * m * D.hpCurve) * S.hp * (1 + S.ramp * f * f * f); };
+// Minutes past the overtime mark (DIFFICULTY.run.overtimeAt), 0 before it. Only reachable while the 15:00 boss lives,
+// since beating it ends the run. Each minute compounds damage taken, enemy HP and spawns so nobody can stall forever.
+const overtime = t => { const D = DIFF(), at = D.overtimeAt; return G && !G.sandbox && at > 0 && t > at * 60 ? (t - at * 60) / 60 : 0; };
+const otMul = (t, per) => Math.pow(Math.max(1, per || 1), overtime(t));
+const hpMul = t => { const D = DIFF(), S = STAGE(), m = t / 60, f = Math.min(1, t / RUN_LENGTH); return (1 + m * D.hpGrowth + m * m * D.hpCurve) * S.hp * (1 + S.ramp * f * f * f) * otMul(t, D.overtimeHp); };
 
 function spawnEnemy(type, x, y, o = {}) {
   const T = ENEMY_TYPES[type] || BOSSES[type] || SANDBOX_TYPES[type];
@@ -58,7 +62,7 @@ function ebullet(x, y, ang, spd, r = 6, dmg = 8, color = '#ff3b8b') { if (G.ebul
 function director(dt) {
   const t = G.time, D = DIFF(), m = t / 60;
   // regular spawns
-  const rate = (D.spawnBase + m * D.spawnGrowth + m * m * D.spawnCurve) * STAGE().spawn;
+  const rate = (D.spawnBase + m * D.spawnGrowth + m * m * D.spawnCurve) * STAGE().spawn * (1 + overtime(t) * (D.overtimeSpawn || 0));
   G.spawnAcc += rate * dt;
   const avail = SPAWN_TABLE.filter(s => t >= s[1]); const totalW = avail.reduce((a, s) => a + s[2], 0);
   while (G.spawnAcc >= 1) {
@@ -71,6 +75,9 @@ function director(dt) {
   if (t >= G.nextRing) { G.nextRing += Math.max(10, D.ringEvery); const n = 22 + Math.floor(t / 60) * 2; const R = 360; for (let k = 0; k < n; k++) { const a = k * TAU / n; spawnEnemy(t > 400 ? 'darter' : 'swarm', G.player.x + Math.cos(a) * R, G.player.y + Math.sin(a) * R); } banner('Encirclement!', '#ff9e4c'); }
   // elites
   if (t >= G.nextElite) { G.nextElite += Math.max(5, D.eliteEvery); const p = spawnRing(viewRadius()); spawnEnemy(pick(avail)[0], p.x, p.y, { elite: true }); banner('An elite approaches', '#ffe14d'); }
+  // overtime warning, once a minute
+  const ot = overtime(t);
+  if (ot > 0 && Math.floor(ot) >= (G.otWarned || 0)) { G.otWarned = Math.floor(ot) + 1; banner(ot < 1 ? '☠ OVERTIME: the Void grows stronger ☠' : `☠ OVERTIME ×${+otMul(t, D.overtimeDmg).toFixed(1)} damage ☠`, '#ff3b5c', 3); }
   // bosses
   for (const [bt, id] of BOSS_TIMES) if (t >= bt && !G.bossSpawned[id]) {
     G.bossSpawned[id] = true; const p = spawnRing(viewRadius() - 60); spawnEnemy(id, p.x, p.y, { boss: true }); banner('⚠ ' + BOSSES[id].name + ' ⚠', '#ff3b5c', 3);
@@ -372,7 +379,7 @@ function updatePlayer(dt) {
 function dash() { if (!G || G.paused) return; const P = G.player; if (P.dashCd > 0) return; P.dashT = 0.16; P.dashCd = 1.1; P.dashA = P.moving ? P.moveAng : P.face; P.inv = Math.max(P.inv, 0.3); trigger('dash'); }
 function hurtPlayer(dmg) {
   const P = G.player; if (P.inv > 0 || G.over || G.sandbox) return;
-  dmg = Math.max(1, dmg - P.armor); P.hp -= dmg; P.inv = 0.7; P.hurtFlash = 0.2; G.shake = 6;
+  dmg = Math.max(1, dmg * otMul(G.time, DIFF().overtimeDmg) - P.armor); P.hp -= dmg; P.inv = 0.7; P.hurtFlash = 0.2; G.shake = 6;
   fxText(P.x, P.y - 18, '-' + Math.round(dmg), '#ff3b5c', 14);
   trigger('hurt', dmg);
   if (P.hp <= 0) {
@@ -620,7 +627,7 @@ function drawHUD() {
   ctx.fillStyle = '#fff'; ctx.font = '11px system-ui,sans-serif'; ctx.fillText(Math.ceil(P.hp) + ' / ' + P.maxHp, L + 4, 36);
   ctx.font = '12px system-ui,sans-serif'; ctx.fillStyle = P.dashCd > 0 ? '#888' : '#7fdcff'; ctx.fillText(P.dashCd > 0 ? 'Dash ' + P.dashCd.toFixed(1) : 'Dash ready', L, 52);
   // timer
-  ctx.textAlign = 'center'; ctx.font = 'bold 26px system-ui,sans-serif'; ctx.fillStyle = '#fff'; ctx.fillText(fmtTime(G.time), W / 2, 16);
+  ctx.textAlign = 'center'; ctx.font = 'bold 26px system-ui,sans-serif'; ctx.fillStyle = overtime(G.time) > 0 ? '#ff3b5c' : '#fff'; ctx.fillText(fmtTime(G.time), W / 2, 16);
   if (!G.enemies.some(e => e.boss)) { ctx.font = '11px system-ui,sans-serif'; ctx.fillStyle = STAGE().color; ctx.fillText(`Level ${G.stage} · ${STAGE().name}`, W / 2, 46); }
   if (gameSpeed() !== 1) { ctx.font = 'bold 12px system-ui,sans-serif'; ctx.fillStyle = '#c9a0ff'; ctx.fillText('▶▶ ' + gameSpeed() + 'x', W / 2, 60); }
   // kills/gold

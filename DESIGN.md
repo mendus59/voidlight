@@ -15,7 +15,7 @@ collect **Void Gold** that persists between runs to buy permanent upgrades and u
 | **Meta (between rounds)** | Void Gold picked up during the run + a time bonus at the end | Permanent stat ranks and extra sockets in the Forge, buying unlocked items and characters |
 | **Achievements** | Stats per level (kills, best time, bosses, wins) and lifetime stats | Unlock categories, characters, items, fusion tiers and the next level. Most items and characters still cost gold after their achievement |
 
-A run ends when you die, or when you defeat the 15:00 boss (a win).
+A run ends when you die, or when you defeat the 15:00 boss (a win). If that boss is still alive at 20:00, **overtime** starts: every minute past 20:00 doubles the damage you take, multiplies new enemies' HP by 1.6 and adds 50% more spawns, compounding, so no run can be stalled forever (admin panel: Enemies > Difficulty, overtime fields).
 
 ## 2. Slots (5) and sockets
 
@@ -269,6 +269,7 @@ more socket bought in total, so 9 extra sockets (19 in all) once Level 10 is ope
 | 8:00 | Wraiths (fast and tough) |
 | 10:00 | **Boss: Clockwork Seraph** (rotating spiral streams + aimed triples) |
 | 15:00 | **Boss: The Eclipse** (spirals, rings and fans). Kill it to win |
+| 20:00 | **Overtime** if the Eclipse still lives: damage taken ×2, enemy HP ×1.6 and +50% spawns per minute, compounding. Clock turns red |
 
 Every ~45s an Elite spawns (8× HP, drops a chest). Every 60s an encirclement wave rings you in.
 You have a small hitbox (bullet-hell style) and a **dash** (Space / Shift) with brief invulnerability.

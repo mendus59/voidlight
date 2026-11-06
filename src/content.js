@@ -21,7 +21,7 @@ const VOIDLIGHT_CONTENT = (() => {
     cats:     { get: () => CATEGORIES, fields: ['lock'] },
     stages:   { get: () => byId(STAGES), fields: ['name', 'color', 'hp', 'ramp', 'spawn', 'dmg', 'bossHp', 'xp', 'gold', 'start'] },
     tiers:    { get: () => FUSION, fields: ['name', 'need', 'mul', 'cdMul', 'own', 'pool', 'statMul', 'hist', 'lock'] },
-    difficulty: { get: () => DIFFICULTY, fields: ['hpGrowth', 'hpCurve', 'spawnBase', 'spawnGrowth', 'spawnCurve', 'dmgGrowth', 'eliteEvery', 'eliteHp', 'ringEvery', 'bossHp', 'xpStep', 'xpCurve'] },
+    difficulty: { get: () => DIFFICULTY, fields: ['hpGrowth', 'hpCurve', 'spawnBase', 'spawnGrowth', 'spawnCurve', 'dmgGrowth', 'eliteEvery', 'eliteHp', 'ringEvery', 'bossHp', 'xpStep', 'xpCurve', 'overtimeAt', 'overtimeDmg', 'overtimeHp', 'overtimeSpawn'] },
     chars:    { get: () => byId(CHARACTERS), fields: ['name', 'title', 'color', 'weapon', 'perk', 'mods', 'lock'] },
     upgrades: { get: () => byId(UPGRADES), fields: ['name', 'icon', 'desc', 'max', 'cost', 'per'] },
     enemies:  { get: () => ENEMY_TYPES, fields: ['name', 'hp', 'spd', 'r', 'dmg', 'xp', 'color', 'shape'] },

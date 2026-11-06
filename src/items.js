@@ -342,8 +342,11 @@ const tierOf = inst => FUSION[TIER_KEYS[(inst && inst.tier) || 0]];
 // m = minutes into the run. Enemy HP ×(1 + hpGrowth·m + hpCurve·m²), spawns/s = spawnBase + spawnGrowth·m + spawnCurve·m²,
 // enemy damage ×(1 + dmgGrowth·m). Elites every eliteEvery s with eliteHp× HP, encirclements every ringEvery s, boss HP ×bossHp.
 // XP for level l: 5 + xpStep·(l−1) + (l−1)^xpCurve. Each level (STAGES) multiplies on top of this.
+// Overtime: if the 15:00 boss is still alive at overtimeAt minutes, every minute past that multiplies the damage the player
+// takes by overtimeDmg and new enemies' HP by overtimeHp, and adds overtimeSpawn × the spawn rate. It compounds, so a run
+// can't be stalled forever.
 const DIFFICULTY = {
-  run: { hpGrowth: 0.4, hpCurve: 0.06, spawnBase: 1, spawnGrowth: 0.9, spawnCurve: 0.06, dmgGrowth: 0.1, eliteEvery: 40, eliteHp: 10, ringEvery: 50, bossHp: 1.4, xpStep: 6, xpCurve: 1.8 },
+  run: { hpGrowth: 0.4, hpCurve: 0.06, spawnBase: 1, spawnGrowth: 0.9, spawnCurve: 0.06, dmgGrowth: 0.1, eliteEvery: 40, eliteHp: 10, ringEvery: 50, bossHp: 1.4, xpStep: 6, xpCurve: 1.8, overtimeAt: 20, overtimeDmg: 2, overtimeHp: 1.6, overtimeSpawn: 0.5 },
 };
 
 // ======================= OPTIONS =======================
