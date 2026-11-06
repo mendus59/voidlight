@@ -57,6 +57,7 @@ function spawnEnemy(type, x, y, o = {}) {
   if (!o.boss) type = levelFoe(type);
   const T = ENEMY_TYPES[type] || BOSSES[type] || SANDBOX_TYPES[type];
   const S = STAGE(), m = (o.boss ? DIFF().bossHp * S.bossHp * nexusMul('boss') : hpMul(G.time) * (o.elite ? DIFF().eliteHp : 1) * nexusMul('hp'));
+  if (G.foes && !G.sandbox) { const f = G.foes[type] = G.foes[type] || { seen: 0, kills: 0 }; f.seen++; } // the enemy Codex (bestiary)
   const e = { id: G.nextId++, type, T, x, y, r: T.r * (o.elite ? 1.3 : 1), hp: T.hp * m, maxHp: T.hp * m, spd: T.spd * (o.elite ? 0.9 : 1) * (1 + Math.min(0.35, G.time / 2400)),
     dmg: T.dmg * (1 + DIFF().dmgGrowth * G.time / 60) * S.dmg * nexusMul('dmg'), xp: T.xp * (o.elite ? 10 : 1), color: foeColor(T), mass: T.mass || (o.boss ? 50 : o.elite ? 6 : 1), elite: !!o.elite, boss: !!o.boss,
     kx: 0, ky: 0, burnT: 0, burnDps: 0, slowT: 0, slow: 0, poisonT: 0, poison: 0, freezeT: 0, reactCd: 0, dot: 0, dotT: 0, flash: 0, shootT: rand(0.5, 2), at: 0, spin: 0, phase: 0 };
@@ -158,13 +159,15 @@ function killEnemy(e) {
   if (e.dead) return; e.dead = true; G.kills++;
   const P = G.player;
   if (G.sandbox) { fxSpark(e.x, e.y, e.color, 4, 110); trigger('kill', e); return; } // admin test canvas: no drops or rewards
+  if (e.by && e.by.def) G.itemKills[e.by.def.id] = (G.itemKills[e.by.def.id] || 0) + 1; // the item that landed the last hit
+  if (G.foes[e.type]) G.foes[e.type].kills++;
   const D = DROPS;
   dropGem(e.x, e.y, e.xp * D.gem.value * STAGE().xp);
   if (Math.random() < D.coin.chance * (1 + P.luck * 2)) drop('coin', e.x + rand(-8, 8), e.y + rand(-8, 8), randi(D.coin.min, D.coin.max));
   if (Math.random() < D.heart.chance * (1 + P.luck)) drop('heart', e.x, e.y, D.heart.value);
   if (Math.random() < D.magnet.chance) drop('magnet', e.x, e.y, 0);
-  if (e.elite) { drop('chest', e.x, e.y, D.chest.elite); for (let k = 0; k < 6; k++) drop('coin', e.x + rand(-30, 30), e.y + rand(-30, 30), 3); }
-  if (e.boss) { G.stats.bossKills++; drop('chest', e.x, e.y, D.chest.boss); for (let k = 0; k < 15; k++) drop('coin', e.x + rand(-60, 60), e.y + rand(-60, 60), 5); fxRing(e.x, e.y, 200, e.color, 0.8, 8); banner(e.T.name + ' defeated!', '#6bff8f', 2.5);
+  if (e.elite) { dropChest(e.x, e.y, D.chest.elite); for (let k = 0; k < 6; k++) drop('coin', e.x + rand(-30, 30), e.y + rand(-30, 30), 3); }
+  if (e.boss) { G.stats.bossKills++; dropChest(e.x, e.y, D.chest.boss); for (let k = 0; k < 15; k++) drop('coin', e.x + rand(-60, 60), e.y + rand(-60, 60), 5); fxRing(e.x, e.y, 200, e.color, 0.8, 8); banner(e.T.name + ' defeated!', '#6bff8f', 2.5);
     if (e.type === 'eclipse') later(1.5, () => endRun(true)); }
   if (e.T.deathRing) for (let k = 0; k < e.T.deathRing; k++) ebullet(e.x, e.y, k * TAU / e.T.deathRing + rand(0, 0.3), 130, 6, 8);
   if (e.T.deathSpawn && ENEMY_TYPES[e.T.deathSpawn.type]) { const S = e.T.deathSpawn, x0 = e.x, y0 = e.y; later(0, () => { if (!G || G.over) return; for (let k = 0; k < S.n && G.enemies.length < 400; k++) { const a = k * TAU / S.n; spawnEnemy(S.type, x0 + Math.cos(a) * 14, y0 + Math.sin(a) * 14); } }); }
@@ -353,17 +356,53 @@ function applyChoice(o) {
   else if (o.type === 'heal') heal(40);
   else if (o.type === 'gold') G.gold += 25;
 }
+// ---------------- chests ----------------
+// A chest holds 1, 3 or 5 upgrades (DROPS.chest in items.js), rolled when it drops so its colour shows what is inside:
+// blue 1, purple 3, gold 5. Luck raises the odds of the bigger ones. Opening one pauses the run on the chest screen.
+const CHEST_LOOK = { 1: { name: 'Chest', color: '#5ab8ff' }, 3: { name: 'Rare chest', color: '#c04cff' }, 5: { name: 'Legendary chest', color: '#ffd24c' } };
+const chestLook = n => CHEST_LOOK[n >= 5 ? 5 : n >= 3 ? 3 : 1];
+// [chance of 1, of 3, of 5] at a Luck of L
+function chestOdds(L) {
+  const C = DROPS.chest, w = C.luck || 0;
+  const p5 = Math.min(0.9, Math.max(0, (C.five || 0) * (1 + 2 * w * L))), p3 = Math.min(0.95 - p5, Math.max(0, (C.three || 0) * (1 + w * L)));
+  return [Math.max(0, 1 - p3 - p5), p3, p5];
+}
+function chestRoll(least = 1, L = G.player.luck) {
+  const [, p3, p5] = chestOdds(L), r = Math.random();
+  let n = r < p5 ? 5 : r < p5 + p3 ? 3 : 1;
+  if (least > 3) n = 5; else if (least > 1 && n < 3) n = 3;
+  return n;
+}
+function dropChest(x, y, least, n) {
+  n = n || chestRoll(least); drop('chest', x, y, n);
+  const L = chestLook(n); fxRing(x, y, 90, L.color, 0.7, 5); fxRing(x, y, 160, L.color, 1, 3);
+  if (n > 1) banner(`${n >= 5 ? '★ ' : ''}${L.name}!`, L.color, 1.8);
+  return n;
+}
 function openChest(n) {
   const got = [];
   for (let k = 0; k < n; k++) {
     const f = !G.fuseQueue.length && fusionGroups()[0];
-    if (f) { G.fuseQueue.push(f); got.push(`a ${tierName(f.tier)} fusion`); continue; } // the player picks which item stays
+    if (f) { G.fuseQueue.push(f); got.push({ icon: '✦', title: `${f.nexus ? '✴ ' + f.nexus.name : tierName(f.tier) + ' fusion'}`, tag: 'FUSION', text: 'You choose which item remains when this chest closes.', color: TIER_COLORS[f.tier] }); continue; } // the player picks which item stays
     const c = buildChoices().filter(x => x.type === 'up' || x.type === 'heal' || x.type === 'gold'); const o = c.length ? pick(c) : { type: 'gold' };
-    applyChoice(o); got.push(describeChoice(o).title);
+    const d = describeChoice(o); applyChoice(o);
+    got.push({ icon: d.icon, title: d.title, tag: d.tag, text: '', color: d.effs ? EFFECTS[d.effs[0]].color : o.type === 'heal' ? '#ff3b5c' : '#ffd24c' });
   }
-  G.gold += 10 * n * STAGE().gold;
-  toast('📦 Chest: ' + got.join(', '));
+  const gold = Math.round(10 * n * STAGE().gold); G.gold += gold;
+  G.stats.chests = (G.stats.chests || 0) + 1;
+  showChest(n, got, gold);
 }
+function showChest(n, got, gold) {
+  const L = chestLook(n);
+  G.paused = true;
+  $('#chestTitle').textContent = `${n >= 5 ? '★ ' : ''}${L.name}${n >= 5 ? ' ★' : ''}`; $('#chestTitle').style.color = L.color;
+  $('#chest .panel').style.setProperty('--c', L.color);
+  $('#chestCards').innerHTML = got.map((g, k) => `<div class="card chestItem" style="--c:${g.color};animation-delay:${0.15 + k * 0.28}s"><div class="ico">${g.icon}</div><div class="tag">${g.tag}</div><b>${g.title}</b>${g.text ? `<small>${g.text}</small>` : ''}</div>`).join('');
+  $('#chestGold').innerHTML = `<span class="gold">+● ${gold}</span>`;
+  showScreen('chest');
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+}
+function closeChest() { if (currentScreen !== 'chest') return; showScreen(null); if (G) G.paused = false; }
 
 // ---------------- player ----------------
 const keys = {};
@@ -441,7 +480,7 @@ function freshRun(ch, stage = 1) {
   const g = { time: 0, char: ch, player: null, cam: { x: 0, y: 0 }, enemies: [], bullets: [], ebullets: [], fx: [], texts: [], pickups: [], deploys: [], sched: [], inv: [], pool: {},
     kills: 0, level: 1, xp: 0, xpNext: xpFor(1), gold: 0, pendingLevels: 0, paused: false, over: false, nextId: 1, spawnAcc: 0, nextRing: 90, nextElite: 60, bossSpawned: {},
     stats: { evolves: 0, supers: 0, megas: 0, bossKills: 0, crits: 0, healed: 0, damage: 0 }, settings: SAVE.settings, banners: [], shake: 0, reached: {}, fuseQueue: [], runners: [],
-    stage, stageDef: stageDef(stage), bonus: {}, arch: archOf(ch) };
+    stage, stageDef: stageDef(stage), bonus: {}, arch: archOf(ch), itemKills: {}, foes: {} };
   g.player = buildPlayer(ch);
   G = g; recomputePool();
   return g;
@@ -474,6 +513,7 @@ function update(dt) {
   for (const t of G.texts) t.t += dt; G.texts = G.texts.filter(t => t.t < 0.7);
   for (const b of G.banners) b.t += dt; G.banners = G.banners.filter(b => b.t < b.dur);
   G.shake = Math.max(0, G.shake - dt * 30);
+  if (G.paused) return; // a chest opened this frame: level-ups and fusions wait until it closes
   if (G.pendingLevels > 0 && !G.over) { G.pendingLevels--; trigger('levelup'); openLevelUp(); }
   else if (G.fuseQueue.length && !G.over) openFuse(G.fuseQueue.shift());
 }
@@ -483,6 +523,8 @@ function endRun(won) {
   const before = progressSnapshot(SAVE);
   const couldFuse = new Set(ITEMS.filter(d => fuseUnlocked(SAVE, d)).map(d => d.id));
   for (const [id, L] of Object.entries(G.reached)) { const r = (SAVE.itemRuns[id] || [0, 0, 0, 0, 0]).slice(); for (let k = 0; k < L; k++) r[k]++; SAVE.itemRuns[id] = r; }
+  for (const [id, n] of Object.entries(G.itemKills)) SAVE.itemKills[id] = (SAVE.itemKills[id] || 0) + n;
+  for (const [id, f] of Object.entries(G.foes)) { const b = SAVE.bestiary[id] = SAVE.bestiary[id] || { seen: 0, kills: 0, tier: 0 }; b.seen += f.seen; b.kills += f.kills; }
   const earned = Math.round(G.gold + bonus);
   SAVE.gold += earned; s.totalGold += earned; s.totalKills += G.kills; s.bestTime = Math.max(s.bestTime, Math.floor(G.time)); s.bossKills += G.stats.bossKills;
   s.evolves += G.stats.evolves; s.supers += G.stats.supers; s.megas += G.stats.megas; s.runs++; if (won) s.wins++; s.maxLevel = Math.max(s.maxLevel, G.level);
@@ -619,7 +661,45 @@ function drawDeploy(d, x, y) {
 function drawPickup(p, x, y) {
   if (p.k === 'gem') { const col = p.v >= 10 ? '#ff5a7a' : p.v >= 3 ? '#5aff9c' : '#5ab8ff'; const s = p.v >= 10 ? 7 : p.v >= 3 ? 5.5 : 4.5; ctx.fillStyle = col; ctx.globalAlpha = 0.25; circle(x, y, s * 1.8); ctx.globalAlpha = 1; poly(x, y, s, 4, 0); ctx.fill(); }
   else if (p.k === 'coin') { ctx.fillStyle = '#ffd24c'; circle(x, y, 5); ctx.fillStyle = '#fff6c4'; circle(x - 1, y - 1, 2); }
-  else { ctx.font = '18px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText({ heart: '❤️', magnet: '🧲', chest: '📦' }[p.k], x, y + Math.sin(G.time * 4) * 2); }
+  else if (p.k === 'chest') drawChest(p, x, y);
+  else { ctx.font = '18px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText({ heart: '❤️', magnet: '🧲' }[p.k] || '•', x, y + Math.sin(G.time * 4) * 2); }
+}
+// a chest: a beam of light, a pulsing glow (with turning rays for 3 and 5), and a box in its colour
+function drawChest(p, x, y) {
+  const L = chestLook(p.v), c = L.color, t = G.time + p.x * 0.01, s = p.v >= 5 ? 1.4 : p.v >= 3 ? 1.18 : 1, yy = y + Math.sin(t * 3) * 2;
+  const g = ctx.createLinearGradient(x, y - 190, x, y); g.addColorStop(0, c + '00'); g.addColorStop(1, c + '66');
+  ctx.fillStyle = g; ctx.fillRect(x - 6 * s, y - 190, 12 * s, 190);
+  ctx.fillStyle = c; ctx.globalAlpha = 0.2 + 0.12 * Math.sin(t * 5); circle(x, y, 30 * s); ctx.globalAlpha = 1;
+  if (p.v >= 3) { ctx.save(); ctx.translate(x, y); ctx.rotate(t * 0.9); ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.globalAlpha = 0.45;
+    const n = p.v >= 5 ? 12 : 8; ctx.beginPath(); for (let k = 0; k < n; k++) { const a = k * TAU / n; ctx.moveTo(Math.cos(a) * 20 * s, Math.sin(a) * 20 * s); ctx.lineTo(Math.cos(a) * (34 + 6 * Math.sin(t * 4 + k)) * s, Math.sin(a) * (34 + 6 * Math.sin(t * 4 + k)) * s); } ctx.stroke(); ctx.restore(); ctx.globalAlpha = 1; }
+  const w = 22 * s, h = 14 * s;
+  ctx.fillStyle = '#1c1208'; ctx.fillRect(x - w / 2, yy - h / 2 + 2, w, h);
+  ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.strokeRect(x - w / 2, yy - h / 2 + 2, w, h);
+  ctx.fillStyle = c; ctx.fillRect(x - w / 2 - 2, yy - h / 2 - 4 * s, w + 4, 6 * s);
+  ctx.fillStyle = '#fff'; ctx.fillRect(x - 2, yy - 1, 4, 6 * s);
+}
+// ---------------- beacons: arrows at the screen edge pointing at things worth walking to ----------------
+// Each one is { x, y, color, icon }. Chests now; later the level's Map and other finds (world.js adds them).
+function beaconList() {
+  const out = [];
+  for (const p of G.pickups) if (p.k === 'chest') out.push({ x: p.x, y: p.y, color: chestLook(p.v).color, icon: '📦' });
+  if (typeof worldBeacons === 'function') out.push(...worldBeacons());
+  return out;
+}
+function drawBeacons() {
+  const W = VIEW.w, H = VIEW.h, cx = W / 2, cy = H / 2, ox = cx - G.cam.x, oy = cy - G.cam.y, m = 30, top = 86, bottom = 80;
+  for (const b of beaconList()) {
+    const sx = b.x + ox, sy = b.y + oy; if (sx > 10 && sx < W - 10 && sy > 10 && sy < H - 10) continue;
+    const a = Math.atan2(sy - cy, sx - cx), c = Math.cos(a), s = Math.sin(a);
+    const kx = (c > 0 ? W - m - cx : cx - m) / Math.max(1e-6, Math.abs(c)), ky = (s > 0 ? H - bottom - cy : cy - top) / Math.max(1e-6, Math.abs(s)), k = Math.min(kx, ky);
+    const x = cx + c * k, y = cy + s * k, pulse = 0.75 + 0.25 * Math.sin(G.time * 5);
+    ctx.save(); ctx.translate(x, y);
+    ctx.fillStyle = 'rgba(10,8,22,0.8)'; circle(0, 0, 16); ctx.strokeStyle = b.color; ctx.lineWidth = 2; ctx.globalAlpha = pulse; ctx.beginPath(); ctx.arc(0, 0, 16, 0, TAU); ctx.stroke();
+    ctx.rotate(a); ctx.fillStyle = b.color; ctx.beginPath(); ctx.moveTo(26, 0); ctx.lineTo(17, -7); ctx.lineTo(17, 7); ctx.closePath(); ctx.fill(); ctx.rotate(-a); ctx.globalAlpha = 1;
+    ctx.font = '15px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#fff'; ctx.fillText(b.icon, 0, 1);
+    const dist = Math.hypot(b.x - G.player.x, b.y - G.player.y); ctx.font = 'bold 10px system-ui,sans-serif'; ctx.fillStyle = b.color; ctx.fillText(Math.round(dist / 50) + 'm', 0, 27);
+    ctx.restore();
+  }
 }
 function render() {
   const W = VIEW.w, H = VIEW.h;
@@ -728,6 +808,7 @@ function drawHUD() {
       x0 += n * (sz + 2) + gap * 3;
     }
   });
+  drawBeacons();
   // effect pool
   ctx.textAlign = 'right'; ctx.font = '12px system-ui,sans-serif'; let ey = 62;
   for (const k of EFFECT_KEYS) { const v = G.pool[k]; if (!v) continue; ctx.fillStyle = EFFECTS[k].color; ctx.fillText(EFFECTS[k].icon + ' ' + EFFECTS[k].name + ' ×' + v, W - 12, ey); ey += 17; }
@@ -1145,7 +1226,7 @@ function archCard(c) {
   return `<div class="archBox"><b>◆ ${A.name || 'Archetype'}</b>${L.map(x => `<span>${x}</span>`).join('')}</div>`;
 }
 function togglePause() {
-  if (!G || G.sandbox || G.over || currentScreen === 'levelup') return;
+  if (!G || G.sandbox || G.over || currentScreen === 'levelup' || currentScreen === 'chest') return;
   if (G.paused) { G.paused = false; showScreen(null); }
   else { G.paused = true; renderPause(); showScreen('pause'); }
 }
@@ -1179,6 +1260,7 @@ window.addEventListener('keydown', e => {
   if (e.code === 'Escape' && currentScreen === 'codex') { codexBack(); return; }
   if (!G || G.over) return;
   if (currentScreen === 'codex') return;
+  if (currentScreen === 'chest') { if (e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'Space' || e.code === 'Escape') { e.preventDefault(); closeChest(); } return; }
   // 1-4 only select; Enter (or the Confirm button) takes it. Letter keys do nothing here, so WASD can't pick or skip.
   if (currentScreen === 'levelup') { if (e.code === 'Space' || e.code === 'Enter' || e.code === 'NumpadEnter') e.preventDefault(); const n = parseInt(e.key, 10); if (n >= 1 && n <= 4) selectLevel(n - 1); if (e.code === 'Enter' || e.code === 'NumpadEnter') confirmLevel(); return; }
   if (e.code === 'Escape' || e.code === 'KeyP') togglePause();
@@ -1203,6 +1285,7 @@ $('#btnStart').onclick = () => { const c = CHARACTERS.find(x => x.id === selecte
 $('#reroll').onclick = () => { if (G.player.rerolls <= 0 || (levelChoices || []).some(o => o.type === 'keep')) return; G.player.rerolls--; luSel = null; levelChoices = buildChoices(); renderLevelUp(); };
 $('#skip').onclick = () => { if (!levelChoices || levelChoices.some(o => o.type === 'keep')) return; luSel = 'skip'; renderLevelUp(); };
 $('#luConfirm').onclick = confirmLevel;
+$('#chestTake').onclick = closeChest;
 $('#btnResume').onclick = togglePause;
 $('#btnQuit').onclick = () => { G.paused = false; endRun(false); };
 $('#speedToggle').onclick = () => { cycleSpeed(); renderPause(); };
@@ -1406,4 +1489,4 @@ $('#version').textContent = 'v' + VERSION + ' beta';
 requestAnimationFrame(frame);
 
 // debug hooks for testing
-window.VOIDLIGHT = { get G() { return G; }, refresh() { checkUnlocks(); if (!G && SCREENS_WITH_SAVE.includes(currentScreen)) showScreen(currentScreen); }, SAVE: () => SAVE, ITEMS, defaultSave, normalizeSave, mergeSaves, replaceSave, toast, addItem: (id, L) => addItem(ITEM[id], L), update, newRun, levelItem, fuse, fusionGroups, buildChoices, applyChoice, chooseLevel, selectLevel, confirmLevel, statsPanel, speedChoices, gameSpeed, synthFusion, endRun, get levelChoices() { return levelChoices; } };
+window.VOIDLIGHT = { get G() { return G; }, chestOdds, chestRoll, dropChest, openChest, closeChest, get screen() { return currentScreen; }, refresh() { checkUnlocks(); if (!G && SCREENS_WITH_SAVE.includes(currentScreen)) showScreen(currentScreen); }, SAVE: () => SAVE, ITEMS, defaultSave, normalizeSave, mergeSaves, replaceSave, toast, addItem: (id, L) => addItem(ITEM[id], L), update, newRun, levelItem, fuse, fusionGroups, buildChoices, applyChoice, chooseLevel, selectLevel, confirmLevel, statsPanel, speedChoices, gameSpeed, synthFusion, endRun, get levelChoices() { return levelChoices; } };

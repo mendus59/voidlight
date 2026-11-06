@@ -27,7 +27,7 @@ const VOIDLIGHT_CONTENT = (() => {
     upgrades: { get: () => byId(UPGRADES), fields: ['name', 'icon', 'desc', 'max', 'cost', 'per'] },
     enemies:  { get: () => ENEMY_TYPES, fields: ['name', 'hp', 'spd', 'r', 'dmg', 'xp', 'color', 'shape'] },
     bosses:   { get: () => BOSSES, fields: ['name', 'hp', 'spd', 'r', 'dmg', 'xp', 'color'] },
-    drops:    { get: () => DROPS, fields: ['chance', 'min', 'max', 'value', 'elite', 'boss'] },
+    drops:    { get: () => DROPS, fields: ['chance', 'min', 'max', 'value', 'elite', 'boss', 'three', 'five', 'luck'] },
     options:  { get: () => OPTIONS, fields: ['choices'] },
     chain:    { get: () => CHAIN_RULES, fields: ['dmg', 'rate', 'depth', 'kids', 'ride'] },
   };
@@ -94,6 +94,8 @@ const VOIDLIGHT_CONTENT = (() => {
     if (table === 'chain') return f === 'depth' ? num(v) && v >= 0 && v <= 4 && Math.round(v) === v : f === 'rate' ? num(v) && v >= 0.5 && v <= 60 : num(v) && v >= 0 && v <= 3;
     if (table === 'tiers' && f === 'hist') return num(v) && v >= 0 && v <= 50 && Math.round(v) === v;
     if (table === 'tiers' && f === 'need') return num(v) && v >= 1 && v <= 8 && Math.round(v) === v;
+    if (table === 'drops' && (f === 'three' || f === 'five')) return num(v) && v >= 0 && v <= 1;
+    if (table === 'drops' && f === 'luck') return num(v) && v >= 0 && v <= 20;
     if (table === 'stages' && f === 'start') return num(v) && v >= 1 && v <= 5 && Math.round(v) === v;
     switch (f) {
       case 'name': case 'icon': case 'pattern': case 'trig': case 'title': case 'perk': case 'desc': return str(v);

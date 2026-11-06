@@ -143,6 +143,14 @@
   .labRow select { max-width: 220px; } .labGrp { display: inline-flex; gap: 3px; align-items: center; }
   .labRow button.small { padding: 3px 8px; font-size: 12px; } .labRow button.on { border-color: #c9a0ff; color: #fff; background: rgba(201,160,255,0.2); }
   .labRow .lbl { color: var(--muted); font-size: 12px; } .labRow .note, .labPanel .note { color: var(--muted); font-size: 12px; }
+  /* chests: the panel glows in the chest's colour and the items flip in one by one */
+  .chestPanel { width: min(900px, 100%); border-color: var(--c); box-shadow: 0 0 70px color-mix(in srgb, var(--c) 45%, transparent); }
+  #chestTitle { font-size: 30px; letter-spacing: 0.08em; text-shadow: 0 0 18px currentColor; }
+  #chestCards { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin: 12px 0; }
+  .card.chestItem { align-items: center; text-align: center; border-color: color-mix(in srgb, var(--c) 60%, transparent); background: linear-gradient(180deg, color-mix(in srgb, var(--c) 16%, transparent), rgba(255,255,255,0.02)); opacity: 0; animation: chestIn 0.45s ease-out forwards; }
+  .card.chestItem .ico { font-size: 30px; } .card.chestItem .tag { font-size: 11px; font-weight: 800; letter-spacing: 0.08em; color: var(--c); }
+  @keyframes chestIn { 0% { opacity: 0; transform: translateY(14px) scale(0.85) rotateY(70deg); } 100% { opacity: 1; transform: none; } }
+  #chestGold { font-size: 18px; }
   .labOut { margin-top: 8px; font-size: 13px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 6px; }
 </style>
 </head>
@@ -208,6 +216,13 @@
   <div class="center" style="margin-top:14px"><button id="reroll">🎲 Reroll</button> <button id="skip" title="Take nothing: heal 15 and get some gold">⏭ Skip</button> <button class="primary" id="luConfirm" disabled>Pick an option first</button></div>
   <div class="center"><small style="color:var(--muted)">Click an option (or press 1–4), then Confirm (or Enter)</small></div>
   <div class="stats-box" id="luStats"></div>
+</div></div>
+
+<div class="screen" id="chest"><div class="panel chestPanel">
+  <h2 class="center" id="chestTitle">Chest</h2>
+  <div id="chestCards"></div>
+  <div class="center" id="chestGold"></div>
+  <div class="center" style="margin-top:12px"><button class="primary" id="chestTake">Take it (Enter)</button></div>
 </div></div>
 
 <div class="screen" id="pause"><div class="panel" style="max-width:640px">

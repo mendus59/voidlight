@@ -6,6 +6,14 @@ Voidlight is in beta, so versions are `0.MINOR.PATCH`. The version lives in one 
 - Bump **PATCH** (0.11.0 → 0.11.1) for a bug fix or balance tweak.
 - Add a line here in the same PR.
 
+## 0.23.0 (2026-11-06)
+- Chests worth chasing: every chest now holds **1, 3 or 5 upgrades**, rolled when it drops (about 70% / 25% / 5%). Luck raises the odds of the bigger ones (at the Forge's max Luck about 54% / 36% / 10%). Boss chests always hold at least 3.
+- Chests look the part: a beam of light, a pulsing glow, turning rays on 3 and 5 chests, and a colour that says what's inside (blue 1, purple Rare 3, gold Legendary 5). A banner announces Rare and Legendary drops.
+- An arrow at the edge of the screen points to any chest you can't see, with its distance.
+- Opening a chest shows a chest screen that reveals each upgrade in turn, plus its gold. Level-ups and fusions wait until you close it.
+- Behind the scenes for later versions: the save (v4) now counts kills per item and every enemy you meet and kill, and has room for materials, augments, maps, forged recipes and attuned items. Older saves load as before.
+- Admin: Pickups has the 3 and 5 chest chances and the Luck weight.
+
 ## 0.22.0 (2026-11-06)
 - Fusion chains by category: every attacking item now has an animation category (➶ Projectile, ◎ Orbital, ◌ Aura, ▣ Deployable, 〰 Trail, ▒ Zone, ✸ Blast, ϟ Arc), and how an absorbed item chains depends only on the two categories, so new items chain automatically. An absorbed item either rides on the main body of the item that remains (each bullet, each orbiting shot, its aura, each object it places, its patches) as a visible part that acts on its own, or pops where that item hits.
 - Auras, deployables and patches now visibly change with every absorbed item: e.g. Frost Halo with Tesla Coil gets little coils circling its rim that arc lightning; Tesla Coil with Frost Halo gives every coil a frost aura; Tesla Coil with Cinder Ring has fireballs circling each coil; Plague Cloud with an absorbed projectile fires volleys from every cloud. Absorbed deployables drop or carry small copies of themselves. Orbital chains on bullets now fly outward when the bullet hits.
