@@ -136,7 +136,6 @@ function chainTravel(b, dt) {
 }
 // a bullet made by a link: its hits trigger the link's kids
 function kidShot(l, c, owner, o) {
-  if (G.seen) G.seen.add(c.shape);
   return shoot(Object.assign({ owner, link: l, effect: l.def.effect, color: chainCol(l.def), dmg: linkDmg(l, c) * G.player.might, shape: c.shape, noTrig: true, r: 4.5 * c.size }, o));
 }
 const homes = l => l.def.effect === 'homing';
