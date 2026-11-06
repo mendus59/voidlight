@@ -6,6 +6,14 @@ Voidlight is in beta, so versions are `0.MINOR.PATCH`. The version lives in one 
 - Bump **PATCH** (0.11.0 → 0.11.1) for a bug fix or balance tweak.
 - Add a line here in the same PR.
 
+## 0.18.0 (2026-11-06)
+- Fusion chains: every attacking item a fusion absorbs now plays its own attack off the item that remains, at 50% of its damage. Each item has a chain form (volley, burst, orbit ring, zone, arc, blast, halo, satellites or trail): e.g. Cinder Ring in Ember Pistol spins a cinder ring out wherever a fireball hits or runs out, and Frost Halo in Frost Fan puts a frost halo on every shard. Super and Mega fusions nest the chains: the shots a link makes trigger the links of the item it came from.
+- Fusion rules: a mastered item can absorb items that are not mastered yet (only mastered items can remain). A fusion always makes the remaining item stronger: it keeps 100% of what it had and adds 50% of what each absorbed item had, even though it restarts at the level's start level.
+- 🧪 Fusion Lab on the main menu: try any item, fusion tier and partners you have unlocked on training targets, with the chains listed. Nothing is saved.
+- Level-up fusion cards and the pause menu list each item's chains.
+- Admin: every item page has a "Fusion chain" editor (form, trigger, shape, count, size, damage), Progression has the chain rules (damage share, rate limit, nesting depth); the test canvas has a fusion tester with partners and, for Super and Mega, the items each partner was made from (or 🎲 Random).
+- Balance: fused builds measured about 1.6× (Fused), 1.7× (Super) and 1.3× (Mega) the old damage, so enemy and boss HP of Levels 2 to 10 went up ×1.2 to ×1.5. Mega fusion now opens with Beat Level 7 (was 6). New endgame Levels 11 (The Echo Loom) and 12 (Singularity Choir).
+
 ## 0.17.0 (2026-11-06)
 - Hero archetypes: every hero now has an archetype (Pyromancer, Tinker, Sharpshooter...) with passive bonuses on top of their perk: stronger effects of their element, +20% damage on hits that carry their effect combo (e.g. Burn + Poison for Kael), and for some, extra damage for one or two item slots.
 - Level-up offers lean a little toward items that fit your hero's archetype, and those cards carry a ◆ archetype badge.

@@ -823,7 +823,7 @@ function itemDetailHtml(d) {
     const open = tierUnlocked(SAVE, key);
     h += `<div class="dSec" style="--c:${col}"><h4>✦ ${F.name} fusion <small>${F.need} level 5 ${FUSION[TIER_KEYS[t - 1]].name.toLowerCase()} items that share an effect</small></h4>`;
     const req = [];
-    if (t === 1) req.push(`<span class="part${fuseUnlocked(SAVE, d) ? ' ok' : ''}">${fuseUnlocked(SAVE, d) ? '✓' : '○'} ${d.name} mastery</span>`);
+    if (t === 1) req.push(`<span class="part${fuseUnlocked(SAVE, d) ? ' ok' : ''}">${fuseUnlocked(SAVE, d) ? '✓' : '○'} ${d.name} mastery (to remain; it can absorb unmastered items)</span>`);
     if (F.lock) req.push(`<span class="part${open ? ' ok' : ''}">${open ? '✓' : '○'} ${lockLabel(F.lock)}</span>`);
     if (b) req.push(`<span class="part${a >= b ? ' ok' : ''}">${a >= b ? '✓' : '○'} ${d.name} ${histText(t)} (${Math.min(a, b)}/${b})</span>`);
     if (req.length) h += `<div class="req">${req.join('')}</div>`;
@@ -867,7 +867,7 @@ function renderAchievements() {
   section('Heroes', 'Each hero is earned with another hero: beat a level with them and master a weapon. A hero also needs the categories of their starting weapon.', list.filter(a => a.group === 'heroes'));
   for (const S of STAGES) section(`Level ${S.id}: ${S.name}`, stageUnlocked(SAVE, S.id) ? '' : `Opens when you beat Level ${S.id - 1}.`, list.filter(a => a.stage === S.id && a.group !== 'stages' && a.group !== 'tiers' && a.group !== 'heroes'));
   section('Other', '', list.filter(a => !a.stage && (a.group === 'cats' || a.group === 'unlocks')));
-  section('Mastery (unlocks fusion)', 'Level an item up to unlock fusing it. Every item in a fusion needs its mastery.', list.filter(a => a.group === 'mastery'));
+  section('Mastery (unlocks fusion)', 'Level an item up to master it. Only a mastered item can remain in a fusion; it can absorb items that are not mastered yet.', list.filter(a => a.group === 'mastery'));
   $('#achievements .gold-line').innerHTML = `${list.filter(a => a.done).length}/${list.length} done`;
 }
 const effNames = ks => ks.map(k => EFFECTS[k].icon + ' ' + EFFECTS[k].name).join(' + ');
@@ -877,9 +877,9 @@ const tierLine = T => (T ? `${tierName(T)}: ×${FUSION[TIER_KEYS[T]].mul} damage
 function masteryBadge(d, tier) {
   if (!d || tier) return '';
   const f = fuseLockOf(d); if (f.runs <= 0) return '';
-  if (fuseUnlocked(SAVE, d)) return `<div class="mast done" title="${d.name} mastery earned: it can fuse">★ Mastered</div>`;
+  if (fuseUnlocked(SAVE, d)) return `<div class="mast done" title="${d.name} mastery earned: it can remain in a fusion and absorb others">★ Mastered</div>`;
   const have = runsAt(SAVE, d.id, f.level), now = ((G && G.reached) || {})[d.id] >= f.level;
-  const tip = `${d.name} mastery: reach level ${f.level} with it in ${f.runs} run${f.runs > 1 ? 's' : ''} to unlock fusing it`;
+  const tip = `${d.name} mastery: reach level ${f.level} with it in ${f.runs} run${f.runs > 1 ? 's' : ''} to unlock fusing it (until then a mastered item can still absorb it)`;
   if (now && have + 1 >= f.runs) return `<div class="mast soon" title="${tip}">✓ Mastered when this run ends</div>`;
   const prog = f.runs > 1 ? ` · ${have + (now ? 1 : 0)}/${f.runs} runs` : '';
   return `<div class="mast" title="${tip}">☆ Not mastered (reach Lv ${f.level}${prog})</div>`;
@@ -1169,7 +1169,7 @@ function synthFusion(inst, partners, T) {
     return keep;
   }
   const made = synthItem(inst.def, partners, T);
-  for (const k of ['carry', 'flat', 'links', 'tier', 'gone']) inst[k] = made[k];
+  for (const k of ['base', 'stats', 'carry', 'flat', 'links', 'tier', 'gone']) inst[k] = made[k];
   inst.riders = []; for (const d of made.gone) for (const k of effectsOf(d)) if (!effectsOf(inst.def).includes(k) && !inst.riders.includes(k)) inst.riders.push(k);
   const first = partners[0] && partners[0].def, sh = first ? effectsOf(inst.def).filter(k => effectsOf(first).includes(k)) : [];
   inst.fuseEff = sh[0] || inst.def.effect;

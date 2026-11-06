@@ -308,22 +308,24 @@ const CATEGORIES = {
 };
 
 // ======================= LEVELS =======================
-// Ten levels. Level 1 is open; each other one opens when the level before it is beaten (its 15:00 boss defeated).
+// Twelve levels. Level 1 is open; each other one opens when the level before it is beaten (its 15:00 boss defeated).
 // On top of DIFFICULTY.run: enemy HP ×hp, rising to ×hp·(1 + ramp) by 15:00 (it grows with the cube of the clock, so the
 // late game is where it bites, when fused builds are at their strongest);
 // spawns ×spawn, enemy damage ×dmg, boss HP ×bossHp, XP crystals ×xp, gold ×gold. start = the level new items
 // (and new fusions) arrive at, so the bigger builds later levels need fit into a 15 minute run.
 const STAGES = [
   { id: 1,  name: 'The Rift',          color: '#a55cff', hp: 1, ramp: 0, spawn: 1, dmg: 1, bossHp: 1, xp: 1, gold: 1, start: 1 },
-  { id: 2,  name: 'Ashen Verge',       color: '#ff8a3d', hp: 1.2, ramp: 0.5, spawn: 1.05, dmg: 1.1, bossHp: 1.6, xp: 1.4, gold: 1.2, start: 1 },
-  { id: 3,  name: 'Frostbound Deep',   color: '#7fdcff', hp: 1.4, ramp: 1.2, spawn: 1.1, dmg: 1.2, bossHp: 2.6, xp: 1.9, gold: 1.4, start: 2 },
-  { id: 4,  name: 'Storm Spire',       color: '#fff36b', hp: 1.6, ramp: 2.1, spawn: 1.15, dmg: 1.3, bossHp: 4, xp: 2.6, gold: 1.6, start: 2 },
-  { id: 5,  name: 'Blight Garden',     color: '#8cff5a', hp: 1.8, ramp: 3.4, spawn: 1.2, dmg: 1.4, bossHp: 6.5, xp: 3.4, gold: 1.8, start: 3 },
-  { id: 6,  name: 'Mirror Wastes',     color: '#ff6bd5', hp: 2, ramp: 5, spawn: 1.25, dmg: 1.5, bossHp: 10, xp: 4.4, gold: 2, start: 3 },
-  { id: 7,  name: "Hunter's Moon",     color: '#b48cff', hp: 2.3, ramp: 9, spawn: 1.3, dmg: 1.6, bossHp: 20, xp: 6, gold: 2.3, start: 4 },
-  { id: 8,  name: 'Shattered Crown',   color: '#5affd9', hp: 2.6, ramp: 16, spawn: 1.35, dmg: 1.7, bossHp: 40, xp: 8, gold: 2.6, start: 4 },
-  { id: 9,  name: 'Crimson Expanse',   color: '#ff3b5c', hp: 3, ramp: 27, spawn: 1.4, dmg: 1.8, bossHp: 85, xp: 11, gold: 3, start: 5 },
-  { id: 10, name: 'The Void Heart',    color: '#ffffff', hp: 3.5, ramp: 68, spawn: 1.45, dmg: 1.9, bossHp: 1500, xp: 16, gold: 3.5, start: 5 },
+  { id: 2,  name: 'Ashen Verge',       color: '#ff8a3d', hp: 1.44, ramp: 0.5, spawn: 1.05, dmg: 1.1, bossHp: 1.92, xp: 1.4, gold: 1.2, start: 1 },
+  { id: 3,  name: 'Frostbound Deep',   color: '#7fdcff', hp: 1.89, ramp: 1.2, spawn: 1.1, dmg: 1.2, bossHp: 3.51, xp: 1.9, gold: 1.4, start: 2 },
+  { id: 4,  name: 'Storm Spire',       color: '#fff36b', hp: 2.24, ramp: 2.1, spawn: 1.15, dmg: 1.3, bossHp: 5.6, xp: 2.6, gold: 1.6, start: 2 },
+  { id: 5,  name: 'Blight Garden',     color: '#8cff5a', hp: 2.61, ramp: 3.4, spawn: 1.2, dmg: 1.4, bossHp: 9.42, xp: 3.4, gold: 1.8, start: 3 },
+  { id: 6,  name: 'Mirror Wastes',     color: '#ff6bd5', hp: 3, ramp: 5, spawn: 1.25, dmg: 1.5, bossHp: 15, xp: 4.4, gold: 2, start: 3 },
+  { id: 7,  name: "Hunter's Moon",     color: '#b48cff', hp: 3.45, ramp: 9, spawn: 1.3, dmg: 1.6, bossHp: 30, xp: 6, gold: 2.3, start: 4 },
+  { id: 8,  name: 'Shattered Crown',   color: '#5affd9', hp: 3.9, ramp: 16, spawn: 1.35, dmg: 1.7, bossHp: 60, xp: 8, gold: 2.6, start: 4 },
+  { id: 9,  name: 'Crimson Expanse',   color: '#ff3b5c', hp: 4.35, ramp: 27, spawn: 1.4, dmg: 1.8, bossHp: 123, xp: 11, gold: 3, start: 5 },
+  { id: 10, name: 'The Void Heart',    color: '#ffffff', hp: 4.73, ramp: 68, spawn: 1.45, dmg: 1.9, bossHp: 2025, xp: 16, gold: 3.5, start: 5 },
+  { id: 11, name: 'The Echo Loom',     color: '#ffb84c', hp: 5.4, ramp: 90, spawn: 1.5, dmg: 2, bossHp: 3200, xp: 20, gold: 4, start: 5 },
+  { id: 12, name: 'Singularity Choir', color: '#ff4cc3', hp: 6.6, ramp: 120, spawn: 1.55, dmg: 2.1, bossHp: 5200, xp: 24, gold: 4.5, start: 5 },
 ];
 
 // ======================= FUSION TIERS =======================
@@ -338,7 +340,7 @@ const FUSION = {
   base:  { name: 'Base',  need: 1, mul: 1,   cdMul: 1,    own: 2, pool: 1,   statMul: 1 },
   fused: { name: 'Fused', need: 2, mul: 1.6, cdMul: 0.75, own: 3, pool: 1.5, statMul: 1.25 },
   super: { name: 'Super', need: 3, mul: 3.2, cdMul: 0.65, own: 6, pool: 4,   statMul: 1.5, hist: 3, lock: { stage: 3, stat: 'wins', min: 1, text: 'Beat Level 3' } },
-  mega:  { name: 'Mega',  need: 5, mul: 16,  cdMul: 0.55, own: 12, pool: 12,  statMul: 2,   hist: 5, lock: { stage: 6, stat: 'wins', min: 1, text: 'Beat Level 6' } },
+  mega:  { name: 'Mega',  need: 5, mul: 16,  cdMul: 0.55, own: 12, pool: 12,  statMul: 2,   hist: 5, lock: { stage: 7, stat: 'wins', min: 1, text: 'Beat Level 7' } },
 };
 const TIER_KEYS = Object.keys(FUSION);
 

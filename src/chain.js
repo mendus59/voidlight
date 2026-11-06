@@ -64,24 +64,28 @@ const chainCol = def => def.color || EFFECTS[def.effect].color;
 
 // ---------------- fusion maths (shared by the run, the level-up preview and the test canvases) ----------------
 // keep absorbs others into the next tier and restarts at `level`:
-//   carry  = 100% of what keep hit for + 50% of what each other one hit for (flat damage on top of its own growth),
-//   flat   = 100% of keep's passive stats right now + 50% of each other one's (kept on top of its own per-level stats),
-//   links  = keep's links + one link per absorbed attacking item (with that item's own links as its kids),
-//   riders = every effect of the absorbed items, carried on its own bullets.
-// So the item that remains is always at least as strong as it was, and never loses anything it carried.
+//   base / stats: its own base damage and per-level passive stats, plus 50% of each other one's. They grow with the new
+//                 tier's multipliers and with every level, as before.
+//   carry / flat: top-ups so that, right at the fusion, it hits for at least 100% of what it hit for plus 50% of what each
+//                 other one hit for, and gives at least 100% of its passive stats plus 50% of theirs. Restarting at a low
+//                 level can then never make it weaker; levelling it back up to 5 makes it stronger again.
+//   links:        keep's links + one link per absorbed attacking item (with that item's own links as its kids).
+//   riders:       every effect of the absorbed items, carried on its own bullets.
 function absorb(keep, others, level) {
-  const add = (m, src, k) => { for (const [s, v] of Object.entries(src)) if (v) m[s] = (m[s] || 0) + v * k; };
-  const flat = {}; add(flat, instStats(keep), 1);
-  let carry = itemPower(keep);
-  keep.links = (keep.links || []).slice();
+  const add = (m, src, k) => { for (const [s, v] of Object.entries(src || {})) if (v) m[s] = (m[s] || 0) + v * k; };
+  const wantStats = {}; add(wantStats, instStats(keep), 1);
+  let want = itemPower(keep);
+  keep.links = (keep.links || []).slice(); keep.stats = Object.assign({}, keep.stats || {});
   for (const o of others) {
-    carry += 0.5 * itemPower(o); add(flat, instStats(o), 0.5);
+    want += 0.5 * itemPower(o); add(wantStats, instStats(o), 0.5);
+    keep.base = (keep.base ?? keep.def.dmg ?? 0) + 0.5 * (o.base ?? o.def.dmg ?? 0); add(keep.stats, o.stats, 0.5);
     for (const k of instEffects(o)) if (!effectsOf(keep.def).includes(k) && !(keep.riders || []).includes(k)) (keep.riders = keep.riders || []).push(k);
     const l = makeLink(o, 1); if (l) keep.links.push(l);
     keep.gone = (keep.gone || []).concat([o.def], o.gone || []);
   }
-  keep.carry = isPassive(keep.def) ? 0 : carry; keep.flat = flat;
-  keep.tier = (keep.tier || 0) + 1; keep.level = level;
+  keep.tier = (keep.tier || 0) + 1; keep.level = level; keep.carry = 0; keep.flat = {};
+  if (!isPassive(keep.def)) keep.carry = Math.max(0, want - itemPower(keep));
+  const now = instStats(keep); for (const [s, v] of Object.entries(wantStats)) if (v > (now[s] || 0)) keep.flat[s] = v - (now[s] || 0);
   return keep;
 }
 // a link made from an absorbed item; depth 1 = on the keeper's own bullets
