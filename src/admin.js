@@ -492,6 +492,29 @@ function renderShapes() {
   })))), h('div', { class: 'note' }, 'Shapes show up here as the test canvas fires them.'));
 }
 
+// A hero's archetype (arch in CHARACTERS): name, effect potency per effect, damage per slot, and effect-pair combos.
+function archFields(T, id) {
+  const a = get(T, id).arch || {};
+  const put = fn => { const n = clone(get(T, id).arch || {}); fn(n); for (const k of ['eff', 'slot', 'combo']) if (n[k] && !Object.keys(n[k]).length) delete n[k]; if (!n.name) delete n.name; set(T, id, 'arch', Object.keys(n).length ? n : null, { rerender: true }); };
+  const setIn = (part, k, x) => put(n => { n[part] = Object.assign({}, n[part]); if (x) n[part][k] = x; else delete n[part][k]; });
+  const numIn = (part, k) => h('input', { type: 'number', step: 'any', value: (a[part] || {})[k] ?? '', placeholder: '0', onchange: e => { const x = parseFloat(e.target.value); setIn(part, k, isFinite(x) ? x : 0); } });
+  const effOpts = EFFECT_KEYS.map(k => [k, EFFECTS[k].icon + ' ' + EFFECTS[k].name]);
+  const combos = Object.entries(a.combo || {});
+  const swap = (old, p, q, x) => put(n => { const c = Object.assign({}, n.combo); delete c[old]; if (p !== q) c[p + '+' + q] = x; n.combo = c; });
+  const fresh = () => { for (const p of EFFECT_KEYS) for (const q of EFFECT_KEYS) if (p !== q && !(p + '+' + q in (a.combo || {})) && !(q + '+' + p in (a.combo || {}))) return p + '+' + q; return null; };
+  return h('div', { class: 'fields' },
+    field('Archetype name', h('input', { value: a.name || '', placeholder: 'e.g. Pyromancer', onchange: e => put(n => { n.name = e.target.value.trim(); }) }), T, id, 'arch', { hint: 'Shown on the hero card, level-up cards and stats panel' }),
+    h('div', { class: 'f wide note' }, 'Potency 0.3 = every stack of that effect works 30% harder on every hit. Slot 0.15 = +15% damage for items in that slot. Combo 0.2 = +20% damage on hits that carry both effects. Level-up offers lean a little toward items with these effects or slots.'),
+    h('div', { class: 'f wide' }, h('label', {}, 'Effect potency'), h('div', { class: 'fields' }, EFFECT_KEYS.map(k => h('div', { class: 'f' }, h('label', {}, EFFECTS[k].icon + ' ' + EFFECTS[k].name), numIn('eff', k))))),
+    h('div', { class: 'f wide' }, h('label', {}, 'Slot damage'), h('div', { class: 'fields' }, SLOT_KEYS.map(k => h('div', { class: 'f' }, h('label', {}, SLOTS[k].icon + ' ' + SLOTS[k].name), numIn('slot', k))))),
+    h('div', { class: 'f wide' }, h('label', {}, 'Effect combos'),
+      ...combos.map(([k, x]) => { const [p, q] = k.split('+');
+        return h('div', { style: 'display:flex;gap:6px;align-items:center;margin-bottom:4px' }, sel(effOpts, p, v => swap(k, v, q, x)), h('span', {}, '+'), sel(effOpts, q, v => swap(k, p, v, x)),
+          h('input', { type: 'number', step: 'any', value: x, style: 'width:80px', onchange: e => { const y = parseFloat(e.target.value); setIn('combo', k, isFinite(y) ? y : 0); } }),
+          h('button', { class: 'small', onclick: () => setIn('combo', k, 0) }, '✕')); }),
+      h('button', { class: 'small', onclick: () => { const k = fresh(); if (k) setIn('combo', k, 0.2); } }, '+ Add combo')));
+}
+
 function charView() {
   const T = 'chars';
   if (!BASE.chars[pickId.chars]) pickId.chars = CHARACTERS[0].id;
@@ -510,11 +533,13 @@ function charView() {
       field('Perk text', txt(T, id, 'perk'), T, id, 'perk', { wide: true, hint: 'Describe the stat bonuses below' })),
     h('h3', {}, 'Stat bonuses'),
     h('div', { class: 'fields' }, field('Bonuses', h('div', { class: 'fields' }, C.MODS.map(k => h('div', { class: 'f' }, h('label', {}, k), h('input', { type: 'number', step: 'any', value: mods[k] ?? '', placeholder: '0', oninput: e => { const x = parseFloat(e.target.value); setMod(k, isFinite(x) ? x : 0); } }), h('div', { class: 'hint' }, MOD_HINT[k])))), T, id, 'mods', { wide: true })),
+    h('h3', {}, 'Archetype'),
+    archFields(T, id),
     h('h3', {}, 'Unlock'),
     h('div', { class: 'fields' }, lockFields(T, id, { buyable: true }),
       charCats(CHARACTERS.find(c => c.id === id)).length ? h('div', { class: 'f wide note' }, `Also needs the ${charCats(CHARACTERS.find(c => c.id === id)).map(k => EFFECTS[k].name).join(' and ')} category of ${w.name} (added automatically, players see it on the hero card): ${charCats(CHARACTERS.find(c => c.id === id)).map(k => lockLabel(catLock(k))).join('; ')}.`) : null),
     h('h3', {}, 'Preview'),
-    h('div', { class: 'preview', style: `--c:${v.color}` }, h('div', { class: 'avatar' }, '◆'), h('b', {}, v.name), h('small', {}, v.title), h('div', {}, `${w.icon} ${w.name}`), h('div', { class: 'perk' }, v.perk), charLock(CHARACTERS.find(c => c.id === id)) ? h('small', { style: 'color:#ff9e4c' }, lockFull(charLock(CHARACTERS.find(c => c.id === id)))) : null));
+    h('div', { class: 'preview', style: `--c:${v.color}` }, h('div', { class: 'avatar' }, '◆'), h('b', {}, v.name), h('small', {}, v.title), h('div', {}, `${w.icon} ${w.name}`), h('div', { class: 'perk' }, v.perk), ...archLines(v).map(x => h('small', {}, x)), charLock(CHARACTERS.find(c => c.id === id)) ? h('small', { style: 'color:#ff9e4c' }, lockFull(charLock(CHARACTERS.find(c => c.id === id)))) : null));
   return h('div', { class: 'editor', style: 'grid-template-columns: 220px minmax(300px, 760px)' }, list, form);
 }
 

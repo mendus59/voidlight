@@ -22,7 +22,7 @@ const VOIDLIGHT_CONTENT = (() => {
     stages:   { get: () => byId(STAGES), fields: ['name', 'color', 'hp', 'ramp', 'spawn', 'dmg', 'bossHp', 'xp', 'gold', 'start'] },
     tiers:    { get: () => FUSION, fields: ['name', 'need', 'mul', 'cdMul', 'own', 'pool', 'statMul', 'hist', 'lock'] },
     difficulty: { get: () => DIFFICULTY, fields: ['hpGrowth', 'hpCurve', 'spawnBase', 'spawnGrowth', 'spawnCurve', 'dmgGrowth', 'eliteEvery', 'eliteHp', 'ringEvery', 'bossHp', 'xpStep', 'xpCurve', 'overtimeAt', 'overtimeDmg', 'overtimeHp', 'overtimeSpawn'] },
-    chars:    { get: () => byId(CHARACTERS), fields: ['name', 'title', 'color', 'weapon', 'perk', 'mods', 'lock'] },
+    chars:    { get: () => byId(CHARACTERS), fields: ['name', 'title', 'color', 'weapon', 'perk', 'mods', 'arch', 'lock'] },
     upgrades: { get: () => byId(UPGRADES), fields: ['name', 'icon', 'desc', 'max', 'cost', 'per'] },
     enemies:  { get: () => ENEMY_TYPES, fields: ['name', 'hp', 'spd', 'r', 'dmg', 'xp', 'color', 'shape'] },
     bosses:   { get: () => BOSSES, fields: ['name', 'hp', 'spd', 'r', 'dmg', 'xp', 'color'] },
@@ -69,9 +69,18 @@ const VOIDLIGHT_CONTENT = (() => {
     if (v.shapes !== undefined && (typeof v.shapes !== 'object' || !Object.values(v.shapes).every(s => SHAPES.includes(s)))) return false;
     return true;
   }
+  // a hero archetype (see CHARACTERS in items.js): bonuses from −100% to +500%, combos of two different effects
+  const bonus = x => num(x) && x >= -1 && x <= 5;
+  const mapOf = (v, ok) => v === undefined || (v && typeof v === 'object' && !Array.isArray(v) && Object.entries(v).every(([k, x]) => ok(k) && bonus(x)));
+  function validArch(v) {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
+    if (v.name !== undefined && !str(v.name)) return false;
+    const pair = k => { const p = k.split('+'); return p.length === 2 && p[0] in EFFECTS && p[1] in EFFECTS && p[0] !== p[1]; };
+    return mapOf(v.eff, k => k in EFFECTS) && mapOf(v.slot, k => k in SLOTS) && mapOf(v.combo, pair);
+  }
   // Rejects anything that could break the game; null means "remove this field" (e.g. take a lock off).
   function valid(table, f, v) {
-    if (v === null) return ['lock', 'fuseLock', 'effect2', 'color', 'vis', 'trig', 'disabled', 'min', 'max', 'value', 'chance', 'elite', 'boss'].includes(f);
+    if (v === null) return ['arch', 'lock', 'fuseLock', 'effect2', 'color', 'vis', 'trig', 'disabled', 'min', 'max', 'value', 'chance', 'elite', 'boss'].includes(f);
     if (table === 'tiers' && f === 'hist') return num(v) && v >= 0 && v <= 50 && Math.round(v) === v;
     if (table === 'tiers' && f === 'need') return num(v) && v >= 1 && v <= 8 && Math.round(v) === v;
     if (table === 'stages' && f === 'start') return num(v) && v >= 1 && v <= 5 && Math.round(v) === v;
@@ -86,6 +95,7 @@ const VOIDLIGHT_CONTENT = (() => {
       case 'lock': return validLock(v);
       case 'choices': return validSpeeds(v);
       case 'vis': return validVis(v);
+      case 'arch': return validArch(v);
       case 'disabled': return typeof v === 'boolean';
       case 'mods': case 'passive': return v && typeof v === 'object' && Object.entries(v).every(([k, x]) => MODS.includes(k) && num(x) && Math.abs(x) <= 100);
       case 'max': case 'min': case 'elite': case 'boss': return num(v) && v >= 0 && v <= 1e6;

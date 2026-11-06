@@ -2,7 +2,7 @@
 // ===== VOIDLIGHT core engine: math, state, bullets, effects, enemies helpers =====
 // Game version shown on the title screen. Beta, so 0.MINOR.PATCH: bump MINOR for a feature PR, PATCH for a fix/tweak.
 // Add a matching line to CHANGELOG.md whenever you bump it.
-const VERSION = '0.16.0';
+const VERSION = '0.17.0';
 const TAU = Math.PI * 2;
 const rand = (a, b) => a + Math.random() * (b - a);
 const randi = (a, b) => Math.floor(a + Math.random() * (b - a + 1));
@@ -123,9 +123,40 @@ function aimAngle(range = 520) {
 // ---------- bullets ----------
 // Stacks of effect k on a hit: the shared pool, plus the firing item's own bonus (inst.own, set in recomputePool:
 // +2 for a single-effect item, +1 per effect for a two-effect item, +3 per effect for a fused item).
+// The hero's archetype (G.arch, from archOf) makes every stack of its effects count for more.
 function poolStack(b, k) {
   const o = b && b.owner;
-  return (G.pool[k] || 0) + (o && o.own ? (o.own[k] || 0) : (b && b.effect === k ? 2 : 0));
+  const v = (G.pool[k] || 0) + (o && o.own ? (o.own[k] || 0) : (b && b.effect === k ? 2 : 0));
+  const m = v && G.arch ? G.arch.eff[k] : 0;
+  return m ? v * (1 + m) : v;
+}
+
+// ---------- hero archetypes ----------
+// CHARACTERS[].arch in items.js: { name, eff: { effect: potency }, combo: { 'a+b': damage }, slot: { slot: damage } }.
+// archOf turns it into what the engine reads: combos as [a, b, x] pairs, and the effects and slots the hero leans toward.
+function archOf(ch) {
+  const a = (ch && ch.arch) || {}, eff = {}, slot = {}, combo = [];
+  for (const [k, x] of Object.entries(a.eff || {})) if (EFFECTS[k] && x) eff[k] = x;
+  for (const [k, x] of Object.entries(a.slot || {})) if (SLOTS[k] && x) slot[k] = x;
+  for (const [k, x] of Object.entries(a.combo || {})) { const [p, q] = k.split('+'); if (EFFECTS[p] && EFFECTS[q] && p !== q && x) combo.push([p, q, x]); }
+  const leans = [...new Set([...Object.keys(eff), ...combo.flatMap(c => [c[0], c[1]])])];
+  return { name: a.name || '', eff, slot, combo, leans, slots: Object.keys(slot) };
+}
+// one line per bonus, for the hero card, the stats panel and the admin preview
+function archLines(ch) {
+  const A = archOf(ch), pct = x => (x >= 0 ? '+' : '−') + Math.round(Math.abs(x) * 100) + '%', E = k => EFFECTS[k].icon + ' ' + EFFECTS[k].name;
+  return [
+    ...Object.entries(A.eff).map(([k, x]) => `${E(k)} ${pct(x)} stronger`),
+    ...A.combo.map(([p, q, x]) => `${EFFECTS[p].icon}${EFFECTS[q].icon} ${EFFECTS[p].name} + ${EFFECTS[q].name} hits ${pct(x)} damage`),
+    ...Object.entries(A.slot).map(([k, x]) => `${SLOTS[k].icon} ${SLOTS[k].name} items ${pct(x)} damage`),
+  ];
+}
+// damage × for an item's slot, and for a hit that carries both effects of an archetype combo
+const archSlotMul = def => 1 + ((G && G.arch && G.arch.slot[def.slot]) || 0);
+function archComboMul(S) {
+  let m = 1; if (!G.arch) return m;
+  for (const c of G.arch.combo) if (S(c[0]) > 0 && S(c[1]) > 0) m *= 1 + c[2];
+  return m;
 }
 
 function shoot(o) {
@@ -274,7 +305,7 @@ function hitEnemy(e, b) {
   hitDepth++;
   const P = G.player;
   const S = k => poolStack(b, k);
-  let dmg = b.dmg, crit = false;
+  let dmg = b.dmg * archComboMul(S), crit = false;
   // critical
   const cc = 0.03 * S('crit') + P.critBonus;
   if (cc > 0 && Math.random() < cc) { dmg *= 2 + 0.1 * S('crit'); crit = true; G.stats.crits++; }
@@ -334,7 +365,7 @@ function trigger(name, arg) {
 function baseDmg(inst) { return (inst.base ?? inst.def.dmg) * tierOf(inst).mul; }
 function ctxOf(inst) {
   const P = G.player, L = inst.level, T = inst.tier || 0, E = T ? 1 : 0, def = inst.def, e2 = def.effect2 || (inst.riders && inst.riders[0]) || def.effect;
-  return { L, E, T, P, x: P.x, y: P.y, d: baseDmg(inst) * (1 + 0.3 * (L - 1)) * P.might, n: P.amount + T, aim: aimAngle(), face: P.face,
+  return { L, E, T, P, x: P.x, y: P.y, d: baseDmg(inst) * (1 + 0.3 * (L - 1)) * P.might * archSlotMul(def), n: P.amount + T, aim: aimAngle(), face: P.face,
     col: def.color || EFFECTS[def.effect].color, col2: EFFECTS[e2].color, eff: def.effect, eff2: e2, inst };
 }
 function itemName(inst) {
