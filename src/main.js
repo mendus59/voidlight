@@ -220,7 +220,7 @@ function socketsFor(slot) { return G && G.sandbox ? SLOTS[slot].sockets : slotSo
 function available(def) { return !def.disabled && (itemUnlocked(SAVE, def) || def.id === G.char.weapon); }
 function slotCount(slot) { return G.inv.filter(i => i.def.slot === slot).length; }
 // the damage types of an item's hits (core.js hitTypes): its own effects and riders, or what a Hit augment made them
-const instTypes = inst => (inst.hitTypes || instEffects(inst)).slice();
+const instTypes = inst => { const t = (inst.hitTypes || instEffects(inst)).slice(); for (const k of (inst.aug && inst.aug.hit) || []) if (!t.includes(k)) t.push(k); return t; };
 function instEffects(inst) { const out = effectsOf(inst.def).slice(); for (const k of inst.riders || []) if (!out.includes(k)) out.push(k); return out; }
 // No effect works before its category is unlocked (a hero's starting weapon included), outside the admin test canvas.
 const effOpen = k => !G || G.sandbox || catUnlocked(SAVE, k);
@@ -254,11 +254,11 @@ function rebuild(inst) { killOwned(inst); if (inst.def.spawn && !isPassive(inst.
 // base: its own damage before the tier multiplier. stats: its own passive stats per level. riders: effects carried from
 // fusions. carry / flat: damage and passive stats carried over by fusions. links: the absorbed items' chains (chain.js).
 // gone: the items fused into it.
-function newInst(def, level = 1) { return { def, level, timer: 0.3, state: {}, tier: 0, base: def.dmg || 0, riders: [], stats: Object.assign({}, def.passive || {}), gone: [], own: null, carry: 0, flat: {}, links: [] }; }
+function newInst(def, level = 1) { return { def, level, timer: 0.3, state: {}, tier: 0, base: def.dmg || 0, riders: [], stats: Object.assign({}, def.passive || {}), gone: [], own: null, carry: 0, flat: {}, links: [], augs: [], aug: null }; }
 function reach(inst) { if (G.reached) G.reached[inst.def.id] = Math.max(G.reached[inst.def.id] || 0, inst.level); }
 // New items (and new fusions) arrive at the level's start level (STAGES in items.js).
 const arrivalLevel = () => (G.sandbox ? 1 : clamp(STAGE().start | 0, 1, MAX_LEVEL));
-function addItem(def, level) { const inst = newInst(def, level || arrivalLevel()); G.inv.push(inst); reach(inst); recomputePool(); rebuild(inst); return inst; }
+function addItem(def, level) { const inst = newInst(def, level || arrivalLevel()); giveAugments(inst); G.inv.push(inst); reach(inst); recomputePool(); rebuild(inst); return inst; }
 function levelItem(inst) {
   inst.level = Math.min(MAX_LEVEL, inst.level + 1); reach(inst);
   for (const p of inst.parts || []) { p.level = inst.level; reach(p); }
@@ -312,6 +312,7 @@ function fuse(keep, others, quiet) {
   if (!G.sandbox) writeSave();
   if (!keep.fuseEff) keep.fuseEff = sh.includes(keep.def.effect) ? keep.def.effect : sh[0] || keep.def.effect;
   absorb(keep, others, arrivalLevel()); // chain.js: 100% of keep + 50% of the others, their attacks become chain links
+  fuseAugments(keep, others); // augments.js: every augment comes along, added up
   for (const o of others) killOwned(o);
   G.inv = G.inv.filter(i => !others.includes(i));
   keep.timer = Math.min(keep.timer, 0.3);
@@ -971,7 +972,7 @@ function renderCodex() {
     const shut = effs.filter(k => !catUnlocked(SAVE, k));
     for (const k of shut) lockHtml += `<div class="req">🔒 ${EFFECTS[k].name} items: ${lockLabel(catLock(k))}</div>`;
     if (!inRun()) lockHtml += window.lockHtml(d.lock, itemOwned(SAVE, d));
-    el.innerHTML = `<div class="ico">${d.icon}</div><div class="body"><b>${d.name}</b>${masteryBadge(d, 0)}<div class="tags"><span>${SLOTS[d.slot].icon} ${SLOTS[d.slot].name}</span><span>${effTags(d)}</span>${isPassive(d) ? '<span>Passive</span>' : ''}${effs.length > 1 ? '<span>Two effects</span>' : ''}${d.trig ? `<span>⏯ ${d.trig}</span>` : ''}${heldNow(d) ? '<span class="held">In this run</span>' : ''}</div><small>${d.pattern}</small>${isPassive(d) ? `<small class="perk">${passiveText(d)}</small>` : ''}${fuseLine(d)}${histLine(d)}${lockHtml}</div>`;
+    el.innerHTML = `<div class="ico">${d.icon}</div><div class="body"><b>${d.name}</b>${masteryBadge(d, 0)}<div class="tags"><span>${SLOTS[d.slot].icon} ${SLOTS[d.slot].name}</span><span>${effTags(d)}</span>${isPassive(d) ? '<span>Passive</span>' : ''}${effs.length > 1 ? '<span>Two effects</span>' : ''}${d.trig ? `<span>⏯ ${d.trig}</span>` : ''}${augList(SAVE, d.id).some(Boolean) ? `<span>🔧 ${augList(SAVE, d.id).filter(Boolean).length}/${augSlots(d)}</span>` : ''}${heldNow(d) ? '<span class="held">In this run</span>' : ''}</div><small>${d.pattern}</small>${isPassive(d) ? `<small class="perk">${passiveText(d)}</small>` : ''}${fuseLine(d)}${histLine(d)}${lockHtml}</div>`;
     el.classList.add('open'); el.title = 'Open the fusion history of ' + d.name;
     el.onclick = e => { if (!e.target.closest('.buy')) openItemDetail(d); };
     const btn = el.querySelector('.buy');
@@ -1035,8 +1036,9 @@ function itemDetailHtml(d) {
 let detailItem = null;
 function openItemDetail(d) {
   detailItem = d; const box = $('#itemDetail');
-  box.querySelector('.dPanel').innerHTML = itemDetailHtml(d); box.hidden = false;
+  box.querySelector('.dPanel').innerHTML = itemDetailHtml(d) + augSectionHtml(d); box.hidden = false;
   box.querySelector('[data-close]').onclick = closeItemDetail;
+  wireAugments(box, d, () => { const y = box.querySelector('.dPanel').scrollTop; openItemDetail(d); box.querySelector('.dPanel').scrollTop = y; if (currentScreen === 'codex') $('#codex .gold-line').innerHTML = goldPill(); });
 }
 function closeItemDetail() { detailItem = null; $('#itemDetail').hidden = true; }
 $('#itemDetail').onclick = e => { if (e.target.id === 'itemDetail') closeItemDetail(); };
@@ -1268,7 +1270,7 @@ function invChip(i) {
   const T = i.tier || 0, next = T < TIER_KEYS.length - 1 ? FUSION[TIER_KEYS[T + 1]] : null, st = [i, ...(i.parts || [])].map(instStats).reduce((a, x) => { for (const [k, v] of Object.entries(x)) a[k] = (a[k] || 0) + v; return a; }, {});
   const fuseNote = i.level < MAX_LEVEL || !next ? '' : !T && !fuseUnlocked(SAVE, i.def) ? `Not mastered (${fuseLockText(i.def)}): a mastered item can absorb it, but it can't remain.` : !tierUnlocked(SAVE, TIER_KEYS[T + 1]) ? `${next.name} fusion locked: ${lockLabel(next.lock)}.` : !histMet(SAVE, i.def.id, T + 1) ? `${next.name} fusion locked for ${i.def.name}: ${histText(T + 1)} first (${histProgress(SAVE, i.def.id, T + 1).join('/')}). See its Codex page.` : `Ready: ${next.need} level 5 ${tierName(T).toLowerCase()} items sharing an effect make a ${next.name} item.`;
   return `<div class="chip" style="--c:${T ? TIER_COLORS[T] : EFFECTS[i.def.effect].color}">${i.def.icon} ${itemName(i)} <b>Lv${i.level}</b>${T ? ` <b style="color:${TIER_COLORS[T]}">${tierName(T)}</b>` : ''}${isPassive(i.def) ? ' <b style="color:#c9f">Passive</b>' : ''} <span style="font-size:11px">${effNames(instEffects(i))}</span>` +
-    `<small>${isPassive(i.def) ? 'Passive: ' + (statText(st) || 'no stats') : i.def.pattern}</small>` + (isPassive(i.def) ? '' : `<small>Hits as ${effNames(instTypes(i))}</small>`) + (i.riders.length && !isPassive(i.def) ? `<small>Its bullets also carry ${effNames(i.riders)}.</small>` : '') +
+    `<small>${isPassive(i.def) ? 'Passive: ' + (statText(st) || 'no stats') : i.def.pattern}</small>` + (isPassive(i.def) ? '' : `<small>Hits as ${effNames(instTypes(i))}</small>`) + (i.riders.length && !isPassive(i.def) ? `<small>Its bullets also carry ${effNames(i.riders)}.</small>` : '') + instAugHtml(i) +
     (!isPassive(i.def) && Object.keys(st).length ? `<small>Stats from fused passives: ${statText(st)}.</small>` : '') + (i.gone.length ? `<small>Made from ${i.gone.length + 1} items: ${[i.def, ...i.gone].map(d => d.icon).join('')}</small>` : '') + ((i.links || []).length ? `<div class="chain">${chainHtml(i.links, G.player.might, i.def)}</div>` : '') + (i.nexus ? nexusPauseLine(i) : fuseNote ? `<small>${fuseNote}</small>` : '') + '</div>';
 }
 function renderPause() {

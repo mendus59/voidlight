@@ -26,6 +26,7 @@ function B(c, o) {
     if (v.speed && b.spd) { b.spd *= v.speed; if (b.maxSpd) b.maxSpd *= v.speed; }
     if (v.trail && !b.beam && !b.follow) b.trail = [];
   }
+  if (c.inst.aug && c.inst.aug.trail && !b.beam && !b.follow && !b.trail) b.trail = []; // a Form augment (augments.js)
   return shoot(b);
 }
 function lob(c, tx, ty, o) {
@@ -40,7 +41,7 @@ function targetPoint(range = 380) {
 }
 function petFollow(d, dt, tx, ty, k = 6) { d.x = lerp(d.x, tx, Math.min(1, dt * k)); d.y = lerp(d.y, ty, Math.min(1, dt * k)); }
 function persistBase(c) { return { life: Infinity, persist: true, noMods: true }; }
-function cdFor(i, base) { return base * (1 - 0.07 * (i.level - 1)) * G.player.cdMul * tierOf(i).cdMul; }
+function cdFor(i, base) { return base * (1 - 0.07 * (i.level - 1)) * G.player.cdMul * tierOf(i).cdMul * (1 - ((i.aug && i.aug.cd) || 0)); }
 function radial(c, x, y, m, o, a0 = 0) { for (let k = 0; k < m; k++) B(c, Object.assign({ x, y, ang: a0 + k * TAU / m }, o)); }
 
 // ======================= WEAPONS =======================
@@ -503,7 +504,7 @@ const MATERIALS = {
 const MATERIAL_FAMILIES = { slot: { name: 'Slot materials', from: 'Elites, chests and challenge shrines. Each is used by augments for items of its slot.' },
   essence: { name: 'Essences', from: 'Zone enemies of that element and their Wardens. Hit and Effect augments of that effect use them.' },
   attr: { name: 'Attribute materials', from: 'Bosses, buff shrines, and elites from Level 4 on. Stat augments and Forge rank caps use them.' },
-  catalyst: { name: 'Catalysts', from: 'Wardens and first clears of zones; bosses drop Form Catalysts. Every augment needs one of its kind.' } };
+  catalyst: { name: 'Catalysts', from: 'Wardens and first clears of zones; bosses drop Form Catalysts. Power, Hit, Effect, Form and big Stat augments need one of their kind.' } };
 // What drops materials. elite: slot materials per elite (min-max). eliteAttr: chance of an attribute material from an elite, from
 // Level eliteAttrFrom on. boss: attribute materials per boss, bossForm: chance of a Form Catalyst. chest: slot materials per chest
 // item. zone: chance per zone enemy to drop its zone's Essence. warden: Essences from a Warden; wardenCat: Catalysts.
@@ -554,6 +555,35 @@ const SHRINES = {
 // challenge (rising to 2× by its end). grace: seconds a hold may be left. chestMin: least a challenge chest holds. mats: slot
 // materials for a challenge.
 const SHRINE_RULES = { run: { buffs: 4, challenges: 2, channel: 2, buffTime: 60, radius: 320, spawn: 3, grace: 3, chestMin: 3, mats: 3 } };
+
+// ======================= AUGMENTS (augments.js) =======================
+// Permanent tweaks to one item, bought outside a run with gold and materials, one per augment slot. They add up through fusion:
+// the item that remains carries every augment of every item fused into it (Power is capped on the total). mats: material ids, plus
+// `slot` (the item's slot material) and `ess` (the Essence of the augment's effect). Hit and Effect come one per effect (`hit:burn`).
+//   Power: + damage. Hit: the item's own hits also count as that damage type (answers immune zones). Effect: the item carries the
+//   effect (its own bullets apply it, and it counts for fusion). Stat: cooldown, area, duration, projectile speed, crit or
+//   projectiles for that item only. Form: looks only.
+const AUG_KINDS = { power: { name: 'Power', icon: '🔴', color: '#ff5a5a' }, hit: { name: 'Hit', icon: '🟠', color: '#ffa04c' }, effect: { name: 'Effect', icon: '🟣', color: '#c04cff' },
+  stat: { name: 'Stat', icon: '🔵', color: '#4c9bff' }, form: { name: 'Form', icon: '⚪', color: '#e8e8ff' } };
+const AUGMENTS = {
+  power:        { kind: 'power',  name: 'Power',        mods: { power: 0.06 },   gold: 150, mats: { slot: 2, might_ore: 2, cat_power: 1 } },
+  hit:          { kind: 'hit',    name: 'Hit',          perEffect: true,         gold: 200, mats: { slot: 2, might_ore: 1, ess: 3, cat_hit: 1 } },
+  effect:       { kind: 'effect', name: 'Effect',       perEffect: true,         gold: 300, mats: { slot: 3, ess: 5, cat_effect: 1 } },
+  stat_cd:      { kind: 'stat',   name: 'Quickening',   mods: { cd: 0.04 },      gold: 80,  mats: { slot: 2, haste_sand: 2 } },
+  stat_area:    { kind: 'stat',   name: 'Breadth',      mods: { area: 0.08 },    gold: 80,  mats: { slot: 2, reach_silk: 2 } },
+  stat_duration: { kind: 'stat',  name: 'Lingering',    mods: { duration: 0.08 }, gold: 80, mats: { slot: 2, ever_wax: 2 } },
+  stat_projSpd: { kind: 'stat',   name: 'Velocity',     mods: { projSpd: 0.1 },  gold: 80,  mats: { slot: 2, swift_quill: 2 } },
+  stat_crit:    { kind: 'stat',   name: 'Keenness',     mods: { crit: 0.03 },    gold: 80,  mats: { slot: 2, keen_lens: 2 } },
+  stat_amount:  { kind: 'stat',   name: 'Twinning',     mods: { amount: 1 },     gold: 600, mats: { slot: 4, twin_seed: 4, cat_stat: 2 } },
+  form_trail:   { kind: 'form',   name: 'Trails',       mods: { trail: 1 },      gold: 40,  mats: { slot: 1, cat_form: 1 } },
+  form_spark:   { kind: 'form',   name: 'Impact sparks', mods: { spark: 1 },     gold: 40,  mats: { slot: 1, cat_form: 1 } },
+};
+// powerCap: the most Power one item (fused ones included) can have. refund: share of the old augment's materials back when a slot
+// is re-augmented (gold isn't refunded); fee: extra gold to re-augment. weapon .. passive: augment slots per item of that kind
+// (an item's own augSlots overrides it).
+const AUG_RULES = { run: { powerCap: 0.3, refund: 0.5, fee: 50, weapon: 4, spell: 5, orbit: 5, trap: 6, relic: 6, passive: 3 } };
+// what opens each slot, in order: kills with the item, its mastery, or having fused it into that tier
+const AUG_OPEN = [{ kills: 100 }, { mastery: 1 }, { kills: 1000 }, { fuse: 'fused' }, { kills: 5000 }, { fuse: 'super' }, { kills: 20000 }];
 
 // ======================= FORGE (meta upgrades) =======================
 const UPGRADES = [

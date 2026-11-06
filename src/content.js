@@ -18,7 +18,9 @@ const VOIDLIGHT_CONTENT = (() => {
   const byId = list => Object.fromEntries(list.map(x => [x.id, x]));
   // Every editable table: where it lives and which fields the admin page may change.
   const TABLES = {
-    items:    { get: () => ITEM, fields: ['name', 'icon', 'effect', 'effect2', 'passive', 'dmg', 'cd', 'pattern', 'trig', 'lock', 'fuseLock', 'color', 'vis', 'disabled', 'chain'] },
+    items:    { get: () => ITEM, fields: ['name', 'icon', 'effect', 'effect2', 'passive', 'dmg', 'cd', 'pattern', 'trig', 'lock', 'fuseLock', 'color', 'vis', 'disabled', 'chain', 'augSlots'] },
+    augments: { get: () => AUGMENTS, fields: ['name', 'gold'] },
+    augrules: { get: () => AUG_RULES, fields: ['powerCap', 'refund', 'fee', 'weapon', 'spell', 'orbit', 'trap', 'relic', 'passive'] },
     cats:     { get: () => CATEGORIES, fields: ['lock'] },
     stages:   { get: () => byId(STAGES), fields: ['name', 'color', 'hp', 'ramp', 'spawn', 'dmg', 'bossHp', 'xp', 'gold', 'start', 'mapSize'] },
     world:    { get: () => ({ run: WORLD }), fields: ['size', 'landmarks', 'anchors', 'mapMin'] },
@@ -110,6 +112,9 @@ const VOIDLIGHT_CONTENT = (() => {
     if (table === 'shrines' && f === 'value') return num(v) && v >= 0 && v <= 5;
     if (table === 'shrines' && (f === 'time' || f === 'kills')) return num(v) && v >= 1 && v <= 1000;
     if (table === 'shrinerules') return num(v) && v >= 0 && (f === 'buffs' || f === 'challenges' ? v <= 20 : f === 'radius' ? v >= 100 && v <= 2000 : f === 'chestMin' ? v <= 5 : v <= 600);
+    if (table === 'items' && f === 'augSlots') return v === null || (num(v) && v >= 1 && v <= 7 && Math.round(v) === v);
+    if (table === 'augments' && f === 'gold') return num(v) && v >= 0 && v <= 1e6;
+    if (table === 'augrules') return num(v) && v >= 0 && (f === 'powerCap' ? v <= 3 : f === 'refund' ? v <= 1 : f === 'fee' ? v <= 1e5 : v >= 1 && v <= 7 && Math.round(v) === v);
     if (table === 'matdrops') return num(v) && v >= 0 && (['eliteAttr', 'bossForm', 'zone', 'repeat'].includes(f) ? v <= 1 : v <= 50);
     if (v === null) return ['arch', 'lock', 'fuseLock', 'effect2', 'color', 'vis', 'trig', 'disabled', 'min', 'max', 'value', 'chance', 'elite', 'boss', 'chain'].includes(f);
     if (table === 'chain') return f === 'depth' ? num(v) && v >= 0 && v <= 4 && Math.round(v) === v : f === 'rate' ? num(v) && v >= 0.5 && v <= 60 : num(v) && v >= 0 && v <= 3;

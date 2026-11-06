@@ -33,7 +33,7 @@ let ov = {};                                   // what you are editing
 let live = { ov: {}, updatedAt: 0, by: '' };   // content/live, what players get
 let draft = null;                              // content/draft
 let history = [];
-const TABLE_NAMES = { shrines: 'Shrine', shrinerules: 'Shrine rules', zones: 'Zone', zonerules: 'Zone rules', matdrops: 'Material drops', world: 'World', codex: 'Codex prices', dmgtypes: 'Damage types', items: 'Item', chars: 'Character', cats: 'Category', stages: 'Level', tiers: 'Fusion tier', difficulty: 'Difficulty', upgrades: 'Forge upgrade', enemies: 'Enemy', bosses: 'Boss', drops: 'Pickup', options: 'Game option', chain: 'Fusion chains' };
+const TABLE_NAMES = { augments: 'Augment', augrules: 'Augment rules', shrines: 'Shrine', shrinerules: 'Shrine rules', zones: 'Zone', zonerules: 'Zone rules', matdrops: 'Material drops', world: 'World', codex: 'Codex prices', dmgtypes: 'Damage types', items: 'Item', chars: 'Character', cats: 'Category', stages: 'Level', tiers: 'Fusion tier', difficulty: 'Difficulty', upgrades: 'Forge upgrade', enemies: 'Enemy', bosses: 'Boss', drops: 'Pickup', options: 'Game option', chain: 'Fusion chains' };
 
 // current value of one entry: items.js default with the overrides on top
 function get(t, id) {
@@ -424,7 +424,7 @@ function render() {
   if (isItem) { itemView(tab); sb.renderControls(); renderShapes(); return; }
   if (tab === 'chars') other.replaceChildren(charView());
   else if (tab === 'enemies') other.replaceChildren(enemyView());
-  else if (tab === 'drops') other.replaceChildren(h('div', { style: 'display:grid;gap:16px' }, dropView(), matDropView(), shrineView()));
+  else if (tab === 'drops') other.replaceChildren(h('div', { style: 'display:grid;gap:16px' }, dropView(), matDropView(), shrineView(), augView()));
   else if (tab === 'upgrades') other.replaceChildren(upgradeView());
   else if (tab === 'progress') other.replaceChildren(progressView());
   else if (tab === 'options') other.replaceChildren(optionsView());
@@ -463,6 +463,8 @@ function itemView(slot) {
     def.passive ? passiveFields(id) : h('div', { class: 'fields' },
       field('Base damage', num(T, id, 'dmg', { step: 1 }), T, id, 'dmg', { hint: '+30% per level, × the fusion tier. A fusion also carries over 100% of what the kept item hit for and 50% of what the others hit for, as flat damage' }),
       def.fire ? field('Cooldown (s)', num(T, id, 'cd', { step: 0.05 }), T, id, 'cd', { hint: '−7% per level, times the fusion tier\'s cooldown factor' }) : null),
+    h('div', { class: 'fields' }, field('Augment slots (empty = by kind)', h('input', { type: 'number', min: 1, max: 7, step: 1, value: get(T, id).augSlots ?? '', placeholder: String(isPassive(def) ? get('augrules', 'run').passive : get('augrules', 'run')[def.slot]),
+      oninput: e => { const x = parseInt(e.target.value, 10); set(T, id, 'augSlots', x >= 1 && x <= 7 ? x : null); } }), T, id, 'augSlots', { hint: 'How many augments the player can put on this item (1 to 7). Slots open with kills, mastery and fusions.' })),
     h('h3', {}, 'Unlock'),
     h('div', { class: 'fields' }, lockFields(T, id, { buyable: true }),
       h('div', { class: 'f wide note' }, `Also needs its ${effectsOf(v).map(k => EFFECTS[k].name).join(' and ')} ${effectsOf(v).length > 1 ? 'categories' : 'category'}: ${effectsOf(v).map(k => catLock(k) ? `${EFFECTS[k].name} opens with “${catLock(k).text || lockText(catLock(k))}”` : `${EFFECTS[k].name} is open from the start`).join('; ')}. Categories are set on the Progression tab.`)),
@@ -627,6 +629,12 @@ function matDropView() {
   return tableView('Material drops', 'Elites: slot materials (min to max) for a slot the player holds items in, plus a chance of an attribute material from "Attr from level" on. Bosses: attribute materials each, and a chance of a Form Catalyst. Chests: slot materials per item in the chest. Zone enemies: chance of their zone\'s Essence. Wardens: Essences and Catalysts; "Repeat" is the share a Warden gives once its zone was cleared in that level before. First clear: extra Essences and Catalysts the first time ever.', 'matdrops', ['run'], [
     { f: 'eliteMin', label: 'Elite min', step: 1 }, { f: 'eliteMax', label: 'Elite max', step: 1 }, { f: 'eliteAttr', label: 'Elite attr %', pct: true }, { f: 'eliteAttrFrom', label: 'Attr from level', step: 1 }, { f: 'boss', label: 'Boss attr', step: 1 }, { f: 'bossForm', label: 'Boss Form %', pct: true },
     { f: 'chest', label: 'Per chest item' }, { f: 'zone', label: 'Zone Essence %', pct: true }, { f: 'warden', label: 'Warden Essences', step: 1 }, { f: 'wardenCat', label: 'Warden Catalysts', step: 1 }, { f: 'repeat', label: 'Repeat ×' }, { f: 'firstEss', label: 'First: Essences', step: 1 }, { f: 'firstCat', label: 'First: Catalysts', step: 1 }]);
+}
+function augView() {
+  return h('div', { style: 'display:grid;gap:16px' },
+    tableView('Augments', 'Gold price of each augment (Hit and Effect: each of the per-effect ones). Their materials are set in items.js.', 'augments', Object.keys(BASE.augments), [{ f: 'name', label: 'Name', kind: 'text' }, { f: 'gold', label: 'Gold', step: 10 }]),
+    tableView('Augment rules', 'Power cap: the most Power one item (fused ones included) can have (0.3 = +30%). Refund: share of the old augment\'s materials given back when a slot is changed; fee: extra gold to change one. Weapon … Passive: augment slots per item of that kind (1 to 7); an item\'s own value (Items tab) overrides it.', 'augrules', ['run'],
+      [{ f: 'powerCap', label: 'Power cap' }, { f: 'refund', label: 'Refund' }, { f: 'fee', label: 'Fee ●', step: 10 }, ...['weapon', 'spell', 'orbit', 'trap', 'relic', 'passive'].map(k => ({ f: k, label: k[0].toUpperCase() + k.slice(1) + ' slots', step: 1 }))]));
 }
 function shrineView() {
   return h('div', { style: 'display:grid;gap:16px' },

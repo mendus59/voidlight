@@ -2,7 +2,7 @@
 // ===== VOIDLIGHT core engine: math, state, bullets, effects, enemies helpers =====
 // Game version shown on the title screen. Beta, so 0.MINOR.PATCH: bump MINOR for a feature PR, PATCH for a fix/tweak.
 // Add a matching line to CHANGELOG.md whenever you bump it.
-const VERSION = '0.27.0';
+const VERSION = '0.28.0';
 const TAU = Math.PI * 2;
 const rand = (a, b) => a + Math.random() * (b - a);
 const randi = (a, b) => Math.floor(a + Math.random() * (b - a + 1));
@@ -159,14 +159,15 @@ function archComboMul(S) {
   return m;
 }
 
+const NO_AUG = { power: 0, cd: 0, area: 0, duration: 0, projSpd: 0, crit: 0, amount: 0, hit: [] };
 function shoot(o) {
   // bullet cap; higher fusion tiers get headroom so big fused items are not starved by a screen full of small bullets
   if (G.bullets.length > 2600 + 900 * ((o.owner && o.owner.tier) || 0)) return null;
-  const P = G.player;
+  const P = G.player, A = (o.owner && o.owner.aug) || NO_AUG; // the item's own augments (augments.js)
   const b = Object.assign({ x: P.x, y: P.y, ang: 0, spd: 400, r: 5, dmg: 10, life: 1.5, pierce: 1, t: 0, color: '#fff', shape: 'orb', effect: null }, o);
-  b.spd *= P.projSpd;
-  b.r *= Math.sqrt(P.area);
-  if (isFinite(b.life)) b.life *= P.duration;
+  b.spd *= P.projSpd * (1 + A.projSpd);
+  b.r *= Math.sqrt(P.area * (1 + A.area));
+  if (isFinite(b.life)) b.life *= P.duration * (1 + A.duration);
   b.vx = Math.cos(b.ang) * b.spd; b.vy = Math.sin(b.ang) * b.spd;
   if (b.wave) { b.px = b.x; b.py = b.y; b.wave.ph = b.wave.ph || 0; }
   if (!b.noMods) {
@@ -182,7 +183,7 @@ function shoot(o) {
 
 // instant area hit
 function strike(x, y, r, dmg, effect, o = {}) {
-  const P = G.player; if (!o.raw) r *= Math.sqrt(P.area);
+  const P = G.player; if (!o.raw) r *= Math.sqrt(P.area * (1 + ((o.owner && o.owner.aug) || NO_AUG).area));
   if (!o.noFx) fxRing(x, y, r, o.color || (effect ? EFFECTS[effect].color : '#fff'), 0.3, 3);
   const pseudo = { dmg, effect, vx: 0, vy: 0, x, y, kb: o.kb || 0, owner: o.owner, link: o.link, dtype: o.dtype };
   for (const e of enemiesNear(x, y, r)) hitEnemy(e, pseudo);
@@ -311,6 +312,7 @@ function collideBullet(b) {
 function hitTypes(b) {
   if (b.dtype) return b.dtype;
   const o = b.owner, out = o ? (o.hitTypes || instEffects(o)).slice() : [];
+  if (o && o.aug) for (const k of o.aug.hit) if (!out.includes(k)) out.push(k); // Hit augments
   if (b.effect && !out.includes(b.effect)) out.push(b.effect);
   return out;
 }
@@ -335,7 +337,7 @@ function hitEnemy(e, b) {
   const tm = typeMul(e, hitTypes(b));
   let dmg = b.dmg * archComboMul(S), crit = false, bonus = 0;
   // critical
-  const cc = 0.03 * S('crit') + P.critBonus;
+  const cc = 0.03 * S('crit') + P.critBonus + ((b.owner && b.owner.aug) || NO_AUG).crit;
   if (cc > 0 && Math.random() < cc) { dmg *= 2 + 0.1 * S('crit'); crit = true; G.stats.crits++; }
   // reactions
   if (e.burnT > 0 && e.slowT > 0 && (S('burn') || S('chill')) && e.reactCd <= 0) {
@@ -356,6 +358,7 @@ function hitEnemy(e, b) {
   if ((s = S('vampiric')) > 0 && Math.random() < 0.012 * s) heal(1);
   dmg = dmg * tm + bonus;
   if (b.lifesteal) heal(dmg * b.lifesteal);
+  if (b.owner && b.owner.aug && b.owner.aug.spark) fxSpark(e.x, e.y, b.color || '#fff', 3, 140); // a Form augment
   if (b.owner) e.by = b.owner; // the item credited with the kill (its burn and poison ticks count for it too)
   if (tm === 0 && !bonus) { if (!(e.immT > G.time)) { e.immT = G.time + 0.7; fxText(e.x, e.y - e.r - 4, 'IMMUNE', '#8a86a8', 11); } }
   else damageEnemy(e, dmg, crit ? '#ffe14d' : tm > 1 ? '#ffd24c' : tm < 1 ? '#8a86a8' : (b.effect ? EFFECTS[b.effect].color : '#ffffff'), crit, tm);
@@ -405,7 +408,8 @@ const lvlF = L => 1 + 0.3 * (L - 1);
 function itemPower(inst) { return inst.def.dmg || inst.carry ? baseDmg(inst) * lvlF(inst.level) + (inst.carry || 0) : 0; }
 function ctxOf(inst) {
   const P = G.player, L = inst.level, T = inst.tier || 0, E = T ? 1 : 0, def = inst.def, e2 = def.effect2 || (inst.riders && inst.riders[0]) || def.effect;
-  return { L, E, T, P, x: P.x, y: P.y, d: itemPower(inst) * P.might * archSlotMul(def), n: P.amount + T, aim: aimAngle(), face: P.face,
+  const A = inst.aug || NO_AUG; // augments.js: Power and Twinning
+  return { L, E, T, P, x: P.x, y: P.y, d: itemPower(inst) * P.might * archSlotMul(def) * (1 + A.power), n: P.amount + T + A.amount, aim: aimAngle(), face: P.face,
     col: def.color || EFFECTS[def.effect].color, col2: EFFECTS[e2].color, eff: def.effect, eff2: e2, inst };
 }
 function itemName(inst) {
