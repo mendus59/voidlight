@@ -1,6 +1,6 @@
 # Voidlight Roadmap: maps, zones, augments and the expanded Forge
 
-Status: **proposal.** Patrick answered most of the open questions on 2026-11-06 (see *Decisions* below); two are still open (Part 3).
+Status: **proposal.** Patrick answered most of the open questions on 2026-11-06 (see *Decisions* below); one is still open (Part 3).
 Nothing here is built yet. Written 2026-11-06 against v0.22.0.
 
 ## Decisions (Patrick, 2026-11-06)
@@ -21,6 +21,9 @@ These override the recommendations in Part 1 wherever they differ.
    several kinds (e.g. turning a spell's damage into Burn damage costs Spell, Damage and Burn materials). Augments are expensive, but
    some are reachable early. Every item has a **fixed number of augment slots (3 to 7, to be settled by testing)**. A slot can be
    re-augmented for more materials with a partial refund of what it held; the slot count is the real limit.
+6. **Augments add up through fusion.** Augments permanently modify an item for the player, so when items fuse, the item that remains
+   carries every augment of every item in the fusion, added together (not halved like damage). Augments are meant as subtle tweaks to
+   how an item plays, so their values are sized for that.
 
 ---
 
@@ -220,6 +223,10 @@ work is built. Each phase lists what it still needs from Part 3.
 * **Choosing 3 to 7:** measured with the Fusion Lab (DPS of typical builds with 3, 5 and 7 slots filled against Levels 10 to 14) and
   with a material-income estimate (how many runs to fill a slot). Starting guess: 3 for strong weapons and passives, 5 for most items,
   7 for weak or niche items, so augments also even out the roster.
+* **Fusion (Decision 6):** the item that remains gets the augments of every item fused into it, added together, at full value
+  (Super and Mega items can carry dozens). The absorbed items keep their own augments in the save for later runs. Since that stacks,
+  each augment is sized as a subtle tweak, and the Power cap applies to the fused total so a Mega can't stack raw damage past it.
+  Hit and Effect augments from absorbed items are carried by the item that remains, so fusing is also a way to combine damage types.
 * Augments apply in runs and in the Fusion Lab and show on level-up cards, the stats panel and the item's Armory page.
 * Rebalance pass on Levels 8 to 14 assuming typical augments.
 * Admin: augment catalogue, slot counts per item, recipes, refund rate.
@@ -232,7 +239,7 @@ work is built. Each phase lists what it still needs from Part 3.
   * Proposed cost: gold in the thousands to tens of thousands plus slot materials and catalysts, gated by beating Levels 3 / 6 / 9.
 * **Rank caps**: each Forge upgrade can be raised past its current max with attribute materials (Might 5 → 8, etc.), each step gated
   by a level.
-* **Forge recipes** (see Part 3, question 2).
+* **Forge recipes** (see Part 3, question 1).
 * **Level briefing** on the level select screen: the level's zones and Wardens and what the Codex says about their immunities and
   weaknesses (unknown = "?"), so a build can be planned and attuned before the run.
 
@@ -249,16 +256,13 @@ work is built. Each phase lists what it still needs from Part 3.
 | 3 Wrapping maps + Map pickup | large | nothing |
 | 4 Zones + materials | large | 2, 3 |
 | 5 Shrines | medium | 3 (4 for material rewards) |
-| 6 Augments | large | 4, Part 3 Q1 |
-| 7 Forge + Attunement | medium | 4, 6, Part 3 Q2 |
+| 6 Augments | large | 4 |
+| 7 Forge + Attunement | medium | 4, 6, Part 3 Q1 |
 | 8 Endgame retune | medium, mostly tuning | all |
 
 ---
 
 ## Part 3. Still open
 
-1. **Augments through fusion.** When items fuse, does the item that remains keep only its own augments, while absorbed items' augments
-   stay saved on those items but don't transfer? *(Recommended: yes. Augments are per item, so the absorbed item keeps them for its
-   next run.)*
-2. **Forge recipes.** Do recipes *unlock* items and Nexus recipes (so they then show up in runs), rather than handing you the item at
+1. **Forge recipes.** Do recipes *unlock* items and Nexus recipes (so they then show up in runs), rather than handing you the item at
    the start of a run? *(Recommended: unlock. A Nexus at 0:00 would skip the whole build.)*
