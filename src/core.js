@@ -377,6 +377,7 @@ function ctxOf(inst) {
     col: def.color || EFFECTS[def.effect].color, col2: EFFECTS[e2].color, eff: def.effect, eff2: e2, inst };
 }
 function itemName(inst) {
+  if (inst.nexus && typeof nexusDef === 'function' && nexusDef(inst.nexus)) return nexusDef(inst.nexus).name; // a Nexus (nexus.js)
   const T = inst.tier || 0; if (!T) return inst.def.name;
   const fused = (FUSE_PREFIX[inst.fuseEff || inst.def.effect] || 'Fused') + ' ' + inst.def.name;
   return T === 1 ? fused : tierOf(inst).name + ' ' + fused;

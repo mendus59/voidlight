@@ -11,7 +11,7 @@ window.VOIDLIGHT_TESTSAVE = !window.VOIDLIGHT_SANDBOX && new URLSearchParams(loc
 
 const VOIDLIGHT_CONTENT = (() => {
   const CACHE_KEY = window.VOIDLIGHT_TESTSAVE ? 'voidlight.testcontent' : 'voidlight.content.v1';
-  const STATS = { totalKills: 'Enemies defeated (lifetime)', bestTime: 'Best survival time in any level (seconds)', bossKills: 'Bosses defeated', evolves: 'Fusions made', supers: 'Super fusions made', megas: 'Mega fusions made', wins: 'Runs won', runs: 'Runs played', maxLevel: 'Highest character level reached', totalGold: 'Gold earned (lifetime)' };
+  const STATS = { totalKills: 'Enemies defeated (lifetime)', bestTime: 'Best survival time in any level (seconds)', bossKills: 'Bosses defeated', evolves: 'Fusions made', supers: 'Super fusions made', megas: 'Mega fusions made', nexus: 'Nexus items formed', wins: 'Runs won', runs: 'Runs played', maxLevel: 'Highest character level reached', totalGold: 'Gold earned (lifetime)' };
   const SHAPES = ['orb', 'shard', 'bolt', 'lance', 'missile', 'petal', 'disc', 'glaive', 'blade', 'star', 'prism', 'shield', 'skull', 'flame', 'spore', 'aura'];
   const CHAIN_SHAPES = [...SHAPES, 'feather', 'spark', 'bat', 'dagger'];
   const MODS = STAT_KEYS; // hero perks and passive item stats
