@@ -308,7 +308,7 @@ const CATEGORIES = {
 };
 
 // ======================= LEVELS =======================
-// Twelve levels. Level 1 is open; each other one opens when the level before it is beaten (its 15:00 boss defeated).
+// Fourteen levels (13 and 14 are the Nexus levels). Level 1 is open; each other one opens when the level before it is beaten (its 15:00 boss defeated).
 // On top of DIFFICULTY.run: enemy HP ×hp, rising to ×hp·(1 + ramp) by 15:00 (it grows with the cube of the clock, so the
 // late game is where it bites, when fused builds are at their strongest);
 // spawns ×spawn, enemy damage ×dmg, boss HP ×bossHp, XP crystals ×xp, gold ×gold. start = the level new items

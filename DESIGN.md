@@ -160,8 +160,9 @@ any other item and it's a normal fusion. Super and Mega recipes name the core it
 
 **Balance (bot tested, invulnerable player, 4 level 5 Megas injected).** A Mega Nexus does about 1.7× the damage of a normal Mega
 (5 parts at full strength against 1 + 4 × 50%). With three Mega Nexus items (threat 12) Level 10 is only slightly easier than with
-four normal Megas, so the threat roughly cancels the power gain. The two Nexus levels (see section 9) are tuned for Nexus builds:
-the same build takes about twice the pressure on Nexus Spire and three times on Event Horizon. Hand playtests should drive tuning.
+four normal Megas, so the threat roughly cancels the power gain. Levels 13 (Nexus Spire) and 14 (Event Horizon) are the Nexus
+levels, meant for full Nexus builds: with only that injected build they put about 4× and 5× the pressure of the Level 10 baseline
+on you, and the 10:00 boss survives, so they need a fuller build than the bot had. Hand playtests should drive tuning.
 
 ## 3b. Progression: levels, categories, mastery and achievements
 * **Nothing unlocks by gold alone.** Every locked item, character, category and fusion tier has an achievement. Most items and
@@ -390,6 +391,8 @@ spawn rate, enemy damage and boss HP, and also XP and gold so a build can keep u
 | 10 | The Void Heart | ×4.73 | 68 | ×1.45 | ×1.9 | ×2025 | ×16 | ×3.5 | 5 |
 | 11 | The Echo Loom | ×5.4 | 90 | ×1.5 | ×2 | ×3200 | ×20 | ×4 | 5 |
 | 12 | Singularity Choir | ×6.6 | 120 | ×1.55 | ×2.1 | ×5200 | ×24 | ×4.5 | 5 |
+| 13 | Nexus Spire | ×7.4 | 150 | ×1.6 | ×2.2 | ×8000 | ×30 | ×5 | 5 |
+| 14 | Event Horizon | ×8.4 | 190 | ×1.65 | ×2.3 | ×12000 | ×36 | ×5.6 | 5 |
 
 Enemy HP is `hp × (1 + ramp × f³)`, where f goes from 0 at 0:00 to 1 at 15:00. All values are editable in the admin panel (Progression > Levels).
 

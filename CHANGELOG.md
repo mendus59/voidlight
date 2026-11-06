@@ -6,6 +6,12 @@ Voidlight is in beta, so versions are `0.MINOR.PATCH`. The version lives in one 
 - Bump **PATCH** (0.11.0 → 0.11.1) for a bug fix or balance tweak.
 - Add a line here in the same PR.
 
+## 0.19.0 (2026-11-06)
+- Nexus items: 20 named recipes (11 Fused, 6 Super, 3 Mega) made by fusing specific items and keeping the recipe's first item (the core). Nothing is halved: every part keeps 100% of its damage, attack and stats at the new tier, all in one socket. A Nexus can't fuse further.
+- Nexus threat: while you hold Nexus items, enemies get more HP, damage and spawns (Fused 1, Super 2, Mega 4 threat points), and forming one calls a ring of elites. The HUD shows your threat.
+- Nexus recipes are learned through achievements (new "Nexus recipes" section). The Codex has a ✴ Nexus tab with every recipe.
+- Two new Nexus levels for Nexus builds: Level 13 Nexus Spire and Level 14 Event Horizon.
+
 ## 0.18.0 (2026-11-06)
 - Fusion chains: every attacking item a fusion absorbs now plays its own attack off the item that remains, at 50% of its damage. Each item has a chain form (volley, burst, orbit ring, zone, arc, blast, halo, satellites or trail): e.g. Cinder Ring in Ember Pistol spins a cinder ring out wherever a fireball hits or runs out, and Frost Halo in Frost Fan puts a frost halo on every shard. Super and Mega fusions nest the chains: the shots a link makes trigger the links of the item it came from.
 - Fusion rules: a mastered item can absorb items that are not mastered yet (only mastered items can remain). A fusion always makes the remaining item stronger: it keeps 100% of what it had and adds 50% of what each absorbed item had, even though it restarts at the level's start level.
