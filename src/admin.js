@@ -33,7 +33,7 @@ let ov = {};                                   // what you are editing
 let live = { ov: {}, updatedAt: 0, by: '' };   // content/live, what players get
 let draft = null;                              // content/draft
 let history = [];
-const TABLE_NAMES = { codex: 'Codex prices', dmgtypes: 'Damage types', items: 'Item', chars: 'Character', cats: 'Category', stages: 'Level', tiers: 'Fusion tier', difficulty: 'Difficulty', upgrades: 'Forge upgrade', enemies: 'Enemy', bosses: 'Boss', drops: 'Pickup', options: 'Game option', chain: 'Fusion chains' };
+const TABLE_NAMES = { world: 'World', codex: 'Codex prices', dmgtypes: 'Damage types', items: 'Item', chars: 'Character', cats: 'Category', stages: 'Level', tiers: 'Fusion tier', difficulty: 'Difficulty', upgrades: 'Forge upgrade', enemies: 'Enemy', bosses: 'Boss', drops: 'Pickup', options: 'Game option', chain: 'Fusion chains' };
 
 // current value of one entry: items.js default with the overrides on top
 function get(t, id) {
@@ -669,10 +669,13 @@ function chainCard() {
 }
 function stagesCard() {
   const cols = [{ f: 'name', label: 'Name', kind: 'text' }, { f: 'color', label: 'Color', kind: 'color' }, { f: 'hp', label: 'Enemy HP ×' }, { f: 'ramp', label: 'HP ramp by 15:00' }, { f: 'spawn', label: 'Spawns ×' }, { f: 'dmg', label: 'Enemy dmg ×' },
-    { f: 'bossHp', label: 'Boss HP ×' }, { f: 'xp', label: 'XP ×' }, { f: 'gold', label: 'Gold ×' }, { f: 'start', label: 'Items arrive at Lv', step: 1 }];
+    { f: 'bossHp', label: 'Boss HP ×' }, { f: 'xp', label: 'XP ×' }, { f: 'gold', label: 'Gold ×' }, { f: 'start', label: 'Items arrive at Lv', step: 1 }, { f: 'mapSize', label: 'Map size (px, empty = world)', step: 1000, always: true }];
   const t = tableView('Levels', 'Level 1 is open; each level opens when the one before it is beaten. On top of the run difficulty (Enemies tab): enemy HP × "HP", growing (with the cube of the clock) to × HP·(1 + ramp) at 15:00. Each level opened also lets the player buy one more Forge socket. "Items arrive at" is the level new items and new fusions start at, which is what lets later levels fit bigger fusions into 15 minutes.', 'stages', Object.keys(BASE.stages), cols);
   const end = x => { const v = get('stages', x); return +(v.hp * (1 + v.ramp)).toFixed(1); };
   t.append(h('p', { class: 'note' }, 'Enemy HP at 15:00 vs Level 1: ' + Object.keys(BASE.stages).map(x => `L${x} ×${end(x)}`).join(' · ')));
+  const W = get('world', 'run');
+  t.append(tableView('World (every level\'s map)', `Each level is a square map that wraps at its edges. At the base 200 px/s, crossing ${W.size} px takes ${Math.round(W.size / 200)} s. Landmarks are scenery; anchors are the fixed points the Map, zones and shrines are placed on. The Map is at least "Map distance" × the size away from the start.`, 'world', ['run'],
+    [{ f: 'size', label: 'Map size (px)', step: 1000 }, { f: 'landmarks', label: 'Landmarks', step: 50 }, { f: 'anchors', label: 'Anchors', step: 1 }, { f: 'mapMin', label: 'Map distance', step: 0.05 }]));
   return t;
 }
 function tiersCard() {

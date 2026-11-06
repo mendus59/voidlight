@@ -6,6 +6,13 @@ Voidlight is in beta, so versions are `0.MINOR.PATCH`. The version lives in one 
 - Bump **PATCH** (0.11.0 → 0.11.1) for a bug fix or balance tweak.
 - Add a line here in the same PR.
 
+## 0.25.0 (2026-11-06)
+- **Every level is now a huge wrapping map.** It's 36,000 px across (about 3 minutes to cross at base speed), and it wraps: walk off the north edge and you come back at the south, the same east to west. Each level has its own scenery (crystal clusters, stone circles, broken pillars and floor runes in its colours), the same every run, so places become recognisable.
+- **Minimap** in the top right and a **large map in the pause menu**, both centred on you.
+- **The Map pickup:** every level hides its Map far from the start. An arrow at the edge of the screen points the way, with the distance. Finding it is a permanent unlock for that level: from then on its zones show on the minimap and the pause map (zones arrive in the next version).
+- The same edge arrows now point to chests and the Map, and will point to future finds.
+- Admin: Progression > Levels has a map size per level, plus a World table (map size, landmarks, anchor points, how far the Map is).
+
 ## 0.24.0 (2026-11-06)
 - **Damage types.** Every hit now has a type: the effect of the item that fired it (plus its fusion riders). The shared effect pool still strengthens effects, but it no longer changes what a bullet *is*. Burn and poison ticks are Burn and Poison damage, shock arcs are Shock, Split shrapnel is Split, and reactions count as both their ingredients.
 - **Enemies have weaknesses and resistances.** Weak hits do ×1.5 and pop as bigger gold numbers with a "!", resisted hits do ×0.5 and show grey. For example Swarmlings are weak to Burn and Split, Bombers are weak to Force and resist Burn, Wraiths are weak to Shock and Vampiric, and the Hollow Matriarch is weak to Burn. A hit with several types uses the best one, so fusions that carry more effects find more weaknesses. The pause menu shows what each of your items hits as.

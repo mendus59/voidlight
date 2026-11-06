@@ -473,6 +473,7 @@ function newRun(charId, stage) {
   const n = clamp((stage || SAVE.lastStage || 1) | 0, 1, stageCount()), st = stageUnlocked(SAVE, n) ? n : 1;
   SAVE.lastChar = ch.id; SAVE.lastStage = st; writeSave();
   freshRun(ch, st);
+  worldInit(G); // world.js: the level's wrapping map, its Map pickup, zones and shrines
   addItem(ITEM[ch.weapon]);
   showScreen(null);
   if (TESTSAVE) toast('🧪 Test save from the admin panel: nothing here touches real progress');
@@ -494,6 +495,7 @@ function update(dt) {
   updatePlayer(dt);
   G.cam.x = G.player.x; G.cam.y = G.player.y;
   if (G.sandbox) sandboxTick(dt); else director(dt);
+  if (G.world) worldUpdate(dt);
   gridBuild();
   // items
   for (const inst of G.runners) { // held items, and the items fused into them
@@ -718,6 +720,7 @@ function render() {
   // grid
   ctx.strokeStyle = G.sandbox ? 'rgba(130,100,255,0.08)' : STAGE().color + '18'; ctx.lineWidth = 1; const gs = 64; // the level's color
   ctx.beginPath(); for (let x = ((ox % gs) + gs) % gs; x < W; x += gs) { ctx.moveTo(x, 0); ctx.lineTo(x, H); } for (let y = ((oy % gs) + gs) % gs; y < H; y += gs) { ctx.moveTo(0, y); ctx.lineTo(W, y); } ctx.stroke();
+  if (G.world) drawWorld(ox, oy); // world.js: landmarks, the Map, zones, shrines
   const vis = (x, y, m = 80) => x > -m && x < W + m && y > -m && y < H + m;
   for (const p of G.pickups) { const x = p.x + ox, y = p.y + oy; if (vis(x, y)) drawPickup(p, x, y); }
   for (const d of G.deploys) { const x = d.x + ox, y = d.y + oy; if (vis(x, y, 220)) { drawDeploy(d, x, y); if (d.rides) drawChainRides(d, x, y); } }
@@ -811,8 +814,9 @@ function drawHUD() {
     }
   });
   drawBeacons();
+  const mapBottom = drawMinimap(); // world.js
   // effect pool
-  ctx.textAlign = 'right'; ctx.font = '12px system-ui,sans-serif'; let ey = 62;
+  ctx.textAlign = 'right'; ctx.textBaseline = 'top'; ctx.font = '12px system-ui,sans-serif'; let ey = mapBottom || 62;
   for (const k of EFFECT_KEYS) { const v = G.pool[k]; if (!v) continue; ctx.fillStyle = EFFECTS[k].color; ctx.fillText(EFFECTS[k].icon + ' ' + EFFECTS[k].name + ' ×' + v, W - 12, ey); ey += 17; }
 }
 
@@ -1251,8 +1255,10 @@ function invChip(i) {
 function renderPause() {
   const inv = G.inv.map(invChip).join('');
   const pas = {}; for (const i of activeInsts()) for (const [k, v] of Object.entries(instStats(i))) pas[k] = (pas[k] || 0) + v;
-  $('#pauseBody').innerHTML = `<p class="center" style="color:${STAGE().color}">Level ${G.stage}: ${STAGE().name}</p><div class="stats-box">${statsPanel(null, false)}</div><div class="chips col">${inv}</div>` +
+  $('#pauseBody').innerHTML = `<p class="center" style="color:${STAGE().color}">Level ${G.stage}: ${STAGE().name}</p>` +
+    (G.world ? `<div class="pauseMap"><canvas id="pauseMap"></canvas><small>${mapFound(SAVE, G.stage) ? '🗺️ Map found: zones in this level are marked.' : '🗺️ The Map of this level is somewhere out there (follow the edge arrow). Until you find it, zones only show once you have seen them.'} The map wraps: walk off one edge and you come back at the other.</small></div>` : '') + `<div class="stats-box">${statsPanel(null, false)}</div><div class="chips col">${inv}</div>` +
     (Object.keys(pas).length ? `<p><b>From passive stats</b>: ${statText(pas)}</p>` : '');
+  drawPauseMap($('#pauseMap'));
   $('#numToggle').textContent = 'Damage numbers: ' + (SAVE.settings.numbers ? 'on' : 'off');
   $('#speedToggle').innerHTML = 'Game speed: <b>' + gameSpeed() + 'x</b>';
   $('#speedToggle').title = 'Tap to cycle ' + speedChoices().map(x => x + 'x').join(', ');
@@ -1502,4 +1508,4 @@ $('#version').textContent = 'v' + VERSION + ' beta';
 requestAnimationFrame(frame);
 
 // debug hooks for testing
-window.VOIDLIGHT = { get G() { return G; }, chestOdds, chestRoll, dropChest, openChest, closeChest, get screen() { return currentScreen; }, refresh() { checkUnlocks(); if (!G && SCREENS_WITH_SAVE.includes(currentScreen)) showScreen(currentScreen); }, SAVE: () => SAVE, ITEMS, defaultSave, normalizeSave, mergeSaves, replaceSave, toast, addItem: (id, L) => addItem(ITEM[id], L), update, newRun, levelItem, fuse, fusionGroups, buildChoices, applyChoice, chooseLevel, selectLevel, confirmLevel, statsPanel, speedChoices, gameSpeed, synthFusion, endRun, get levelChoices() { return levelChoices; } };
+window.VOIDLIGHT = { get G() { return G; }, renderPause, chestOdds, chestRoll, dropChest, openChest, closeChest, get screen() { return currentScreen; }, refresh() { checkUnlocks(); if (!G && SCREENS_WITH_SAVE.includes(currentScreen)) showScreen(currentScreen); }, SAVE: () => SAVE, ITEMS, defaultSave, normalizeSave, mergeSaves, replaceSave, toast, addItem: (id, L) => addItem(ITEM[id], L), update, newRun, levelItem, fuse, fusionGroups, buildChoices, applyChoice, chooseLevel, selectLevel, confirmLevel, statsPanel, speedChoices, gameSpeed, synthFusion, endRun, get levelChoices() { return levelChoices; } };

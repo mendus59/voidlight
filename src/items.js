@@ -457,6 +457,12 @@ const DROPS = {
   chest:  { name: 'Chest',      icon: '📦', elite: 1, boss: 3, three: 0.25, five: 0.05, luck: 3, desc: 'Free upgrades: 1, 3 or 5 per chest (Luck helps). Elite / boss: the least it holds' },
 };
 
+// ======================= WORLD (world.js) =======================
+// Each level is a square map `size` px across that wraps at its edges (a level's mapSize overrides it). At the base 200 px/s,
+// 36000 takes 3 minutes to cross. landmarks: scenery dots per map. anchors: fixed points for the Map, zones and shrines.
+// mapMin: the Map pickup is at least this share of the map's size away from the start.
+const WORLD = { size: 36000, landmarks: 2000, anchors: 64, mapMin: 0.3 };
+
 // ======================= FORGE (meta upgrades) =======================
 const UPGRADES = [
   { id: 'might',    name: 'Might',       icon: '⚔️', max: 5, cost: 60,  per: 0.05, desc: '+5% damage' },

@@ -143,6 +143,8 @@
   .labRow select { max-width: 220px; } .labGrp { display: inline-flex; gap: 3px; align-items: center; }
   .labRow button.small { padding: 3px 8px; font-size: 12px; } .labRow button.on { border-color: #c9a0ff; color: #fff; background: rgba(201,160,255,0.2); }
   .labRow .lbl { color: var(--muted); font-size: 12px; } .labRow .note, .labPanel .note { color: var(--muted); font-size: 12px; }
+  /* the pause map (world.js) */
+  .pauseMap { display: flex; flex-direction: column; align-items: center; gap: 4px; margin: 6px 0 10px; } .pauseMap canvas { position: static; inset: auto; width: min(360px, 100%); border-radius: 8px; touch-action: auto; } .pauseMap small { color: var(--muted); font-size: 12px; text-align: center; max-width: 420px; }
   /* enemy Codex (bestiary.js) */
   .card.foe .ico { font-size: 28px; min-width: 34px; text-align: center; } .card.foe.mastered { border-color: var(--c); }
   .card .trait { display: block; } .card .trait.weak { color: #ffd24c; } .card .trait.res { color: #b0aac8; } .card .trait.imm { color: #ff6b81; }
@@ -253,6 +255,7 @@
 <script src="src/progress.js"></script>
 <script src="src/nexus.js"></script>
 <script src="src/bestiary.js"></script>
+<script src="src/world.js"></script>
 <script src="src/main.js"></script>
 <script type="module" src="src/cloud.js"></script>
 </body>
