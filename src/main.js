@@ -768,7 +768,17 @@ function renderForge() {
 }
 const effTags = d => effectsOf(d).map(k => `<span style="color:${EFFECTS[k].color}">${EFFECTS[k].icon} ${EFFECTS[k].name}</span>`).join(' + ');
 const passiveText = d => `Per level: ${statText(d.passive)}.`;
-let codexFilter = 'all';
+let codexFilter = 'all', codexShow = 'all', achShow = 'all';
+// Second tab row on the Codex and Achievements: All / Unlocked / Locked, with counts for what the other filters leave.
+function showTabs(box, cur, nOpen, nShut, pick) {
+  box.innerHTML = '';
+  for (const [k, label] of [['all', `All ${nOpen + nShut}`], ['open', `🔓 Unlocked ${nOpen}`], ['shut', `🔒 Locked ${nShut}`]]) {
+    const b = document.createElement('button'); b.className = 'tab' + (cur === k ? ' sel' : ''); b.textContent = label; b.onclick = () => pick(k); box.appendChild(b);
+  }
+}
+const showOk = (show, open) => show === 'all' || (show === 'open') === !!open;
+// unlocked = usable in a run: the item itself and all its categories
+const itemOpen = d => itemUnlocked(SAVE, d) && effectsOf(d).every(k => catUnlocked(SAVE, k));
 // The Codex opens from the main menu and from the pause menu. In a run it can't buy anything and gets a "This run" tab.
 const inRun = () => !!(G && !G.sandbox && !G.over);
 const heldNow = d => inRun() && G.inv.some(i => i.def === d || i.gone.includes(d));
@@ -778,9 +788,18 @@ function renderCodex() {
   const keys = [...(inRun() ? ['run'] : []), 'all', ...SLOT_KEYS, 'nexus'];
   for (const k of keys) { const b = document.createElement('button'); b.className = 'tab' + (codexFilter === k ? ' sel' : ''); b.textContent = k === 'nexus' ? '✴ Nexus ' + NEXUS.filter(nexusOk).length : k === 'run' ? '▶ This run' : k === 'all' ? 'All ' + ITEMS.filter(d => !d.disabled).length : SLOTS[k].icon + ' ' + SLOTS[k].name; b.onclick = () => { codexFilter = k; renderCodex(); }; tabs.appendChild(b); }
   const wrap = $('#codexGrid'); wrap.innerHTML = '';
-  if (codexFilter === 'nexus') renderNexusCodex(wrap); // nexus.js
-  else for (const d of ITEMS) {
-    if (d.disabled || (codexFilter === 'run' ? !heldNow(d) : codexFilter !== 'all' && d.slot !== codexFilter)) continue;
+  const inTab = d => !d.disabled && (codexFilter === 'run' ? heldNow(d) : codexFilter === 'all' || d.slot === codexFilter);
+  const pickShow = k => { codexShow = k; renderCodex(); };
+  if (codexFilter === 'nexus') {
+    const nx = NEXUS.filter(nexusOk), nOpen = nx.filter(x => nexusUnlocked(SAVE, x)).length;
+    showTabs($('#codexShow'), codexShow, nOpen, nx.length - nOpen, pickShow);
+    renderNexusCodex(wrap, x => showOk(codexShow, nexusUnlocked(SAVE, x))); // nexus.js
+  } else {
+    const tab = ITEMS.filter(inTab), nOpen = tab.filter(itemOpen).length;
+    showTabs($('#codexShow'), codexShow, nOpen, tab.length - nOpen, pickShow);
+  }
+  if (codexFilter !== 'nexus') for (const d of ITEMS) {
+    if (!inTab(d) || !showOk(codexShow, itemOpen(d))) continue;
     const un = itemUnlocked(SAVE, d), E = EFFECTS[d.effect], effs = effectsOf(d);
     const el = document.createElement('div'); el.className = 'card item' + (un ? '' : ' locked'); el.style.setProperty('--c', E.color);
     let lockHtml = '';
@@ -794,7 +813,7 @@ function renderCodex() {
     if (btn) btn.onclick = () => { buy(d.lock, SAVE.unlockedItems, d.id, d.name, shut.length ? `. It shows up once ${shut.map(k => EFFECTS[k].name).join(' and ')} items are unlocked.` : '!'); renderCodex(); };
     wrap.appendChild(el);
   }
-  if (!wrap.children.length) wrap.innerHTML = '<p class="note">Nothing here.</p>';
+  if (!wrap.children.length) wrap.innerHTML = `<p class="note">${codexShow === 'all' ? 'Nothing here.' : codexShow === 'open' ? 'Nothing unlocked here yet.' : 'Everything here is unlocked.'}</p>`;
   $('#codex .gold-line').innerHTML = goldPill();
 }
 function fuseLine(d) {
@@ -859,14 +878,18 @@ $('#itemDetail').onclick = e => { if (e.target.id === 'itemDetail') closeItemDet
 // Back from the Codex: to the pause menu during a run, else to the main menu
 function codexBack() { closeItemDetail(); if (inRun() && G.paused) { renderPause(); showScreen('pause'); } else showScreen('menu'); }
 function renderAchievements() {
-  const list = achievementList(SAVE), box = $('#achBody'); box.innerHTML = '';
+  const all = achievementList(SAVE), box = $('#achBody'); box.innerHTML = '';
+  const nDone = all.filter(a => a.done).length;
+  showTabs($('#achShow'), achShow, nDone, all.length - nDone, k => { achShow = k; renderAchievements(); });
+  const list = all;
   const parts = a => (a.parts && !a.done ? `<div class="parts">${a.parts.map(p => `<small class="part${p.done ? ' ok' : ''}">${p.done ? '✓' : '○'} ${p.text}</small>`).join('')}</div>` : '');
   const card = a => `<div class="card ach${a.done ? ' done' : ''}"><div class="ico">${a.done ? a.icon : '🔒'}</div><b>${a.name}</b><small>${a.text}</small>${parts(a)}<small class="rew">Unlocks: ${a.reward}${a.cost ? ` (then ● ${a.cost})` : ''}</small>` +
     (a.done ? `<div class="bar"><i style="width:100%"></i></div><small class="ok">${a.owned ? 'Done' : `Done: buy it for ● ${a.cost}`}</small>` : `<div class="bar"><i style="width:${Math.round(100 * a.have / Math.max(1, a.need))}%"></i></div><small>${Math.floor(a.have)} / ${a.need}</small>`) + '</div>';
-  const section = (title, note, rows) => {
+  const section = (title, note, every) => {
+    const rows = every.filter(a => showOk(achShow, a.done)); // header counts stay those of the whole section
     if (!rows.length) return;
     const sec = document.createElement('div'); sec.className = 'achSec';
-    sec.innerHTML = `<h3>${title} <small>${rows.filter(a => a.done).length}/${rows.length}</small></h3>${note ? `<p class="note">${note}</p>` : ''}<div class="grid achGrid">${rows.map(card).join('')}</div>`;
+    sec.innerHTML = `<h3>${title} <small>${every.filter(a => a.done).length}/${every.length}</small></h3>${note ? `<p class="note">${note}</p>` : ''}<div class="grid achGrid">${rows.map(card).join('')}</div>`;
     box.appendChild(sec);
   };
   section('Levels and fusion tiers', 'Beat a level to open the next one. Each level you open also adds one socket you can buy in the Forge.', list.filter(a => a.group === 'stages' || a.group === 'tiers'));
@@ -875,7 +898,8 @@ function renderAchievements() {
   section('Other', '', list.filter(a => !a.stage && (a.group === 'cats' || a.group === 'unlocks')));
   section('Nexus recipes', 'A Nexus is a fusion of specific items, keeping the first one. Nothing is halved, but enemies grow stronger while you hold it. Recipes are in the Codex (✴ Nexus).', list.filter(a => a.group === 'nexus'));
   section('Mastery (unlocks fusion)', 'Level an item up to master it. Only a mastered item can remain in a fusion; it can absorb items that are not mastered yet.', list.filter(a => a.group === 'mastery'));
-  $('#achievements .gold-line').innerHTML = `${list.filter(a => a.done).length}/${list.length} done`;
+  if (!box.children.length) box.innerHTML = `<p class="note">${achShow === 'open' ? 'No achievements unlocked yet.' : 'Every achievement is unlocked.'}</p>`;
+  $('#achievements .gold-line').innerHTML = `${nDone}/${all.length} done`;
 }
 const effNames = ks => ks.map(k => EFFECTS[k].icon + ' ' + EFFECTS[k].name).join(' + ');
 const tierLine = T => (T ? `${tierName(T)}: ×${FUSION[TIER_KEYS[T]].mul} damage, +${T} projectile${T > 1 ? 's' : ''}, ${Math.round(100 * (1 - FUSION[TIER_KEYS[T]].cdMul))}% faster` : '');

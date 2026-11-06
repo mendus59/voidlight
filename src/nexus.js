@@ -98,9 +98,9 @@ function nexusHint(group, t) {
 const nexusPauseLine = i => { const nx = nexusDef(i.nexus); return nx ? `<small style="color:${nx.color || '#ff4cc3'}">✴ Nexus ${nx.name} (${tierName(i.tier)}): ${[i, ...i.parts].map(p => p.def.icon + ' ' + p.def.name).join(' → ')}. Every part fires at 100%. Threat ${nx.threat}.</small>` : ''; };
 
 // Codex "✴ Nexus" tab: every recipe, what it needs, and how often it was formed.
-function renderNexusCodex(wrap) {
+function renderNexusCodex(wrap, show = () => true) {
   for (const nx of NEXUS) {
-    if (!nexusOk(nx)) continue;
+    if (!nexusOk(nx) || !show(nx)) continue;
     const t = nexusTier(nx), known = nexusUnlocked(SAVE, nx), made = nexusMade(SAVE, nx.id), held = inRun() && G.inv.some(i => i.nexus === nx.id);
     const el = document.createElement('div'); el.className = 'card item nexus' + (known ? '' : ' locked'); el.style.setProperty('--c', nx.color || TIER_COLORS[t]);
     const need = t === 1 ? 'level 5 items' : `level 5 ${tierName(t - 1)} items (by their core item)`;
