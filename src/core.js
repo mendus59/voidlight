@@ -2,7 +2,7 @@
 // ===== VOIDLIGHT core engine: math, state, bullets, effects, enemies helpers =====
 // Game version shown on the title screen. Beta, so 0.MINOR.PATCH: bump MINOR for a feature PR, PATCH for a fix/tweak.
 // Add a matching line to CHANGELOG.md whenever you bump it.
-const VERSION = '0.29.0';
+const VERSION = '0.30.0';
 const TAU = Math.PI * 2;
 const rand = (a, b) => a + Math.random() * (b - a);
 const randi = (a, b) => Math.floor(a + Math.random() * (b - a + 1));
@@ -320,7 +320,8 @@ function hitTypes(b) {
 // The best type of the hit counts. `only`: immune (×0) to every type not listed. An untyped hit is neutral.
 function typeMul(e, ts) {
   const T = e.T; if (!T || (!T.weak && !T.resist && !T.only)) return 1;
-  if (T.only && T.only.length && !ts.some(k => T.only.includes(k))) return 0;
+  const only = e.only || T.only; // e.only: a stricter zone enemy (zones.js, late levels)
+  if (only && only.length && !ts.some(k => only.includes(k))) return 0;
   if (!ts.length) return 1;
   let best = 0;
   for (const k of ts) { const m = T.weak && T.weak.includes(k) ? DAMAGE_TYPES.weak : T.resist && T.resist.includes(k) ? DAMAGE_TYPES.resist : 1; if (m > best) best = m; }

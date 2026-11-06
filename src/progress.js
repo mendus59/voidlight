@@ -189,7 +189,14 @@ function mergeSaves(a, b) {
 const stageStats = (s, n) => (s.stages || {})[String(n)] || emptyStage();
 const charStageStats = (s, c, n) => ((s.charStages || {})[c] || {})[String(n)] || emptyStage();
 // Level 1 is always open; every other one opens once the level before it has been beaten.
-const stageUnlocked = (s, n) => n <= 1 || (n <= stageCount() && stageStats(s, n - 1).wins > 0);
+// what opens level n: beating the level before it, and from ENDGAME.gateFrom on also clearing a zone there (a level already
+// played stays open, so saves from before the gate keep their levels)
+function stageLock(n) {
+  const beat = { stage: n - 1, stat: 'wins', min: 1, text: `Beat Level ${n - 1}` };
+  if (n < ENDGAME.run.gateFrom) return beat;
+  return { all: [beat, { stage: n - 1, stat: 'zones', min: 1 }], text: `Beat Level ${n - 1} and clear a zone there` };
+}
+const stageUnlocked = (s, n) => n <= 1 || (n <= stageCount() && (lockMet(stageLock(n), s) || stageStats(s, n).runs > 0));
 const stagesUnlocked = s => { let n = 1; while (n < stageCount() && stageUnlocked(s, n + 1)) n++; return n; };
 // Extra sockets: one can be bought in the Forge for every level unlocked beyond the first.
 const socketCap = s => stagesUnlocked(s) - 1;
@@ -345,7 +352,7 @@ function achievementList(s) {
   const add = (group, icon, name, lock, reward, done, owned = true) => { const [have, need] = lockProgress(lock, s);
     const parts = lock.all ? lockParts(lock).map(p => { const [a, b] = lockProgress(p, s); return { text: partLabel(p), have: Math.min(a, b), need: b, done: a >= b }; }) : null;
     out.push({ group, stage: lockStage(lock), icon, name, text: lockLabel(lock), have: Math.min(have, need), need, done, owned, cost: lockCost(lock), reward, parts }); };
-  for (let n = 2; n <= stageCount(); n++) add('stages', '🗺', `Level ${n}: ${stageDef(n).name}`, { stage: n - 1, stat: 'wins', min: 1 }, `Level ${n} and a Forge socket`, stageUnlocked(s, n));
+  for (let n = 2; n <= stageCount(); n++) add('stages', '🗺', `Level ${n}: ${stageDef(n).name}`, stageLock(n), `Level ${n} and a Forge socket`, stageUnlocked(s, n));
   // per-level feats (v0.27): Forge recipes (v0.29) will ask for them
   for (let n = 1; n <= stageCount(); n++) {
     const z = { stage: n, stat: 'zones', min: 2 }, c = { stage: n, stat: 'shrines', min: 3 };

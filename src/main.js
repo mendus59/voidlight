@@ -880,8 +880,8 @@ function renderChars() {
   for (const S of STAGES) {
     const n = S.id, un = stageUnlocked(SAVE, n), st = stageStats(SAVE, n);
     const el = document.createElement('button'); el.className = 'card stage' + (un ? '' : ' locked') + (selectedStage === n ? ' sel' : ''); el.style.setProperty('--c', S.color);
-    el.innerHTML = `<b>${un ? '' : '🔒 '}Level ${n}</b><small>${S.name}</small>` + (un ? `<small>${st.wins ? '✓ Beaten' + (st.wins > 1 ? ' ×' + st.wins : '') : st.runs ? 'Best ' + fmtTime(st.best) : 'New'}</small>` : `<small class="req">Beat Level ${n - 1}</small>`);
-    el.onclick = () => { if (!un) { toast(`Beat Level ${n - 1} to open Level ${n}`); return; } selectedStage = n; renderChars(); };
+    el.innerHTML = `<b>${un ? '' : '🔒 '}Level ${n}</b><small>${S.name}</small>` + (un ? `<small>${st.wins ? '✓ Beaten' + (st.wins > 1 ? ' ×' + st.wins : '') : st.runs ? 'Best ' + fmtTime(st.best) : 'New'}</small>` : `<small class="req">${lockLabel(stageLock(n))}</small>`);
+    el.onclick = () => { if (!un) { toast(`${lockLabel(stageLock(n))} to open Level ${n}`); return; } selectedStage = n; renderChars(); };
     sw.appendChild(el);
   }
   const S = stageDef(selectedStage);
@@ -1057,6 +1057,7 @@ function renderAchievements() {
   const nDone = all.filter(a => a.done).length;
   showTabs($('#achShow'), achShow, nDone, all.length - nDone, k => { achShow = k; renderAchievements(); });
   const list = all;
+  if (achShow === 'all') box.insertAdjacentHTML('beforeend', levelWebHtml()); // forge.js
   const parts = a => (a.parts && !a.done ? `<div class="parts">${a.parts.map(p => `<small class="part${p.done ? ' ok' : ''}">${p.done ? '✓' : '○'} ${p.text}</small>`).join('')}</div>` : '');
   const card = a => `<div class="card ach${a.done ? ' done' : ''}"><div class="ico">${a.done ? a.icon : '🔒'}</div><b>${a.name}</b><small>${a.text}</small>${parts(a)}<small class="rew">Unlocks: ${a.reward}${a.cost ? ` (then ● ${a.cost})` : ''}</small>` +
     (a.done ? `<div class="bar"><i style="width:100%"></i></div><small class="ok">${a.owned ? 'Done' : `Done: buy it for ● ${a.cost}`}</small>` : `<div class="bar"><i style="width:${Math.round(100 * a.have / Math.max(1, a.need))}%"></i></div><small>${Math.floor(a.have)} / ${a.need}</small>`) + '</div>';
@@ -1069,7 +1070,7 @@ function renderAchievements() {
   };
   section('Levels and fusion tiers', 'Beat a level to open the next one. Each level you open also adds one socket you can buy in the Forge.', list.filter(a => a.group === 'stages' || a.group === 'tiers'));
   section('Heroes', 'Each hero is earned with another hero: beat a level with them and master a weapon. A hero also needs the categories of their starting weapon.', list.filter(a => a.group === 'heroes'));
-  for (const S of STAGES) section(`Level ${S.id}: ${S.name}`, stageUnlocked(SAVE, S.id) ? '' : `Opens when you beat Level ${S.id - 1}.`, list.filter(a => a.stage === S.id && a.group !== 'stages' && a.group !== 'tiers' && a.group !== 'heroes' && a.group !== 'nexus'));
+  for (const S of STAGES) section(`Level ${S.id}: ${S.name}`, stageUnlocked(SAVE, S.id) ? '' : `Opens when you: ${lockLabel(stageLock(S.id))}.`, list.filter(a => a.stage === S.id && a.group !== 'stages' && a.group !== 'tiers' && a.group !== 'heroes' && a.group !== 'nexus'));
   section('Other', '', list.filter(a => !a.stage && (a.group === 'cats' || a.group === 'unlocks')));
   section('Nexus recipes', 'A Nexus is a fusion of specific items, keeping the first one. Nothing is halved, but enemies grow stronger while you hold it. Each achievement here lets you forge that recipe in the Forge (📜 Recipes); Super and Mega recipes also need level feats.', list.filter(a => a.group === 'nexus'));
   section('Mastery (unlocks fusion)', 'Level an item up to master it. Only a mastered item can remain in a fusion; it can absorb items that are not mastered yet.', list.filter(a => a.group === 'mastery'));

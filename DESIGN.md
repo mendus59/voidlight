@@ -440,6 +440,12 @@ and Challenger for Mega; cost `RECIPE_COSTS` by tier. Saves older than v5 keep e
 on level select lists the level's zones and rifts (immunities shown once their enemies are mastered), wandering enemies and their
 traits (once mastered), the Map, and attuned items.
 
+### Endgame (ENDGAME in items.js)
+From Level `gateFrom` (10) a level opens only once a zone is cleared in the level before it (`stageLock` in progress.js; a level
+already played stays open). From `strictFrom` (9) zone enemies take damage only from the zone's first type. From `hardFrom` (9)
+challenge shrines ask `hard` (1.5)× as much. The Achievements page opens with "What opens what", a per-level list of everything that
+level gates across the game (forge.js `levelWebRows`).
+
 ### Damage types and the Bestiary
 Every hit has a **type**: the effect of the item that fired it, plus its fusion riders (`hitTypes` in core.js). The shared pool
 never changes a hit's type, so holding one Burn item doesn't make every bullet Burn damage. Burn and poison ticks are Burn and
