@@ -33,6 +33,8 @@ const VOIDLIGHT_CONTENT = (() => {
     zones:    { get: () => ZONES, fields: ['name', 'prefix', 'only', 'from'] },
     zonerules: { get: () => ZONE_RULES, fields: ['radius', 'count', 'hp', 'wardenHp', 'perLevel', 'xp', 'wake', 'sleep'] },
     matdrops: { get: () => MAT_DROPS, fields: ['eliteMin', 'eliteMax', 'eliteAttr', 'eliteAttrFrom', 'boss', 'bossForm', 'chest', 'zone', 'warden', 'wardenCat', 'repeat', 'firstEss', 'firstCat'] },
+    shrines:  { get: () => SHRINES, fields: ['name', 'icon', 'value', 'time', 'kills'] },
+    shrinerules: { get: () => SHRINE_RULES, fields: ['buffs', 'challenges', 'channel', 'buffTime', 'radius', 'spawn', 'grace', 'chestMin', 'mats'] },
     drops:    { get: () => DROPS, fields: ['chance', 'min', 'max', 'value', 'elite', 'boss', 'three', 'five', 'luck'] },
     options:  { get: () => OPTIONS, fields: ['choices'] },
     chain:    { get: () => CHAIN_RULES, fields: ['dmg', 'rate', 'depth', 'kids', 'ride'] },
@@ -105,6 +107,9 @@ const VOIDLIGHT_CONTENT = (() => {
     if (table === 'zones' && f === 'from') return num(v) && v >= 1 && v <= STAGES.length && Math.round(v) === v;
     if (table === 'zones' && f === 'prefix') return str(v);
     if (table === 'zonerules') return num(v) && (f === 'radius' ? v >= 200 && v <= 4000 : f === 'count' ? v >= 1 && v <= 40 : f === 'perLevel' ? v >= 0 && v <= 8 : v >= 0 && v <= 20000);
+    if (table === 'shrines' && f === 'value') return num(v) && v >= 0 && v <= 5;
+    if (table === 'shrines' && (f === 'time' || f === 'kills')) return num(v) && v >= 1 && v <= 1000;
+    if (table === 'shrinerules') return num(v) && v >= 0 && (f === 'buffs' || f === 'challenges' ? v <= 20 : f === 'radius' ? v >= 100 && v <= 2000 : f === 'chestMin' ? v <= 5 : v <= 600);
     if (table === 'matdrops') return num(v) && v >= 0 && (['eliteAttr', 'bossForm', 'zone', 'repeat'].includes(f) ? v <= 1 : v <= 50);
     if (v === null) return ['arch', 'lock', 'fuseLock', 'effect2', 'color', 'vis', 'trig', 'disabled', 'min', 'max', 'value', 'chance', 'elite', 'boss', 'chain'].includes(f);
     if (table === 'chain') return f === 'depth' ? num(v) && v >= 0 && v <= 4 && Math.round(v) === v : f === 'rate' ? num(v) && v >= 0.5 && v <= 60 : num(v) && v >= 0 && v <= 3;

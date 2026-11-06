@@ -412,6 +412,14 @@ get a **sealed rift**, a zone from one or two levels later, open once that zone 
 hold items in, chests 1 per item), Essences (zone enemies 30%, Wardens), attribute materials (bosses 3, elites 25% from Level 4) and
 Catalysts (Wardens; bosses 60% for a Form Catalyst). Augments (v0.28) and Forge upgrades (v0.29) spend them.
 
+### Shrines (shrines.js)
+Each run places `SHRINE_RULES.buffs` buff shrines (4) and `challenges` challenge shrines (2) at anchors within 60% of the map from the
+start. Standing on one for `channel` s (2) uses it. Buff shrines (`SHRINES`, kind buff) add `value` to a stat for `buffTime` s (60)
+through `G.buffs`, which `recomputeStats` adds on top, and drop one attribute material. Challenges: **Hold** (stay inside the
+`radius` 320 circle for `time` 20 s; `grace` 3 s outside fails) and **Cull** (defeat `kills` 60 inside it within 30 s); both pour in
+`spawn` 3 extra enemies/s, rising to 6. Success: a chest of `chestMin` (3)+ and `mats` (3) slot materials. Per-level stats count
+`zones` and `shrines` cleared; the per-level feats *Warden-breaker* (2 zones) and *Challenger* (3 challenges) gate Forge recipes.
+
 ### Damage types and the Bestiary
 Every hit has a **type**: the effect of the item that fired it, plus its fusion riders (`hitTypes` in core.js). The shared pool
 never changes a hit's type, so holding one Burn item doesn't make every bullet Burn damage. Burn and poison ticks are Burn and
