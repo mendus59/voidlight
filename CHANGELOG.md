@@ -6,6 +6,12 @@ Voidlight is in beta, so versions are `0.MINOR.PATCH`. The version lives in one 
 - Bump **PATCH** (0.11.0 → 0.11.1) for a bug fix or balance tweak.
 - Add a line here in the same PR.
 
+## 0.21.0 (2026-11-06)
+- Every level has its own colour scheme: enemies wear the level's palette by role (swarm, fast, heavy, ranged), enemy shots share one level colour, and the floor carries a faint wash of the level's colour. Bosses keep their own colours so they stand apart.
+- Three new enemies that some levels swap in for a classic one: Lancer (stops, aims, then dashes; replaces the Darter), Husk (bursts into Swarmlings; replaces the Bomber) and Sentinel (fires a ring of shots; replaces the Spitter or Warlock).
+- Enemy bullets look hostile and can't be mistaken for yours: a dark core inside a coloured shell with a pulsing outer ring, drawn on top. Your shots keep their white-hot cores and soft glow.
+- Elites are toned down (smaller, a thin gold crown ring and a slim health bar, no pulsing aura) and bosses are louder (dark well, pulsing aura, two counter-rotating rings, white outline), so bosses are the clear standouts.
+
 ## 0.20.0 (2026-11-06)
 - Codex & Armory and Achievements have an All / 🔓 Unlocked / 🔒 Locked filter (a second row of tabs, with counts). In the Codex it works with every tab, including ✴ Nexus (unlocked = recipe known) and This run; an item counts as unlocked once it and its categories are unlocked.
 
