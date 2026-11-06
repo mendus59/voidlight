@@ -117,8 +117,8 @@ function updateEnemies(dt) {
     e.flash -= dt; e.reactCd -= dt;
     // damage over time
     let dps = 0;
-    if (e.burnT > 0) { e.burnT -= dt; dps += e.burnDps; if (e.burnT <= 0) e.burnDps = 0; }
-    if (e.poisonT > 0) { e.poisonT -= dt; dps += e.poison; if (e.poisonT <= 0) e.poison = 0; }
+    if (e.burnT > 0) { e.burnT -= dt; dps += e.burnDps * typeMul(e, ['burn']); if (e.burnT <= 0) e.burnDps = 0; } // ticks are Burn / Poison damage
+    if (e.poisonT > 0) { e.poisonT -= dt; dps += e.poison * typeMul(e, ['poison']); if (e.poisonT <= 0) e.poison = 0; }
     if (dps > 0) { e.dot += dps * dt; e.dotT -= dt; if (e.dotT <= 0) { e.dotT = 0.5; const v = e.dot; e.dot = 0; damageEnemy(e, v, e.poisonT > 0 ? '#8cff5a' : '#ff7a2f', false); if (e.dead) continue; } }
     if (e.slowT > 0) { e.slowT -= dt; if (e.slowT <= 0) e.slow = 0; }
     if (e.boss) bossAI(e, dt);
@@ -171,7 +171,7 @@ function killEnemy(e) {
     if (e.type === 'eclipse') later(1.5, () => endRun(true)); }
   if (e.T.deathRing) for (let k = 0; k < e.T.deathRing; k++) ebullet(e.x, e.y, k * TAU / e.T.deathRing + rand(0, 0.3), 130, 6, 8);
   if (e.T.deathSpawn && ENEMY_TYPES[e.T.deathSpawn.type]) { const S = e.T.deathSpawn, x0 = e.x, y0 = e.y; later(0, () => { if (!G || G.over) return; for (let k = 0; k < S.n && G.enemies.length < 400; k++) { const a = k * TAU / S.n; spawnEnemy(S.type, x0 + Math.cos(a) * 14, y0 + Math.sin(a) * 14); } }); }
-  if (e.burnT > 0 && e.poisonT > 0) { fxText(e.x, e.y - 14, 'COMBUST', '#ffb86b', 12); const boom = 8 + Math.min(e.maxHp * 0.15, 4 * (e.burnDps + e.poison)); later(0, () => strike(e.x, e.y, 55, boom, 'burn', { color: '#ffb86b' })); } // capped by the toxin on it, so it cannot snowball off tough enemies' HP
+  if (e.burnT > 0 && e.poisonT > 0) { fxText(e.x, e.y - 14, 'COMBUST', '#ffb86b', 12); const boom = 8 + Math.min(e.maxHp * 0.15, 4 * (e.burnDps + e.poison)); later(0, () => strike(e.x, e.y, 55, boom, 'burn', { color: '#ffb86b', dtype: ['burn', 'poison'] })); } // capped by the toxin on it, so it cannot snowball off tough enemies' HP
   fxSpark(e.x, e.y, e.color, e.boss ? 30 : 4, e.boss ? 300 : 110);
   trigger('kill', e);
 }
@@ -211,6 +211,8 @@ function gainXp(v) { G.xp += v; while (G.xp >= G.xpNext) { G.xp -= G.xpNext; G.l
 function socketsFor(slot) { return G && G.sandbox ? SLOTS[slot].sockets : slotSockets(SAVE, slot); }
 function available(def) { return !def.disabled && (itemUnlocked(SAVE, def) || def.id === G.char.weapon); }
 function slotCount(slot) { return G.inv.filter(i => i.def.slot === slot).length; }
+// the damage types of an item's hits (core.js hitTypes): its own effects and riders, or what a Hit augment made them
+const instTypes = inst => (inst.hitTypes || instEffects(inst)).slice();
 function instEffects(inst) { const out = effectsOf(inst.def).slice(); for (const k of inst.riders || []) if (!out.includes(k)) out.push(k); return out; }
 // No effect works before its category is unlocked (a hero's starting weapon included), outside the admin test canvas.
 const effOpen = k => !G || G.sandbox || catUnlocked(SAVE, k);
@@ -921,12 +923,16 @@ const heldNow = d => inRun() && G.inv.some(i => i.def === d || i.gone.includes(d
 function renderCodex() {
   if (codexFilter === 'run' && !inRun()) codexFilter = 'all';
   const tabs = $('#codexTabs'); tabs.innerHTML = '';
-  const keys = [...(inRun() ? ['run'] : []), 'all', ...SLOT_KEYS, 'nexus'];
-  for (const k of keys) { const b = document.createElement('button'); b.className = 'tab' + (codexFilter === k ? ' sel' : ''); b.textContent = k === 'nexus' ? '✴ Nexus ' + NEXUS.filter(nexusOk).length : k === 'run' ? '▶ This run' : k === 'all' ? 'All ' + ITEMS.filter(d => !d.disabled).length : SLOTS[k].icon + ' ' + SLOTS[k].name; b.onclick = () => { codexFilter = k; renderCodex(); }; tabs.appendChild(b); }
+  const keys = [...(inRun() ? ['run'] : []), 'all', ...SLOT_KEYS, 'nexus', 'foes'];
+  for (const k of keys) { const b = document.createElement('button'); b.className = 'tab' + (codexFilter === k ? ' sel' : ''); b.textContent = k === 'foes' ? '👁 Bestiary ' + foeIds().filter(id => foeSeen(SAVE, id)).length + '/' + foeIds().length : k === 'nexus' ? '✴ Nexus ' + NEXUS.filter(nexusOk).length : k === 'run' ? '▶ This run' : k === 'all' ? 'All ' + ITEMS.filter(d => !d.disabled).length : SLOTS[k].icon + ' ' + SLOTS[k].name; b.onclick = () => { codexFilter = k; renderCodex(); }; tabs.appendChild(b); }
   const wrap = $('#codexGrid'); wrap.innerHTML = '';
   const inTab = d => !d.disabled && (codexFilter === 'run' ? heldNow(d) : codexFilter === 'all' || d.slot === codexFilter);
   const pickShow = k => { codexShow = k; renderCodex(); };
-  if (codexFilter === 'nexus') {
+  if (codexFilter === 'foes') { // bestiary.js: Unlocked = mastered
+    const ids = foeIds(), nOpen = ids.filter(id => foeMastered(SAVE, id)).length;
+    showTabs($('#codexShow'), codexShow, nOpen, ids.length - nOpen, pickShow);
+    renderBestiary(wrap, open => showOk(codexShow, open));
+  } else if (codexFilter === 'nexus') {
     const nx = NEXUS.filter(nexusOk), nOpen = nx.filter(x => nexusUnlocked(SAVE, x)).length;
     showTabs($('#codexShow'), codexShow, nOpen, nx.length - nOpen, pickShow);
     renderNexusCodex(wrap, x => showOk(codexShow, nexusUnlocked(SAVE, x))); // nexus.js
@@ -934,7 +940,7 @@ function renderCodex() {
     const tab = ITEMS.filter(inTab), nOpen = tab.filter(itemOpen).length;
     showTabs($('#codexShow'), codexShow, nOpen, tab.length - nOpen, pickShow);
   }
-  if (codexFilter !== 'nexus') for (const d of ITEMS) {
+  if (codexFilter !== 'nexus' && codexFilter !== 'foes') for (const d of ITEMS) {
     if (!inTab(d) || !showOk(codexShow, itemOpen(d))) continue;
     const un = itemUnlocked(SAVE, d), E = EFFECTS[d.effect], effs = effectsOf(d);
     const el = document.createElement('div'); el.className = 'card item' + (un ? '' : ' locked'); el.style.setProperty('--c', E.color);
@@ -1239,7 +1245,7 @@ function invChip(i) {
   const T = i.tier || 0, next = T < TIER_KEYS.length - 1 ? FUSION[TIER_KEYS[T + 1]] : null, st = [i, ...(i.parts || [])].map(instStats).reduce((a, x) => { for (const [k, v] of Object.entries(x)) a[k] = (a[k] || 0) + v; return a; }, {});
   const fuseNote = i.level < MAX_LEVEL || !next ? '' : !T && !fuseUnlocked(SAVE, i.def) ? `Not mastered (${fuseLockText(i.def)}): a mastered item can absorb it, but it can't remain.` : !tierUnlocked(SAVE, TIER_KEYS[T + 1]) ? `${next.name} fusion locked: ${lockLabel(next.lock)}.` : !histMet(SAVE, i.def.id, T + 1) ? `${next.name} fusion locked for ${i.def.name}: ${histText(T + 1)} first (${histProgress(SAVE, i.def.id, T + 1).join('/')}). See its Codex page.` : `Ready: ${next.need} level 5 ${tierName(T).toLowerCase()} items sharing an effect make a ${next.name} item.`;
   return `<div class="chip" style="--c:${T ? TIER_COLORS[T] : EFFECTS[i.def.effect].color}">${i.def.icon} ${itemName(i)} <b>Lv${i.level}</b>${T ? ` <b style="color:${TIER_COLORS[T]}">${tierName(T)}</b>` : ''}${isPassive(i.def) ? ' <b style="color:#c9f">Passive</b>' : ''} <span style="font-size:11px">${effNames(instEffects(i))}</span>` +
-    `<small>${isPassive(i.def) ? 'Passive: ' + (statText(st) || 'no stats') : i.def.pattern}</small>` + (i.riders.length && !isPassive(i.def) ? `<small>Its bullets also carry ${effNames(i.riders)}.</small>` : '') +
+    `<small>${isPassive(i.def) ? 'Passive: ' + (statText(st) || 'no stats') : i.def.pattern}</small>` + (isPassive(i.def) ? '' : `<small>Hits as ${effNames(instTypes(i))}</small>`) + (i.riders.length && !isPassive(i.def) ? `<small>Its bullets also carry ${effNames(i.riders)}.</small>` : '') +
     (!isPassive(i.def) && Object.keys(st).length ? `<small>Stats from fused passives: ${statText(st)}.</small>` : '') + (i.gone.length ? `<small>Made from ${i.gone.length + 1} items: ${[i.def, ...i.gone].map(d => d.icon).join('')}</small>` : '') + ((i.links || []).length ? `<div class="chain">${chainHtml(i.links, G.player.might, i.def)}</div>` : '') + (i.nexus ? nexusPauseLine(i) : fuseNote ? `<small>${fuseNote}</small>` : '') + '</div>';
 }
 function renderPause() {
@@ -1316,6 +1322,10 @@ function sandboxSlots() {
   else if (SB.layout === 'line') for (let k = 0; k < 7; k++) out.push({ x: 110 + k * 50, y: 0 });
   else if (SB.layout === 'scatter') for (let k = 0; k < 14; k++) { const a = k * 2.399, r = 110 + ((k * 73) % 270); out.push({ x: Math.cos(a) * r, y: Math.sin(a) * r }); }
   else if (SB.layout === 'swarm') for (let k = 0; k < 16; k++) out.push({ x: Math.cos(k * TAU / 16) * 380, y: Math.sin(k * TAU / 16) * 380, walk: true });
+  else if (String(SB.layout).startsWith('foe:')) { // a mastered Codex enemy (bestiary.js), with its real moves and resistances
+    const id = SB.layout.slice(4), boss = isBossId(id), n = boss ? 1 : 8;
+    if (foeDef(id)) for (let k = 0; k < n; k++) out.push({ x: Math.cos(k * TAU / n) * (boss ? 300 : 380), y: Math.sin(k * TAU / n) * (boss ? 300 : 380), walk: true, type: id, boss });
+  }
   return out;
 }
 function sandboxStart() {
@@ -1360,7 +1370,7 @@ function sandboxTick(dt) {
     if (e && !e.dead) { if (!s.walk) { const f = Math.min(1, dt * 1.5); e.x = lerp(e.x, s.x, f); e.y = lerp(e.y, s.y, f); } continue; }
     if (e) { G.sbTargets[k] = null; G.sbWait[k] = 0.8; continue; }
     if ((G.sbWait[k] = (G.sbWait[k] || 0) - dt) > 0) continue;
-    const n = spawnEnemy(s.walk ? 'walker' : 'target', s.x, s.y);
+    const n = spawnEnemy(s.type || (s.walk ? 'walker' : 'target'), s.x, s.y, s.boss ? { boss: true } : {});
     if (SB.tough) n.hp = n.maxHp = 1e9;
     G.sbTargets[k] = n;
   }
@@ -1424,7 +1434,9 @@ function labStart() {
 function labExit() { SB.lab = false; G = null; showScreen('menu'); }
 function labReadout() {
   const el = $('#labOut'), i = G && G.inv[0]; if (!el || !i) return;
-  el.innerHTML = `<b>${i.def.icon} ${itemName(i)}</b> · Lv ${i.level} · one hit ${Math.round(hitDmg(i, G.player))} · ${Math.round(G.sbDps)} damage/s` +
+  const foe = String(SB.layout).startsWith('foe:') && foeDef(SB.layout.slice(4)), ts = instTypes(i);
+  el.innerHTML = `<b>${i.def.icon} ${itemName(i)}</b> · Lv ${i.level} · one hit ${Math.round(hitDmg(i, G.player))} · ${Math.round(G.sbDps)} damage/s · hits as ${effNames(ts)}` +
+    (foe ? `<div class="note">Against ${foe.name}: ×${typeMul({ T: foe }, ts)} damage from its main hits.</div>${foeTraitsHtml(foe)}` : '') +
     ((i.links || []).length ? `<div class="chain">${chainHtml(i.links, G.player.might, i.def)}</div>` : i.tier ? '<div class="note">Only stand-ins or passives were fused in, so there is no chain. Pick partners below.</div>' : '<div class="note">Not fused. Pick a tier to fuse items into it.</div>');
 }
 function renderLab() {
@@ -1435,7 +1447,8 @@ function renderLab() {
   let h = `<div class="labRow"><label>Item <select data-lab="item">${keep.map(d => itemOpt(d, LAB.item)).join('')}</select></label>` +
     `<span class="labGrp">${TIER_KEYS.map((k, t) => `<button class="small${t === T ? ' on' : ''}" data-tier="${t}" ${ok[t] ? '' : 'disabled'} title="${ok[t] ? '' : t === 1 ? 'Master this item first' : lockLabel(FUSION[k].lock)}">${t ? FUSION[k].name : 'Plain'}</button>`).join('')}</span>` +
     `<span class="labGrp">Lv ${[1, 2, 3, 4, 5].map(L => `<button class="small${L === LAB.level ? ' on' : ''}" data-lvl="${L}">${L}</button>`).join('')}</span>` +
-    `<label>Targets <select data-lab="layout">${[['ring', 'Ring'], ['line', 'Line'], ['scatter', 'Scattered'], ['swarm', 'Walking swarm']].map(([v, l]) => opt(v, l, v === LAB.layout)).join('')}</select></label></div>`;
+    `<label>Targets <select data-lab="layout">${[['ring', 'Ring'], ['line', 'Line'], ['scatter', 'Scattered'], ['swarm', 'Walking swarm'], ...foeIds().filter(id => foeMastered(SAVE, id)).map(id => ['foe:' + id, '👁 ' + foeDef(id).name])].map(([v, l]) => opt(v, l, v === LAB.layout)).join('')}</select></label></div>` +
+    (foeIds().some(id => foeMastered(SAVE, id)) ? '' : '<div class="labRow note">Master an enemy in the Codex (👁 Bestiary) to test against it here.</div>');
   if (T) {
     const parts = labPartners(LAB.item), pOpt = (list, cur) => opt('', '— stand-in —', !cur) + list.map(d => itemOpt(d, cur)).join('');
     for (let k = 0; k < need(T); k++) {

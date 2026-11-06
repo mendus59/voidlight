@@ -25,8 +25,10 @@ const VOIDLIGHT_CONTENT = (() => {
     difficulty: { get: () => DIFFICULTY, fields: ['hpGrowth', 'hpCurve', 'spawnBase', 'spawnGrowth', 'spawnCurve', 'dmgGrowth', 'eliteEvery', 'eliteHp', 'ringEvery', 'bossHp', 'xpStep', 'xpCurve', 'overtimeAt', 'overtimeDmg', 'overtimeHp', 'overtimeSpawn'] },
     chars:    { get: () => byId(CHARACTERS), fields: ['name', 'title', 'color', 'weapon', 'perk', 'mods', 'arch', 'lock'] },
     upgrades: { get: () => byId(UPGRADES), fields: ['name', 'icon', 'desc', 'max', 'cost', 'per'] },
-    enemies:  { get: () => ENEMY_TYPES, fields: ['name', 'hp', 'spd', 'r', 'dmg', 'xp', 'color', 'shape'] },
-    bosses:   { get: () => BOSSES, fields: ['name', 'hp', 'spd', 'r', 'dmg', 'xp', 'color'] },
+    enemies:  { get: () => ENEMY_TYPES, fields: ['name', 'hp', 'spd', 'r', 'dmg', 'xp', 'color', 'shape', 'weak', 'resist', 'only'] },
+    bosses:   { get: () => BOSSES, fields: ['name', 'hp', 'spd', 'r', 'dmg', 'xp', 'color', 'weak', 'resist', 'only'] },
+    codex:    { get: () => CODEX_COSTS, fields: ['study', 'master', 'kills'] },
+    dmgtypes: { get: () => ({ run: DAMAGE_TYPES }), fields: ['weak', 'resist'] },
     drops:    { get: () => DROPS, fields: ['chance', 'min', 'max', 'value', 'elite', 'boss', 'three', 'five', 'luck'] },
     options:  { get: () => OPTIONS, fields: ['choices'] },
     chain:    { get: () => CHAIN_RULES, fields: ['dmg', 'rate', 'depth', 'kids', 'ride'] },
@@ -90,6 +92,8 @@ const VOIDLIGHT_CONTENT = (() => {
   }
   // Rejects anything that could break the game; null means "remove this field" (e.g. take a lock off).
   function valid(table, f, v) {
+    if ((table === 'enemies' || table === 'bosses') && (f === 'weak' || f === 'resist' || f === 'only')) return v === null || (Array.isArray(v) && v.length <= 11 && v.every(k => k in EFFECTS) && new Set(v).size === v.length);
+    if (table === 'dmgtypes') return num(v) && v >= 0 && v <= 10;
     if (v === null) return ['arch', 'lock', 'fuseLock', 'effect2', 'color', 'vis', 'trig', 'disabled', 'min', 'max', 'value', 'chance', 'elite', 'boss', 'chain'].includes(f);
     if (table === 'chain') return f === 'depth' ? num(v) && v >= 0 && v <= 4 && Math.round(v) === v : f === 'rate' ? num(v) && v >= 0.5 && v <= 60 : num(v) && v >= 0 && v <= 3;
     if (table === 'tiers' && f === 'hist') return num(v) && v >= 0 && v <= 50 && Math.round(v) === v;

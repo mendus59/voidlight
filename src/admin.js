@@ -33,7 +33,7 @@ let ov = {};                                   // what you are editing
 let live = { ov: {}, updatedAt: 0, by: '' };   // content/live, what players get
 let draft = null;                              // content/draft
 let history = [];
-const TABLE_NAMES = { items: 'Item', chars: 'Character', cats: 'Category', stages: 'Level', tiers: 'Fusion tier', difficulty: 'Difficulty', upgrades: 'Forge upgrade', enemies: 'Enemy', bosses: 'Boss', drops: 'Pickup', options: 'Game option', chain: 'Fusion chains' };
+const TABLE_NAMES = { codex: 'Codex prices', dmgtypes: 'Damage types', items: 'Item', chars: 'Character', cats: 'Category', stages: 'Level', tiers: 'Fusion tier', difficulty: 'Difficulty', upgrades: 'Forge upgrade', enemies: 'Enemy', bosses: 'Boss', drops: 'Pickup', options: 'Game option', chain: 'Fusion chains' };
 
 // current value of one entry: items.js default with the overrides on top
 function get(t, id) {
@@ -594,6 +594,7 @@ function tableView(title, note, t, ids, cols) {
     let input;
     if (c.kind === 'color') input = colorIn(v, x => { set(t, id, c.f, x); td.classList.toggle('changed', changed(t, id, c.f)); });
     else if (c.kind === 'select') input = sel(c.options, v, x => { set(t, id, c.f, x); td.classList.toggle('changed', changed(t, id, c.f)); });
+    else if (c.kind === 'effects') input = h('input', { type: 'text', placeholder: 'e.g. burn, shock', value: (v || []).join(', '), title: 'Effect keys: ' + EFFECT_KEYS.join(', '), onchange: e => { const l = [...new Set(e.target.value.split(/[\s,]+/).map(x => x.trim().toLowerCase()).filter(x => x in EFFECTS))]; set(t, id, c.f, l.length ? l : null); e.target.value = l.join(', '); td.classList.toggle('changed', changed(t, id, c.f)); } });
     else if (c.kind === 'text') input = h('input', { type: 'text', value: v ?? '', oninput: e => { set(t, id, c.f, e.target.value); td.classList.toggle('changed', changed(t, id, c.f)); } });
     else input = h('input', { type: 'number', step: c.step || 'any', min: 0, value: c.pct ? +(v * 100).toPrecision(4) : v, oninput: e => { const x = parseFloat(e.target.value); if (isFinite(x) && x >= 0) { set(t, id, c.f, c.pct ? x / 100 : x); td.classList.toggle('changed', changed(t, id, c.f)); } } });
     const td = h('td', { class: changed(t, id, c.f) ? 'changed' : '' }, input);
@@ -608,7 +609,11 @@ function enemyView() {
   const cols = [{ f: 'name', label: 'Name', kind: 'text' }, { f: 'hp', label: 'HP' }, { f: 'spd', label: 'Speed' }, { f: 'r', label: 'Size' }, { f: 'dmg', label: 'Contact dmg' }, { f: 'xp', label: 'XP' }, { f: 'color', label: 'Color', kind: 'color' }];
   return h('div', { style: 'display:grid;gap:16px' }, difficultyView(),
     tableView('Enemies', 'HP and damage are the values at 0:00; both grow with the run clock.', 'enemies', Object.keys(BASE.enemies), [...cols, { f: 'shape', label: 'Shape', kind: 'select', options: shapes }]),
-    tableView('Bosses', 'Bosses arrive at 5:00, 10:00 and 15:00. Their HP does not scale.', 'bosses', Object.keys(BASE.bosses), cols));
+    tableView('Bosses', 'Bosses arrive at 5:00, 10:00 and 15:00. Their HP does not scale.', 'bosses', Object.keys(BASE.bosses), cols),
+    tableView('Damage types', `A hit's type is the effect of the item that fired it (never the shared pool). Weak to: it takes ×weak from those types; resists: ×resist; immune to all but: ×0 from every other type (zone enemies). Effect keys: ${EFFECT_KEYS.join(', ')}.`, 'enemies', Object.keys(BASE.enemies), [{ f: 'weak', label: 'Weak to', kind: 'effects', always: true }, { f: 'resist', label: 'Resists', kind: 'effects', always: true }, { f: 'only', label: 'Immune to all but', kind: 'effects', always: true }]),
+    tableView('Boss damage types', '', 'bosses', Object.keys(BASE.bosses), [{ f: 'weak', label: 'Weak to', kind: 'effects', always: true }, { f: 'resist', label: 'Resists', kind: 'effects', always: true }, { f: 'only', label: 'Immune to all but', kind: 'effects', always: true }]),
+    tableView('Damage type multipliers', '', 'dmgtypes', ['run'], [{ f: 'weak', label: 'Weak ×' }, { f: 'resist', label: 'Resist ×' }]),
+    tableView('Enemy Codex prices', 'Study: gold for an enemy\'s stats. Master: gold for its weaknesses, once that many are defeated. A mastered enemy can be a Fusion Lab foe.', 'codex', Object.keys(BASE.codex), [{ f: 'study', label: 'Study ●', step: 5 }, { f: 'master', label: 'Master ●', step: 5 }, { f: 'kills', label: 'Kills needed', step: 1 }]));
 }
 function dropView() {
   return tableView('Pickups', 'Drop chance is per normal kill, before Luck. Elites and bosses also drop chests and piles of gold. A chest holds 1, 3 or 5 upgrades: the 3 and 5 chances rise with the player\'s Luck (3: chance × (1 + weight × Luck), 5: chance × (1 + 2 × weight × Luck)).', 'drops', Object.keys(BASE.drops), [
