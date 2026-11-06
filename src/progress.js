@@ -17,7 +17,7 @@ const emptyStage = () => ({ kills: 0, best: 0, wins: 0, bosses: 0, runs: 0 });
 
 function defaultSave() {
   return { ver: SAVE_VERSION, gold: 0, upg: {}, unlockedItems: [], unlockedCats: [], unlockedChars: ['kael', 'mira', 'volt'], itemRuns: {}, fuseLog: {}, nexusMade: {}, stages: {}, charStages: {}, lastStage: 1,
-    itemKills: {}, bestiary: {}, materials: {}, augments: {}, mapsFound: [], forged: [], attuned: [],
+    itemKills: {}, bestiary: {}, materials: {}, augments: {}, mapsFound: [], forged: [], attuned: [], zonesCleared: {},
     stats: { totalKills: 0, bestTime: 0, bossKills: 0, evolves: 0, supers: 0, megas: 0, nexus: 0, wins: 0, runs: 0, maxLevel: 0, totalGold: 0 }, settings: { numbers: true }, lastChar: 'kael' };
 }
 const strList = v => (Array.isArray(v) ? v.filter(x => typeof x === 'string') : []);
@@ -114,6 +114,8 @@ function normalizeSave(s) {
   for (const [id, a] of Object.entries(s.augments || {})) if (Array.isArray(a)) out.augments[id] = a.slice(0, 12).map(x => (typeof x === 'string' ? x : null));
   out.mapsFound = [...new Set((Array.isArray(s.mapsFound) ? s.mapsFound : []).map(n => n | 0).filter(n => n >= 1))];
   out.forged = strList(s.forged);
+  // zonesCleared['level:zone'] = times that zone's Warden fell in that level (zones.js); the first clear pays a bonus
+  out.zonesCleared = {}; for (const [k, n] of Object.entries(s.zonesCleared || {})) if (/^\d+:\w+$/.test(k) && cnt(n)) out.zonesCleared[k] = cnt(n);
   out.attuned = strList(s.attuned).slice(0, 3);
   if (ver < 2) {
     // v1 had no item categories. Anything a player bought with gold stays usable, so its categories open up.
@@ -169,6 +171,7 @@ function mergeSaves(a, b) {
   for (const id of new Set([...Object.keys(a.augments), ...Object.keys(b.augments)])) { const x = a.augments[id] || [], y = b.augments[id] || [], n = l => l.filter(Boolean).length; m.augments[id] = (n(x) > n(y) ? x : y).slice(); }
   m.mapsFound = [...new Set([...a.mapsFound, ...b.mapsFound])];
   m.forged = [...new Set([...a.forged, ...b.forged])];
+  m.zonesCleared = addMap(a.zonesCleared, b.zonesCleared);
   m.attuned = (b.attuned.length ? b.attuned : a.attuned).slice();
   return m;
 }

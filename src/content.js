@@ -30,6 +30,9 @@ const VOIDLIGHT_CONTENT = (() => {
     bosses:   { get: () => BOSSES, fields: ['name', 'hp', 'spd', 'r', 'dmg', 'xp', 'color', 'weak', 'resist', 'only'] },
     codex:    { get: () => CODEX_COSTS, fields: ['study', 'master', 'kills'] },
     dmgtypes: { get: () => ({ run: DAMAGE_TYPES }), fields: ['weak', 'resist'] },
+    zones:    { get: () => ZONES, fields: ['name', 'prefix', 'only', 'from'] },
+    zonerules: { get: () => ZONE_RULES, fields: ['radius', 'count', 'hp', 'wardenHp', 'perLevel', 'xp', 'wake', 'sleep'] },
+    matdrops: { get: () => MAT_DROPS, fields: ['eliteMin', 'eliteMax', 'eliteAttr', 'eliteAttrFrom', 'boss', 'bossForm', 'chest', 'zone', 'warden', 'wardenCat', 'repeat', 'firstEss', 'firstCat'] },
     drops:    { get: () => DROPS, fields: ['chance', 'min', 'max', 'value', 'elite', 'boss', 'three', 'five', 'luck'] },
     options:  { get: () => OPTIONS, fields: ['choices'] },
     chain:    { get: () => CHAIN_RULES, fields: ['dmg', 'rate', 'depth', 'kids', 'ride'] },
@@ -97,6 +100,12 @@ const VOIDLIGHT_CONTENT = (() => {
     if (table === 'world') return num(v) && v >= 0 && (f === 'mapMin' ? v <= 0.7 : f === 'size' ? v >= 4000 && v <= 200000 : v <= 5000);
     if (table === 'stages' && f === 'mapSize') return v === null || (num(v) && v >= 4000 && v <= 200000);
     if (table === 'dmgtypes') return num(v) && v >= 0 && v <= 10;
+    // a zone's two damage types (different effects), and the first level it shows up in
+    if (table === 'zones' && f === 'only') return Array.isArray(v) && v.length === 2 && v.every(k => k in EFFECTS) && v[0] !== v[1];
+    if (table === 'zones' && f === 'from') return num(v) && v >= 1 && v <= STAGES.length && Math.round(v) === v;
+    if (table === 'zones' && f === 'prefix') return str(v);
+    if (table === 'zonerules') return num(v) && (f === 'radius' ? v >= 200 && v <= 4000 : f === 'count' ? v >= 1 && v <= 40 : f === 'perLevel' ? v >= 0 && v <= 8 : v >= 0 && v <= 20000);
+    if (table === 'matdrops') return num(v) && v >= 0 && (['eliteAttr', 'bossForm', 'zone', 'repeat'].includes(f) ? v <= 1 : v <= 50);
     if (v === null) return ['arch', 'lock', 'fuseLock', 'effect2', 'color', 'vis', 'trig', 'disabled', 'min', 'max', 'value', 'chance', 'elite', 'boss', 'chain'].includes(f);
     if (table === 'chain') return f === 'depth' ? num(v) && v >= 0 && v <= 4 && Math.round(v) === v : f === 'rate' ? num(v) && v >= 0.5 && v <= 60 : num(v) && v >= 0 && v <= 3;
     if (table === 'tiers' && f === 'hist') return num(v) && v >= 0 && v <= 50 && Math.round(v) === v;

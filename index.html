@@ -144,6 +144,11 @@
   .labRow button.small { padding: 3px 8px; font-size: 12px; } .labRow button.on { border-color: #c9a0ff; color: #fff; background: rgba(201,160,255,0.2); }
   .labRow .lbl { color: var(--muted); font-size: 12px; } .labRow .note, .labPanel .note { color: var(--muted); font-size: 12px; }
   /* the pause map (world.js) */
+  .matFam { display: flex; flex-direction: column; gap: 6px; border-left: 3px solid #c9a0ff; } .matFam > small.note { margin: -2px 0 4px; }
+  .matRow { display: flex; align-items: center; gap: 10px; padding: 4px 6px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--c) 40%, transparent); } .matRow.none { opacity: 0.45; }
+  .matRow .mi { font-size: 20px; width: 26px; text-align: center; } .matRow .mn { flex: 1; display: flex; flex-direction: column; } .matRow .mn small { color: var(--muted); font-size: 11px; }
+  .matRow .mc { font-weight: bold; color: var(--c); text-align: right; display: flex; flex-direction: column; } .matRow .mc small { color: #6bff8f; font-size: 10px; font-weight: normal; }
+  .zoneList { text-align: left; max-width: 420px; line-height: 1.5; } .zoneList small { font-size: 12px; }
   .pauseMap { display: flex; flex-direction: column; align-items: center; gap: 4px; margin: 6px 0 10px; } .pauseMap canvas { position: static; inset: auto; width: min(360px, 100%); border-radius: 8px; touch-action: auto; } .pauseMap small { color: var(--muted); font-size: 12px; text-align: center; max-width: 420px; }
   /* enemy Codex (bestiary.js) */
   .card.foe .ico { font-size: 28px; min-width: 34px; text-align: center; } .card.foe.mastered { border-color: var(--c); }
@@ -256,6 +261,8 @@
 <script src="src/nexus.js"></script>
 <script src="src/bestiary.js"></script>
 <script src="src/world.js"></script>
+<script src="src/zones.js"></script>
+<script src="src/materials.js"></script>
 <script src="src/main.js"></script>
 <script type="module" src="src/cloud.js"></script>
 </body>

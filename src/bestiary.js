@@ -27,7 +27,7 @@ function foeAttacks(T, id) {
   if (T.deathRing) out.push(`Bursts into ${T.deathRing} bullets when it dies`);
   if (T.deathSpawn) out.push(`Splits into ${T.deathSpawn.n} ${(foeDef(T.deathSpawn.type) || {}).name || T.deathSpawn.type}s when it dies`);
   if (T.pack > 1) out.push(`Comes in packs of ${T.pack}`);
-  if (T.guard) out.push('Stays inside its zone');
+  if (T.guard) out.push('Stays inside its zone' + (T.warden ? ' and guards its middle: defeat it to clear the zone' : ''));
   if (!out.length) out.push('Chases you and hurts on contact');
   return out;
 }
@@ -43,6 +43,7 @@ function foeTraitsHtml(T) {
 // the levels where it shows up (STAGES[].swap puts the newer enemies into some levels)
 function foeLevels(id) {
   if (isBossId(id)) return 'Every level';
+  const Z = typeof ZONES !== 'undefined' && ZONES[(foeDef(id) || {}).zone]; if (Z) return `${Z.name} zones, from Level ${Z.from}`;
   const swapped = STAGES.filter(S => S.swap && Object.values(S.swap).includes(id)).map(S => S.id);
   const replaced = STAGES.filter(S => !(S.swap && S.swap[id])).map(S => S.id);
   const inBase = typeof SPAWN_TABLE !== 'undefined' && SPAWN_TABLE.some(r => r[0] === id);

@@ -6,6 +6,14 @@ Voidlight is in beta, so versions are `0.MINOR.PATCH`. The version lives in one 
 - Bump **PATCH** (0.11.0 → 0.11.1) for a bug fix or balance tweak.
 - Add a line here in the same PR.
 
+## 0.26.0 (2026-11-06)
+- **Zones.** Every level now holds 2 to 4 zones at fixed spots on its map: Emberfall, Rimehold, Stormglass, Blightmire, Ironfield, Spirewood, Fatefall, Mirrorpool, Huntgrounds, Shardvault and Bloodwell, each themed on one element. Their enemies (Warders, Strikers, Casters) are **immune to every damage type but two** (the first is also a weakness), much tougher than the horde, and never leave the zone, so you can always walk around one. A **Warden** guards the middle: defeat it to clear the zone for a Legendary-or-better chest, Essences and Catalysts. Zones show on the minimap and the pause map once that level's Map is found, and the pause menu lists them with what hurts them.
+- **Sealed rifts.** Levels 1 to 8 also hold a rift from a later level, sealed until you clear that zone in its own level (cross-level unlocks).
+- **Materials (28).** Slot materials (one per slot) from elites and chests, Essences (one per effect) from zone enemies and Wardens, attribute materials (one per stat) from bosses and later elites, and Catalysts (one per kind of augment) from Wardens and first clears. They drop as pickups, show on the HUD, the chest screen and the end screen, and are kept even if you fall. Augments and Forge upgrades will spend them. The first clear of each zone in each level pays a bonus; clearing it again pays half.
+- **Codex > 🧰 Materials** lists what you hold and where each family comes from. The Bestiary lists every zone enemy.
+- Immune enemies also shrug off the statuses of the hit (burn, chill, poison, knockback).
+- Admin: Enemies has Zones (name, enemy prefix, the two damage types, first level) and Zone rules (size, enemies, HP, Warden HP, zones per level, XP, wake and sleep distance); Pickups has Material drops.
+
 ## 0.25.0 (2026-11-06)
 - **Every level is now a huge wrapping map.** It's 36,000 px across (about 3 minutes to cross at base speed), and it wraps: walk off the north edge and you come back at the south, the same east to west. Each level has its own scenery (crystal clusters, stone circles, broken pillars and floor runes in its colours), the same every run, so places become recognisable.
 - **Minimap** in the top right and a **large map in the pause menu**, both centred on you.

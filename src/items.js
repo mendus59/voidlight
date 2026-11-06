@@ -463,6 +463,77 @@ const DROPS = {
 // mapMin: the Map pickup is at least this share of the map's size away from the start.
 const WORLD = { size: 36000, landmarks: 2000, anchors: 64, mapMin: 0.3 };
 
+// ======================= MATERIALS (materials.js) =======================
+// Spent with gold on item augments and Forge upgrades. Four families: one per slot, one per effect (Essences), one per attribute
+// an augment can raise, and one Catalyst per kind of augment. drops: where they come from, for the Vault screen.
+const MATERIALS = {
+  // slot materials: elites, chests and challenge shrines
+  alloy:  { name: 'Weapon Alloy',  icon: '🔩', family: 'slot', slot: 'weapon', color: '#c8c8e0' },
+  ink:    { name: 'Spell Ink',     icon: '🖋️', family: 'slot', slot: 'spell', color: '#b48cff' },
+  dust:   { name: 'Orbit Dust',    icon: '✨', family: 'slot', slot: 'orbit', color: '#7fdcff' },
+  gears:  { name: 'Device Gears',  icon: '⚙️', family: 'slot', slot: 'trap', color: '#ffb86b' },
+  relicshard: { name: 'Relic Shards', icon: '💠', family: 'slot', slot: 'relic', color: '#5affd9' },
+  // essences: zone enemies of that element and their Wardens
+  ess_burn:      { name: 'Ember Essence',    icon: '🔥', family: 'essence', effect: 'burn', color: '#ff7a2f' },
+  ess_chill:     { name: 'Rime Essence',     icon: '❄️', family: 'essence', effect: 'chill', color: '#7fdcff' },
+  ess_shock:     { name: 'Static Essence',   icon: '⚡', family: 'essence', effect: 'shock', color: '#fff36b' },
+  ess_poison:    { name: 'Venom Essence',    icon: '☠️', family: 'essence', effect: 'poison', color: '#8cff5a' },
+  ess_bounce:    { name: 'Rebound Essence',  icon: '🔁', family: 'essence', effect: 'bounce', color: '#ff6bd5' },
+  ess_homing:    { name: 'Seeker Essence',   icon: '🎯', family: 'essence', effect: 'homing', color: '#b48cff' },
+  ess_pierce:    { name: 'Edge Essence',     icon: '🗡️', family: 'essence', effect: 'pierce', color: '#e8e8ff' },
+  ess_knockback: { name: 'Impact Essence',   icon: '💥', family: 'essence', effect: 'knockback', color: '#ffb86b' },
+  ess_crit:      { name: 'Fortune Essence',  icon: '✴️', family: 'essence', effect: 'crit', color: '#ffe14d' },
+  ess_split:     { name: 'Fracture Essence', icon: '✳️', family: 'essence', effect: 'split', color: '#5affd9' },
+  ess_vampiric:  { name: 'Blood Essence',    icon: '🩸', family: 'essence', effect: 'vampiric', color: '#ff3b5c' },
+  // attribute materials: bosses, buff shrines and elites in later levels
+  might_ore:  { name: 'Might Ore',     icon: '⚔️', family: 'attr', stat: 'might', color: '#ff8a8a' },
+  haste_sand: { name: 'Haste Sand',    icon: '⏳', family: 'attr', stat: 'cd', color: '#a0ffd0' },
+  reach_silk: { name: 'Reach Silk',    icon: '🕸️', family: 'attr', stat: 'area', color: '#c9a0ff' },
+  twin_seed:  { name: 'Twin Seed',     icon: '🌱', family: 'attr', stat: 'amount', color: '#8cff5a' },
+  ever_wax:   { name: 'Everwax',       icon: '🕯️', family: 'attr', stat: 'duration', color: '#ffe0a0' },
+  swift_quill: { name: 'Swift Quill',  icon: '🪶', family: 'attr', stat: 'projSpd', color: '#a0d8ff' },
+  keen_lens:  { name: 'Keen Lens',     icon: '🔍', family: 'attr', stat: 'crit', color: '#ffe14d' },
+  // catalysts, one per kind of augment: Wardens, first clears, bosses (Form)
+  cat_power:  { name: 'Power Catalyst',  icon: '🔴', family: 'catalyst', kind: 'power', color: '#ff5a5a' },
+  cat_hit:    { name: 'Hit Catalyst',    icon: '🟠', family: 'catalyst', kind: 'hit', color: '#ffa04c' },
+  cat_effect: { name: 'Effect Catalyst', icon: '🟣', family: 'catalyst', kind: 'effect', color: '#c04cff' },
+  cat_stat:   { name: 'Stat Catalyst',   icon: '🔵', family: 'catalyst', kind: 'stat', color: '#4c9bff' },
+  cat_form:   { name: 'Form Catalyst',   icon: '⚪', family: 'catalyst', kind: 'form', color: '#e8e8ff' },
+};
+const MATERIAL_FAMILIES = { slot: { name: 'Slot materials', from: 'Elites, chests and challenge shrines. Each is used by augments for items of its slot.' },
+  essence: { name: 'Essences', from: 'Zone enemies of that element and their Wardens. Hit and Effect augments of that effect use them.' },
+  attr: { name: 'Attribute materials', from: 'Bosses, buff shrines, and elites from Level 4 on. Stat augments and Forge rank caps use them.' },
+  catalyst: { name: 'Catalysts', from: 'Wardens and first clears of zones; bosses drop Form Catalysts. Every augment needs one of its kind.' } };
+// What drops materials. elite: slot materials per elite (min-max). eliteAttr: chance of an attribute material from an elite, from
+// Level eliteAttrFrom on. boss: attribute materials per boss, bossForm: chance of a Form Catalyst. chest: slot materials per chest
+// item. zone: chance per zone enemy to drop its zone's Essence. warden: Essences from a Warden; wardenCat: Catalysts.
+// repeat: what share of that a Warden gives once its zone has been cleared in that level before (first clears pay in full, so
+// new zones and new levels pay best). first: extra Essences and Catalysts the first time ever a zone is cleared in a level.
+const MAT_DROPS = { run: { eliteMin: 1, eliteMax: 2, eliteAttr: 0.25, eliteAttrFrom: 4, boss: 3, bossForm: 0.6, chest: 1, zone: 0.3, warden: 5, wardenCat: 1, repeat: 0.5, firstEss: 4, firstCat: 2 } };
+
+// ======================= ZONES (zones.js) =======================
+// Zones sit on the map at anchor points. Their enemies are immune to every damage type but the zone's `only` two (the first is
+// also a weakness), stay inside the zone, and drop the zone's Essence; a Warden guards the middle. `from`: the first level the
+// zone appears in (both its types are open by then). A level also gets one sealed rift: a zone from two levels later, opened by
+// clearing that zone in its own level (cross-level unlocks). Every zone shows on the minimap only once the level's Map is found.
+const ZONES = {
+  emberfall:   { name: 'Emberfall',   element: 'burn',      only: ['chill', 'shock'],      from: 1, prefix: 'Ember' },
+  rimehold:    { name: 'Rimehold',    element: 'chill',     only: ['burn', 'shock'],       from: 1, prefix: 'Rime' },
+  stormglass:  { name: 'Stormglass',  element: 'shock',     only: ['burn', 'chill'],       from: 2, prefix: 'Storm' },
+  blightmire:  { name: 'Blightmire',  element: 'poison',    only: ['burn', 'knockback'],   from: 3, prefix: 'Blight' },
+  ironfield:   { name: 'Ironfield',   element: 'knockback', only: ['shock', 'poison'],     from: 3, prefix: 'Iron' },
+  spirewood:   { name: 'Spirewood',   element: 'pierce',    only: ['knockback', 'chill'],  from: 4, prefix: 'Spire' },
+  fatefall:    { name: 'Fatefall',    element: 'crit',      only: ['pierce', 'poison'],    from: 5, prefix: 'Fate' },
+  mirrorpool:  { name: 'Mirrorpool',  element: 'bounce',    only: ['crit', 'burn'],        from: 6, prefix: 'Mirror' },
+  huntgrounds: { name: 'Huntgrounds', element: 'homing',    only: ['bounce', 'pierce'],    from: 7, prefix: 'Hunt' },
+  shardvault:  { name: 'Shardvault',  element: 'split',     only: ['homing', 'crit'],      from: 8, prefix: 'Shard' },
+  bloodwell:   { name: 'Bloodwell',   element: 'vampiric',  only: ['split', 'shock'],      from: 9, prefix: 'Blood' },
+};
+// radius: zone size (px). count: enemies in a zone. hp: zone enemy HP × (on top of the run's HP growth); wardenHp: the Warden's.
+// perLevel: zones per level (levels 10+ get one more). xp: zone enemy XP ×. wake: the zone fills when you come within this many px
+// of its edge; sleep: it empties (keeping what's left) when you are this far away.
+const ZONE_RULES = { run: { radius: 750, count: 12, hp: 2.5, wardenHp: 14, perLevel: 3, xp: 3, wake: 900, sleep: 3000 } };
+
 // ======================= FORGE (meta upgrades) =======================
 const UPGRADES = [
   { id: 'might',    name: 'Might',       icon: '⚔️', max: 5, cost: 60,  per: 0.05, desc: '+5% damage' },

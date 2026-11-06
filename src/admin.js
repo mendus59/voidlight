@@ -33,7 +33,7 @@ let ov = {};                                   // what you are editing
 let live = { ov: {}, updatedAt: 0, by: '' };   // content/live, what players get
 let draft = null;                              // content/draft
 let history = [];
-const TABLE_NAMES = { world: 'World', codex: 'Codex prices', dmgtypes: 'Damage types', items: 'Item', chars: 'Character', cats: 'Category', stages: 'Level', tiers: 'Fusion tier', difficulty: 'Difficulty', upgrades: 'Forge upgrade', enemies: 'Enemy', bosses: 'Boss', drops: 'Pickup', options: 'Game option', chain: 'Fusion chains' };
+const TABLE_NAMES = { zones: 'Zone', zonerules: 'Zone rules', matdrops: 'Material drops', world: 'World', codex: 'Codex prices', dmgtypes: 'Damage types', items: 'Item', chars: 'Character', cats: 'Category', stages: 'Level', tiers: 'Fusion tier', difficulty: 'Difficulty', upgrades: 'Forge upgrade', enemies: 'Enemy', bosses: 'Boss', drops: 'Pickup', options: 'Game option', chain: 'Fusion chains' };
 
 // current value of one entry: items.js default with the overrides on top
 function get(t, id) {
@@ -424,7 +424,7 @@ function render() {
   if (isItem) { itemView(tab); sb.renderControls(); renderShapes(); return; }
   if (tab === 'chars') other.replaceChildren(charView());
   else if (tab === 'enemies') other.replaceChildren(enemyView());
-  else if (tab === 'drops') other.replaceChildren(dropView());
+  else if (tab === 'drops') other.replaceChildren(h('div', { style: 'display:grid;gap:16px' }, dropView(), matDropView()));
   else if (tab === 'upgrades') other.replaceChildren(upgradeView());
   else if (tab === 'progress') other.replaceChildren(progressView());
   else if (tab === 'options') other.replaceChildren(optionsView());
@@ -613,12 +613,20 @@ function enemyView() {
     tableView('Damage types', `A hit's type is the effect of the item that fired it (never the shared pool). Weak to: it takes ×weak from those types; resists: ×resist; immune to all but: ×0 from every other type (zone enemies). Effect keys: ${EFFECT_KEYS.join(', ')}.`, 'enemies', Object.keys(BASE.enemies), [{ f: 'weak', label: 'Weak to', kind: 'effects', always: true }, { f: 'resist', label: 'Resists', kind: 'effects', always: true }, { f: 'only', label: 'Immune to all but', kind: 'effects', always: true }]),
     tableView('Boss damage types', '', 'bosses', Object.keys(BASE.bosses), [{ f: 'weak', label: 'Weak to', kind: 'effects', always: true }, { f: 'resist', label: 'Resists', kind: 'effects', always: true }, { f: 'only', label: 'Immune to all but', kind: 'effects', always: true }]),
     tableView('Damage type multipliers', '', 'dmgtypes', ['run'], [{ f: 'weak', label: 'Weak ×' }, { f: 'resist', label: 'Resist ×' }]),
+    tableView('Zones', `Zone enemies are immune to every damage type but the zone's two ("Hurt only by"; the first is also a weakness), stay inside the zone and drop its Essence. A Warden guards the middle. "From level": the first level the zone shows up in; one or two levels before that it can show up as a sealed rift, opened by clearing it in its own level. Effect keys: ${EFFECT_KEYS.join(', ')}.`, 'zones', Object.keys(BASE.zones), [{ f: 'name', label: 'Name', kind: 'text' }, { f: 'prefix', label: 'Enemy name prefix', kind: 'text' }, { f: 'only', label: 'Hurt only by (2)', kind: 'effects', always: true }, { f: 'from', label: 'From level', step: 1 }]),
+    tableView('Zone rules', 'Radius: zone size (px). Enemies: per zone (plus the Warden). HP ×: zone enemies\' HP on top of the run\'s growth; Warden HP ×: the Warden\'s. Zones per level (levels 10+ get one more). XP ×: zone enemy XP. Wake: the zone fills when the player is this close to its edge; sleep: it empties (keeping who is left) past this far.', 'zonerules', ['run'],
+      [{ f: 'radius', label: 'Radius', step: 50 }, { f: 'count', label: 'Enemies', step: 1 }, { f: 'hp', label: 'HP ×' }, { f: 'wardenHp', label: 'Warden HP ×' }, { f: 'perLevel', label: 'Zones per level', step: 1 }, { f: 'xp', label: 'XP ×' }, { f: 'wake', label: 'Wake (px)', step: 50 }, { f: 'sleep', label: 'Sleep (px)', step: 50 }]),
     tableView('Enemy Codex prices', 'Study: gold for an enemy\'s stats. Master: gold for its weaknesses, once that many are defeated. A mastered enemy can be a Fusion Lab foe.', 'codex', Object.keys(BASE.codex), [{ f: 'study', label: 'Study ●', step: 5 }, { f: 'master', label: 'Master ●', step: 5 }, { f: 'kills', label: 'Kills needed', step: 1 }]));
 }
 function dropView() {
   return tableView('Pickups', 'Drop chance is per normal kill, before Luck. Elites and bosses also drop chests and piles of gold. A chest holds 1, 3 or 5 upgrades: the 3 and 5 chances rise with the player\'s Luck (3: chance × (1 + weight × Luck), 5: chance × (1 + 2 × weight × Luck)).', 'drops', Object.keys(BASE.drops), [
     { f: 'chance', label: 'Drop chance %', pct: true }, { f: 'min', label: 'Min', step: 1 }, { f: 'max', label: 'Max', step: 1 }, { f: 'value', label: 'Value' }, { f: 'elite', label: 'Per elite (least)', step: 1 }, { f: 'boss', label: 'Per boss (least)', step: 1 },
     { f: 'three', label: '3-item chest %', pct: true }, { f: 'five', label: '5-item chest %', pct: true }, { f: 'luck', label: 'Luck weight' }]);
+}
+function matDropView() {
+  return tableView('Material drops', 'Elites: slot materials (min to max) for a slot the player holds items in, plus a chance of an attribute material from "Attr from level" on. Bosses: attribute materials each, and a chance of a Form Catalyst. Chests: slot materials per item in the chest. Zone enemies: chance of their zone\'s Essence. Wardens: Essences and Catalysts; "Repeat" is the share a Warden gives once its zone was cleared in that level before. First clear: extra Essences and Catalysts the first time ever.', 'matdrops', ['run'], [
+    { f: 'eliteMin', label: 'Elite min', step: 1 }, { f: 'eliteMax', label: 'Elite max', step: 1 }, { f: 'eliteAttr', label: 'Elite attr %', pct: true }, { f: 'eliteAttrFrom', label: 'Attr from level', step: 1 }, { f: 'boss', label: 'Boss attr', step: 1 }, { f: 'bossForm', label: 'Boss Form %', pct: true },
+    { f: 'chest', label: 'Per chest item' }, { f: 'zone', label: 'Zone Essence %', pct: true }, { f: 'warden', label: 'Warden Essences', step: 1 }, { f: 'wardenCat', label: 'Warden Catalysts', step: 1 }, { f: 'repeat', label: 'Repeat ×' }, { f: 'firstEss', label: 'First: Essences', step: 1 }, { f: 'firstCat', label: 'First: Catalysts', step: 1 }]);
 }
 function upgradeView() {
   return tableView('Forge upgrades', 'Rank n costs cost × 1.6ⁿ. "Per rank" is the bonus each rank adds (0.05 = 5%).', 'upgrades', Object.keys(BASE.upgrades), [

@@ -75,7 +75,7 @@ function worldBeacons() {
   return W.feats.filter(f => !f.gone && f.beacon && f.near && (f.beacon === true || f.beacon(f))).map(f => ({ x: f.near.x, y: f.near.y, color: f.color, icon: f.icon }));
 }
 // is this feature shown on the minimap / pause map?
-const featOnMap = (W, f) => !f.gone && (f.onMap === 'always' || (f.onMap === 'seen' && W.seen.has(f.id)) || (f.onMap === 'map' && (mapFound(SAVE, W.stage) || W.seen.has(f.id))));
+const featOnMap = (W, f) => !f.gone && (f.onMap === 'always' || (f.onMap === 'seen' && W.seen.has(f.id)) || (f.onMap === 'map' && mapFound(SAVE, W.stage))); // zones: only once the level's Map is found
 
 // ---------- drawing ----------
 // ground layer: landmarks, then features (under pickups, enemies and bullets)

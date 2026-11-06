@@ -398,6 +398,20 @@ level looks the same every run; which anchors hold what is rolled per run. A min
 the player. Every level hides a **Map** at least `WORLD.mapMin` of the map away from the start, with an edge arrow pointing to it;
 finding it is a permanent unlock (`mapsFound` in the save) that shows that level's zones on both maps.
 
+### Zones and materials (zones.js, materials.js)
+Each level places `ZONE_RULES.perLevel` zones (3; levels 10+ get 4) from the themes open by that level (`ZONES[].from`), preferring
+ones not yet cleared there, at anchors of its map. A zone's enemies (Warder, Striker, Caster, made per theme into `ENEMY_TYPES` as
+`z_<zone>_<kind>`) are immune to all but the zone's two types (`only`; the first is a weakness), have ×`hp` HP (2.5) on top of the
+run's growth, ×`xp` XP, and stay inside the zone: while the player is outside they walk back to their spot. A zone fills when the
+player comes within `wake` px of its edge and empties (keeping who's left) past `sleep` px. The **Warden** (×`wardenHp` HP, rings of
+16 bullets) clears the zone: a chest of 3+, `MAT_DROPS.warden` Essences and `wardenCat` Catalysts, plus `firstEss` / `firstCat` the
+first time that zone is cleared in that level (`zonesCleared` in the save); later clears pay ×`repeat` (0.5). Levels 1 to 8 also
+get a **sealed rift**, a zone from one or two levels later, open once that zone has been cleared in its own level.
+
+**Materials** (`MATERIALS`, 28 in four families) are kept between runs in `SAVE.materials`: slot materials (elites 1-2 for a slot you
+hold items in, chests 1 per item), Essences (zone enemies 30%, Wardens), attribute materials (bosses 3, elites 25% from Level 4) and
+Catalysts (Wardens; bosses 60% for a Form Catalyst). Augments (v0.28) and Forge upgrades (v0.29) spend them.
+
 ### Damage types and the Bestiary
 Every hit has a **type**: the effect of the item that fired it, plus its fusion riders (`hitTypes` in core.js). The shared pool
 never changes a hit's type, so holding one Burn item doesn't make every bullet Burn damage. Burn and poison ticks are Burn and

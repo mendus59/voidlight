@@ -56,11 +56,13 @@ const shotColor = () => { const pal = G && !G.sandbox && STAGE().palette; return
 function spawnEnemy(type, x, y, o = {}) {
   if (!o.boss) type = levelFoe(type);
   const T = ENEMY_TYPES[type] || BOSSES[type] || SANDBOX_TYPES[type];
-  const S = STAGE(), m = (o.boss ? DIFF().bossHp * S.bossHp * nexusMul('boss') : hpMul(G.time) * (o.elite ? DIFF().eliteHp : 1) * nexusMul('hp'));
+  const S = STAGE(), ZR = ZONE_RULES.run, zm = o.zone ? (o.warden ? ZR.wardenHp : ZR.hp) : 1; // zone enemies (zones.js) are tougher
+  const m = (o.boss ? DIFF().bossHp * S.bossHp * nexusMul('boss') : hpMul(G.time) * (o.elite ? DIFF().eliteHp : 1) * nexusMul('hp') * zm);
   if (G.foes && !G.sandbox) { const f = G.foes[type] = G.foes[type] || { seen: 0, kills: 0 }; f.seen++; } // the enemy Codex (bestiary)
   const e = { id: G.nextId++, type, T, x, y, r: T.r * (o.elite ? 1.3 : 1), hp: T.hp * m, maxHp: T.hp * m, spd: T.spd * (o.elite ? 0.9 : 1) * (1 + Math.min(0.35, G.time / 2400)),
-    dmg: T.dmg * (1 + DIFF().dmgGrowth * G.time / 60) * S.dmg * nexusMul('dmg'), xp: T.xp * (o.elite ? 10 : 1), color: foeColor(T), mass: T.mass || (o.boss ? 50 : o.elite ? 6 : 1), elite: !!o.elite, boss: !!o.boss,
+    dmg: T.dmg * (1 + DIFF().dmgGrowth * G.time / 60) * S.dmg * nexusMul('dmg'), xp: T.xp * (o.elite ? 10 : 1) * (o.zone ? ZR.xp : 1), color: T.zone ? T.color : foeColor(T), mass: T.mass || (o.boss ? 50 : o.elite ? 6 : 1), elite: !!o.elite, boss: !!o.boss,
     kx: 0, ky: 0, burnT: 0, burnDps: 0, slowT: 0, slow: 0, poisonT: 0, poison: 0, freezeT: 0, reactCd: 0, dot: 0, dotT: 0, flash: 0, shootT: rand(0.5, 2), at: 0, spin: 0, phase: 0 };
+  if (o.zone) { e.zf = o.zone; e.warden = !!o.warden; }
   G.enemies.push(e); return e;
 }
 function spawnRing(dist) { const a = rand(0, TAU); const P = G.player; return { x: P.x + Math.cos(a) * dist, y: P.y + Math.sin(a) * dist }; }
@@ -124,12 +126,14 @@ function updateEnemies(dt) {
     if (e.boss) bossAI(e, dt);
     if (e.freezeT > 0) { e.freezeT -= dt; continue; }
     const dist = Math.sqrt(d2(e.x, e.y, P.x, P.y));
-    if (!e.boss && dist > far) { const p = spawnRing(viewRadius()); e.x = p.x; e.y = p.y; continue; }
-    const a = angTo(e.x, e.y, P.x, P.y);
+    if (!e.boss && !e.zf && dist > far) { const p = spawnRing(viewRadius()); e.x = p.x; e.y = p.y; continue; }
+    let a = angTo(e.x, e.y, P.x, P.y);
     let spd = e.spd * (1 - e.slow);
+    const home = e.zf ? zoneHome(e) : null; // zone enemies (zones.js) go back to their spot while the player is outside the zone
+    if (home) { a = angTo(e.x, e.y, home.x, home.y); if (d2(e.x, e.y, home.x, home.y) < 400) spd = 0; }
     const R = e.T.ranged;
     if (R) {
-      if (dist < R.range * 0.8) spd *= -0.4; else if (dist < R.range) spd *= 0.15;
+      if (home) { /* keep walking home */ } else if (dist < R.range * 0.8) spd *= -0.4; else if (dist < R.range) spd *= 0.15;
       e.shootT -= dt;
       if (e.shootT <= 0 && dist < R.range + 60) { e.shootT = R.cd * rand(0.85, 1.15);
         if (R.pat === 'aim') ebullet(e.x, e.y, a, 170, 6, 8);
@@ -141,10 +145,11 @@ function updateEnemies(dt) {
     if (C) {
       if (e.dashT > 0) { e.dashT -= dt; dir = e.dashA; spd = C.spd * (1 - e.slow); }
       else if (e.windT > 0) { e.windT -= dt; spd = 0; e.dashA = a; if (e.windT <= 0) e.dashT = C.time; }
-      else { e.shootT -= dt; if (e.shootT <= 0 && dist < C.range) { e.windT = 0.55; e.shootT = C.cd * rand(0.8, 1.2); } }
+      else if (!home) { e.shootT -= dt; if (e.shootT <= 0 && dist < C.range) { e.windT = 0.55; e.shootT = C.cd * rand(0.8, 1.2); } }
     }
     e.x += (Math.cos(dir) * spd + e.kx) * dt; e.y += (Math.sin(dir) * spd + e.ky) * dt;
     const damp = Math.max(0, 1 - 7 * dt); e.kx *= damp; e.ky *= damp;
+    if (e.zf) zoneLeash(e);
     // contact damage
     if (dist < e.r + P.r + 2) hurtPlayer(e.dmg);
   }
@@ -161,6 +166,7 @@ function killEnemy(e) {
   if (G.sandbox) { fxSpark(e.x, e.y, e.color, 4, 110); trigger('kill', e); return; } // admin test canvas: no drops or rewards
   if (e.by && e.by.def) G.itemKills[e.by.def.id] = (G.itemKills[e.by.def.id] || 0) + 1; // the item that landed the last hit
   if (G.foes[e.type]) G.foes[e.type].kills++;
+  matsOnKill(e); // materials.js (and zones.js for zone enemies)
   const D = DROPS;
   dropGem(e.x, e.y, e.xp * D.gem.value * STAGE().xp);
   if (Math.random() < D.coin.chance * (1 + P.luck * 2)) drop('coin', e.x + rand(-8, 8), e.y + rand(-8, 8), randi(D.coin.min, D.coin.max));
@@ -200,6 +206,7 @@ function collect(p) {
   else if (p.k === 'heart') heal(p.v);
   else if (p.k === 'magnet') { for (const q of G.pickups) if (q.k === 'gem') q.pull = true; banner('Magnetized!', '#7fdcff', 1); }
   else if (p.k === 'chest') openChest(p.v);
+  else if (p.k === 'mat') collectMat(p); // materials.js
 }
 function xpFor(l) { const D = DIFF(); return Math.floor(5 + (l - 1) * D.xpStep + Math.pow(l - 1, D.xpCurve)); }
 function gainXp(v) { G.xp += v; while (G.xp >= G.xpNext) { G.xp -= G.xpNext; G.level++; G.xpNext = xpFor(G.level); G.pendingLevels++; } }
@@ -392,15 +399,15 @@ function openChest(n) {
   }
   const gold = Math.round(10 * n * STAGE().gold); G.gold += gold;
   G.stats.chests = (G.stats.chests || 0) + 1;
-  showChest(n, got, gold);
+  showChest(n, got, gold, chestMats(n));
 }
-function showChest(n, got, gold) {
+function showChest(n, got, gold, mats) {
   const L = chestLook(n);
   G.paused = true;
   $('#chestTitle').textContent = `${n >= 5 ? '★ ' : ''}${L.name}${n >= 5 ? ' ★' : ''}`; $('#chestTitle').style.color = L.color;
   $('#chest .panel').style.setProperty('--c', L.color);
   $('#chestCards').innerHTML = got.map((g, k) => `<div class="card chestItem" style="--c:${g.color};animation-delay:${0.15 + k * 0.28}s"><div class="ico">${g.icon}</div><div class="tag">${g.tag}</div><b>${g.title}</b>${g.text ? `<small>${g.text}</small>` : ''}</div>`).join('');
-  $('#chestGold').innerHTML = `<span class="gold">+● ${gold}</span>`;
+  $('#chestGold').innerHTML = `<span class="gold">+● ${gold}</span>` + (matTotal(mats) ? `<div class="chips">${matChips(mats)}</div>` : '');
   showScreen('chest');
   if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
 }
@@ -483,7 +490,7 @@ function freshRun(ch, stage = 1) {
   const g = { time: 0, char: ch, player: null, cam: { x: 0, y: 0 }, enemies: [], bullets: [], ebullets: [], fx: [], texts: [], pickups: [], deploys: [], sched: [], inv: [], pool: {},
     kills: 0, level: 1, xp: 0, xpNext: xpFor(1), gold: 0, pendingLevels: 0, paused: false, over: false, nextId: 1, spawnAcc: 0, nextRing: 90, nextElite: 60, bossSpawned: {},
     stats: { evolves: 0, supers: 0, megas: 0, bossKills: 0, crits: 0, healed: 0, damage: 0 }, settings: SAVE.settings, banners: [], shake: 0, reached: {}, fuseQueue: [], runners: [],
-    stage, stageDef: stageDef(stage), bonus: {}, arch: archOf(ch), itemKills: {}, foes: {} };
+    stage, stageDef: stageDef(stage), bonus: {}, arch: archOf(ch), itemKills: {}, foes: {}, mats: {}, zonesDone: {} };
   g.player = buildPlayer(ch);
   G = g; recomputePool();
   return g;
@@ -528,6 +535,7 @@ function endRun(won) {
   const couldFuse = new Set(ITEMS.filter(d => fuseUnlocked(SAVE, d)).map(d => d.id));
   for (const [id, L] of Object.entries(G.reached)) { const r = (SAVE.itemRuns[id] || [0, 0, 0, 0, 0]).slice(); for (let k = 0; k < L; k++) r[k]++; SAVE.itemRuns[id] = r; }
   for (const [id, n] of Object.entries(G.itemKills)) SAVE.itemKills[id] = (SAVE.itemKills[id] || 0) + n;
+  saveRunMats(); zonesEndRun(); // materials.js, zones.js
   for (const [id, f] of Object.entries(G.foes)) { const b = SAVE.bestiary[id] = SAVE.bestiary[id] || { seen: 0, kills: 0, tier: 0 }; b.seen += f.seen; b.kills += f.kills; }
   const earned = Math.round(G.gold + bonus);
   SAVE.gold += earned; s.totalGold += earned; s.totalKills += G.kills; s.bestTime = Math.max(s.bestTime, Math.floor(G.time)); s.bossKills += G.stats.bossKills;
@@ -629,7 +637,7 @@ function enemyPath(sh, x, y, r, rot) {
 function drawEnemy(e, x, y) {
   const col = e.flash > 0 ? '#ffffff' : e.color;
   const r = e.r;
-  if (e.boss) drawBossFrame(e, x, y, r);
+  if (e.boss || e.warden) drawBossFrame(e, x, y, r);
   const sh = e.T.shape, rot = e.boss ? G.time * 0.6 : e.dashT > 0 || e.windT > 0 ? e.dashA : angTo(e.x, e.y, G.player.x, G.player.y);
   if (e.windT > 0) { ctx.strokeStyle = e.color; ctx.globalAlpha = 0.5; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(rot) * 90, y + Math.sin(rot) * 90); ctx.stroke(); ctx.globalAlpha = 1; } // a Lancer about to dash
   ctx.fillStyle = col; ctx.strokeStyle = e.boss ? '#ffffff' : 'rgba(0,0,0,0.6)'; ctx.lineWidth = e.boss ? 3 : 2;
@@ -640,7 +648,7 @@ function drawEnemy(e, x, y) {
   // status rings
   let ring = 0; const st = [[e.burnT > 0, '#ff7a2f'], [e.slowT > 0, '#7fdcff'], [e.poisonT > 0, '#8cff5a'], [e.freezeT > 0, '#ffffff']];
   for (const [on, c] of st) if (on) { ctx.strokeStyle = c; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, r + 3 + ring * 3, 0, TAU); ctx.stroke(); ring++; }
-  if (e.elite && !e.boss) drawEliteMark(e, x, y, r);
+  if ((e.elite || e.warden) && !e.boss) drawEliteMark(e, x, y, r);
 }
 function drawDeploy(d, x, y) {
   const c = d.color;
@@ -666,6 +674,7 @@ function drawPickup(p, x, y) {
   if (p.k === 'gem') { const col = p.v >= 10 ? '#ff5a7a' : p.v >= 3 ? '#5aff9c' : '#5ab8ff'; const s = p.v >= 10 ? 7 : p.v >= 3 ? 5.5 : 4.5; ctx.fillStyle = col; ctx.globalAlpha = 0.25; circle(x, y, s * 1.8); ctx.globalAlpha = 1; poly(x, y, s, 4, 0); ctx.fill(); }
   else if (p.k === 'coin') { ctx.fillStyle = '#ffd24c'; circle(x, y, 5); ctx.fillStyle = '#fff6c4'; circle(x - 1, y - 1, 2); }
   else if (p.k === 'chest') drawChest(p, x, y);
+  else if (p.k === 'mat') drawMatPickup(p, x, y);
   else { ctx.font = '18px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText({ heart: '❤️', magnet: '🧲' }[p.k] || '•', x, y + Math.sin(G.time * 4) * 2); }
 }
 // a chest: a beam of light, a pulsing glow (with turning rays for 3 and 5), and a box in its colour
@@ -784,6 +793,7 @@ function drawHUD() {
   if (gameSpeed() !== 1) { ctx.font = 'bold 12px system-ui,sans-serif'; ctx.fillStyle = '#c9a0ff'; ctx.fillText('▶▶ ' + gameSpeed() + 'x', W / 2, 60); }
   // kills/gold
   ctx.textAlign = 'right'; ctx.font = 'bold 14px system-ui,sans-serif'; ctx.fillStyle = '#ddd'; ctx.fillText('☠ ' + G.kills, W - 12, 16); ctx.fillStyle = '#ffd24c'; ctx.fillText('● ' + Math.floor(G.gold), W - 12, 36);
+  const nm = matTotal(G.mats); if (nm) { const gw = ctx.measureText('● ' + Math.floor(G.gold)).width; ctx.fillStyle = '#c9a0ff'; ctx.fillText('🧰 ' + nm, W - 24 - gw, 36); }
   // boss bar
   const boss = G.enemies.find(e => e.boss);
   if (boss) { const bw = Math.min(520, W - 40); ctx.fillStyle = '#200'; ctx.fillRect(W / 2 - bw / 2, 50, bw, 10); ctx.fillStyle = boss.color; ctx.fillRect(W / 2 - bw / 2, 50, bw * clamp(boss.hp / boss.maxHp, 0, 1), 10); ctx.textAlign = 'center'; ctx.font = 'bold 12px system-ui'; ctx.fillStyle = '#fff'; ctx.fillText(boss.T.name, W / 2, 63); }
@@ -927,12 +937,16 @@ const heldNow = d => inRun() && G.inv.some(i => i.def === d || i.gone.includes(d
 function renderCodex() {
   if (codexFilter === 'run' && !inRun()) codexFilter = 'all';
   const tabs = $('#codexTabs'); tabs.innerHTML = '';
-  const keys = [...(inRun() ? ['run'] : []), 'all', ...SLOT_KEYS, 'nexus', 'foes'];
-  for (const k of keys) { const b = document.createElement('button'); b.className = 'tab' + (codexFilter === k ? ' sel' : ''); b.textContent = k === 'foes' ? '👁 Bestiary ' + foeIds().filter(id => foeSeen(SAVE, id)).length + '/' + foeIds().length : k === 'nexus' ? '✴ Nexus ' + NEXUS.filter(nexusOk).length : k === 'run' ? '▶ This run' : k === 'all' ? 'All ' + ITEMS.filter(d => !d.disabled).length : SLOTS[k].icon + ' ' + SLOTS[k].name; b.onclick = () => { codexFilter = k; renderCodex(); }; tabs.appendChild(b); }
+  const keys = [...(inRun() ? ['run'] : []), 'all', ...SLOT_KEYS, 'nexus', 'foes', 'mats'];
+  for (const k of keys) { const b = document.createElement('button'); b.className = 'tab' + (codexFilter === k ? ' sel' : ''); b.textContent = k === 'mats' ? '🧰 Materials ' + matTotal(SAVE.materials) : k === 'foes' ? '👁 Bestiary ' + foeIds().filter(id => foeSeen(SAVE, id)).length + '/' + foeIds().length : k === 'nexus' ? '✴ Nexus ' + NEXUS.filter(nexusOk).length : k === 'run' ? '▶ This run' : k === 'all' ? 'All ' + ITEMS.filter(d => !d.disabled).length : SLOTS[k].icon + ' ' + SLOTS[k].name; b.onclick = () => { codexFilter = k; renderCodex(); }; tabs.appendChild(b); }
   const wrap = $('#codexGrid'); wrap.innerHTML = '';
   const inTab = d => !d.disabled && (codexFilter === 'run' ? heldNow(d) : codexFilter === 'all' || d.slot === codexFilter);
   const pickShow = k => { codexShow = k; renderCodex(); };
-  if (codexFilter === 'foes') { // bestiary.js: Unlocked = mastered
+  if (codexFilter === 'mats') { // materials.js: Unlocked = held
+    const ids = matIds(), nOpen = ids.filter(id => matHeld(SAVE, id) > 0).length;
+    showTabs($('#codexShow'), codexShow, nOpen, ids.length - nOpen, pickShow);
+    renderMaterials(wrap, open => showOk(codexShow, open));
+  } else if (codexFilter === 'foes') { // bestiary.js: Unlocked = mastered
     const ids = foeIds(), nOpen = ids.filter(id => foeMastered(SAVE, id)).length;
     showTabs($('#codexShow'), codexShow, nOpen, ids.length - nOpen, pickShow);
     renderBestiary(wrap, open => showOk(codexShow, open));
@@ -944,7 +958,7 @@ function renderCodex() {
     const tab = ITEMS.filter(inTab), nOpen = tab.filter(itemOpen).length;
     showTabs($('#codexShow'), codexShow, nOpen, tab.length - nOpen, pickShow);
   }
-  if (codexFilter !== 'nexus' && codexFilter !== 'foes') for (const d of ITEMS) {
+  if (codexFilter !== 'nexus' && codexFilter !== 'foes' && codexFilter !== 'mats') for (const d of ITEMS) {
     if (!inTab(d) || !showOk(codexShow, itemOpen(d))) continue;
     const un = itemUnlocked(SAVE, d), E = EFFECTS[d.effect], effs = effectsOf(d);
     const el = document.createElement('div'); el.className = 'card item' + (un ? '' : ' locked'); el.style.setProperty('--c', E.color);
@@ -1228,7 +1242,7 @@ function showGameOver(won, earned, bonus, fresh) {
   $('#goTitle').className = won ? 'win' : 'lose';
   const inv = G.inv.map(i => `<span class="chip" style="--c:${i.tier ? TIER_COLORS[i.tier] : EFFECTS[i.def.effect].color}">${i.nexus ? (nexusDef(i.nexus) || {}).icon || i.def.icon : i.def.icon} ${itemName(i)} <b>${i.level}</b>${fusedOf(i)}</span>`).join('');
   $('#goBody').innerHTML = `<div class="row"><div><small>Time</small><b>${fmtTime(G.time)}</b></div><div><small>Level ${G.stage}</small><b>${STAGE().name}</b></div><div><small>Character level</small><b>${G.level}</b></div><div><small>Kills</small><b>${G.kills}</b></div><div><small>Gold earned</small><b class="gold">● ${earned}</b></div></div>
-    <small>Includes ● ${bonus} survival bonus.</small><div class="chips">${inv}</div>` + (fresh.length ? `<div class="unlocks"><b>Unlocked!</b><br>${fresh.join('<br>')}</div>` : '');
+    <small>Includes ● ${bonus} survival bonus.</small>` + (matTotal(G.mats) ? `<div class="chips"><b style="align-self:center">🧰 Materials</b>${matChips(G.mats)}</div>` : '') + `<div class="chips">${inv}</div>` + (fresh.length ? `<div class="unlocks"><b>Unlocked!</b><br>${fresh.join('<br>')}</div>` : '');
   showScreen('gameover');
 }
 function archCard(c) {
@@ -1256,7 +1270,7 @@ function renderPause() {
   const inv = G.inv.map(invChip).join('');
   const pas = {}; for (const i of activeInsts()) for (const [k, v] of Object.entries(instStats(i))) pas[k] = (pas[k] || 0) + v;
   $('#pauseBody').innerHTML = `<p class="center" style="color:${STAGE().color}">Level ${G.stage}: ${STAGE().name}</p>` +
-    (G.world ? `<div class="pauseMap"><canvas id="pauseMap"></canvas><small>${mapFound(SAVE, G.stage) ? '🗺️ Map found: zones in this level are marked.' : '🗺️ The Map of this level is somewhere out there (follow the edge arrow). Until you find it, zones only show once you have seen them.'} The map wraps: walk off one edge and you come back at the other.</small></div>` : '') + `<div class="stats-box">${statsPanel(null, false)}</div><div class="chips col">${inv}</div>` +
+    (G.world ? `<div class="pauseMap"><canvas id="pauseMap"></canvas><small>${mapFound(SAVE, G.stage) ? '🗺️ Map found: zones in this level are marked.' : '🗺️ The Map of this level is somewhere out there (follow the edge arrow). Until you find it, zones stay off the map.'} The map wraps: walk off one edge and you come back at the other.</small>${zoneListHtml() ? `<div class="zoneList">${zoneListHtml()}</div>` : ''}${matTotal(G.mats) ? `<div class="chips">${matChips(G.mats)}</div>` : ''}</div>` : '') + `<div class="stats-box">${statsPanel(null, false)}</div><div class="chips col">${inv}</div>` +
     (Object.keys(pas).length ? `<p><b>From passive stats</b>: ${statText(pas)}</p>` : '');
   drawPauseMap($('#pauseMap'));
   $('#numToggle').textContent = 'Damage numbers: ' + (SAVE.settings.numbers ? 'on' : 'off');
