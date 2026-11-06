@@ -415,22 +415,33 @@ const OPTIONS = {
 // role: which colour of the level's palette (STAGES[].palette) the enemy wears: swarm, fast, heavy or ranged. color is
 // only the fallback (admin test canvas). pack = how many spawn together. charge = stops, then dashes ({ range, cd, spd, time }).
 // deathSpawn = enemies it bursts into ({ type, n }). ranged.pat: aim (one shot), spread (three), ring (n shots all around).
+// Damage types (v0.24): weak / resist list the effects it takes more / less damage from (DAMAGE_TYPES), only = it is immune to
+// every other type (zone enemies). A hit's type is the effect of the item that fired it, never the shared pool (core.js hitTypes).
 const ENEMY_TYPES = {
   drone:   { name: 'Drone',     hp: 12, spd: 70,  r: 12, dmg: 8,  xp: 1, color: '#a55cff', shape: 'circle', role: 'swarm' },
-  swarm:   { name: 'Swarmling', hp: 5,  spd: 100, r: 7,  dmg: 5,  xp: 1, color: '#ff9e4c', shape: 'circle', role: 'swarm', pack: 4 },
-  darter:  { name: 'Darter',    hp: 9,  spd: 140, r: 9,  dmg: 6,  xp: 1, color: '#ff4c8b', shape: 'tri', role: 'fast' },
-  spitter: { name: 'Spitter',   hp: 22, spd: 60,  r: 13, dmg: 8,  xp: 2, color: '#4cffd2', shape: 'diamond', role: 'ranged', ranged: { range: 280, cd: 2.4, pat: 'aim' } },
-  brute:   { name: 'Brute',     hp: 80, spd: 45,  r: 22, dmg: 15, xp: 5, color: '#7d5cff', shape: 'square', role: 'heavy', mass: 4 },
-  bomber:  { name: 'Bomber',    hp: 26, spd: 72,  r: 14, dmg: 10, xp: 3, color: '#ffd24c', shape: 'hex', role: 'heavy', deathRing: 8 },
-  warlock: { name: 'Warlock',   hp: 45, spd: 52,  r: 15, dmg: 10, xp: 5, color: '#4c9bff', shape: 'star', role: 'ranged', ranged: { range: 320, cd: 3, pat: 'spread' } },
-  wraith:  { name: 'Wraith',    hp: 55, spd: 115, r: 13, dmg: 12, xp: 4, color: '#d0d6ff', shape: 'tri', role: 'fast' },
-  lancer:  { name: 'Lancer',    hp: 11, spd: 105, r: 10, dmg: 8,  xp: 1, color: '#ff6bd5', shape: 'arrow', role: 'fast', charge: { range: 300, cd: 3.2, spd: 420, time: 0.45 } },
-  husk:    { name: 'Husk',      hp: 34, spd: 58,  r: 16, dmg: 10, xp: 3, color: '#c86b3d', shape: 'oct', role: 'heavy', deathSpawn: { type: 'swarm', n: 3 } },
-  sentinel: { name: 'Sentinel', hp: 42, spd: 48,  r: 14, dmg: 9,  xp: 5, color: '#6be8ff', shape: 'star4', role: 'ranged', ranged: { range: 300, cd: 3.4, pat: 'ring', n: 8 } },
+  swarm:   { name: 'Swarmling', hp: 5,  spd: 100, r: 7,  dmg: 5,  xp: 1, color: '#ff9e4c', shape: 'circle', role: 'swarm', pack: 4, weak: ['burn', 'split'] },
+  darter:  { name: 'Darter',    hp: 9,  spd: 140, r: 9,  dmg: 6,  xp: 1, color: '#ff4c8b', shape: 'tri', role: 'fast', weak: ['shock', 'homing'], resist: ['chill'] },
+  spitter: { name: 'Spitter',   hp: 22, spd: 60,  r: 13, dmg: 8,  xp: 2, color: '#4cffd2', shape: 'diamond', role: 'ranged', ranged: { range: 280, cd: 2.4, pat: 'aim' }, weak: ['pierce'], resist: ['poison'] },
+  brute:   { name: 'Brute',     hp: 80, spd: 45,  r: 22, dmg: 15, xp: 5, color: '#7d5cff', shape: 'square', role: 'heavy', mass: 4, weak: ['crit', 'poison'], resist: ['knockback', 'bounce'] },
+  bomber:  { name: 'Bomber',    hp: 26, spd: 72,  r: 14, dmg: 10, xp: 3, color: '#ffd24c', shape: 'hex', role: 'heavy', deathRing: 8, weak: ['knockback'], resist: ['burn'] },
+  warlock: { name: 'Warlock',   hp: 45, spd: 52,  r: 15, dmg: 10, xp: 5, color: '#4c9bff', shape: 'star', role: 'ranged', ranged: { range: 320, cd: 3, pat: 'spread' }, weak: ['pierce', 'vampiric'], resist: ['shock'] },
+  wraith:  { name: 'Wraith',    hp: 55, spd: 115, r: 13, dmg: 12, xp: 4, color: '#d0d6ff', shape: 'tri', role: 'fast', weak: ['shock', 'vampiric'], resist: ['poison', 'chill'] },
+  lancer:  { name: 'Lancer',    hp: 11, spd: 105, r: 10, dmg: 8,  xp: 1, color: '#ff6bd5', shape: 'arrow', role: 'fast', charge: { range: 300, cd: 3.2, spd: 420, time: 0.45 }, weak: ['knockback'], resist: ['pierce'] },
+  husk:    { name: 'Husk',      hp: 34, spd: 58,  r: 16, dmg: 10, xp: 3, color: '#c86b3d', shape: 'oct', role: 'heavy', deathSpawn: { type: 'swarm', n: 3 }, weak: ['burn'], resist: ['split'] },
+  sentinel: { name: 'Sentinel', hp: 42, spd: 48,  r: 14, dmg: 9,  xp: 5, color: '#6be8ff', shape: 'star4', role: 'ranged', ranged: { range: 300, cd: 3.4, pat: 'ring', n: 8 }, weak: ['bounce'], resist: ['homing'] },
+};
+// damage × from a hit of a type the enemy is weak to / resists. A hit with several types uses the best one.
+const DAMAGE_TYPES = { weak: 1.5, resist: 0.5 };
+// The enemy Codex (bestiary): every enemy's first entry is free once met. study: gold for its second entry (stats and attacks);
+// master: gold for the third (weaknesses, resistances, immunities), once you have defeated `kills` of it. A mastered enemy can be
+// a Fusion Lab foe. Bosses use the boss row.
+const CODEX_COSTS = {
+  normal: { study: 40, master: 150, kills: 60 },
+  boss: { study: 300, master: 1000, kills: 3 },
 };
 const BOSSES = {
-  matriarch: { name: 'Hollow Matriarch', hp: 1800,  spd: 55, r: 46, dmg: 20, xp: 80,  color: '#ff4cc3', shape: 'hex' },
-  seraph:    { name: 'Clockwork Seraph', hp: 5500,  spd: 62, r: 44, dmg: 25, xp: 160, color: '#ffd24c', shape: 'star' },
+  matriarch: { name: 'Hollow Matriarch', hp: 1800,  spd: 55, r: 46, dmg: 20, xp: 80,  color: '#ff4cc3', shape: 'hex', weak: ['burn'], resist: ['poison'] },
+  seraph:    { name: 'Clockwork Seraph', hp: 5500,  spd: 62, r: 44, dmg: 25, xp: 160, color: '#ffd24c', shape: 'star', weak: ['shock'], resist: ['crit'] },
   eclipse:   { name: 'The Eclipse',      hp: 14000, spd: 50, r: 58, dmg: 30, xp: 300, color: '#ff3b5c', shape: 'circle' },
 };
 // ======================= PICKUPS (enemy drops) =======================

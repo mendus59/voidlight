@@ -2,7 +2,7 @@
 // ===== VOIDLIGHT core engine: math, state, bullets, effects, enemies helpers =====
 // Game version shown on the title screen. Beta, so 0.MINOR.PATCH: bump MINOR for a feature PR, PATCH for a fix/tweak.
 // Add a matching line to CHANGELOG.md whenever you bump it.
-const VERSION = '0.23.0';
+const VERSION = '0.24.0';
 const TAU = Math.PI * 2;
 const rand = (a, b) => a + Math.random() * (b - a);
 const randi = (a, b) => Math.floor(a + Math.random() * (b - a + 1));
@@ -184,13 +184,13 @@ function shoot(o) {
 function strike(x, y, r, dmg, effect, o = {}) {
   const P = G.player; if (!o.raw) r *= Math.sqrt(P.area);
   if (!o.noFx) fxRing(x, y, r, o.color || (effect ? EFFECTS[effect].color : '#fff'), 0.3, 3);
-  const pseudo = { dmg, effect, vx: 0, vy: 0, x, y, kb: o.kb || 0, owner: o.owner, link: o.link };
+  const pseudo = { dmg, effect, vx: 0, vy: 0, x, y, kb: o.kb || 0, owner: o.owner, link: o.link, dtype: o.dtype };
   for (const e of enemiesNear(x, y, r)) hitEnemy(e, pseudo);
 }
 
 function zap(x, y, e, dmg, effect, owner) {
   fxBolt(x, y, e.x, e.y, '#fff36b');
-  hitEnemy(e, { dmg, effect: effect || 'shock', vx: e.x - x, vy: e.y - y, x, y, owner, noChain: true });
+  hitEnemy(e, { dmg, effect: effect || 'shock', vx: e.x - x, vy: e.y - y, x, y, owner, noChain: true, dtype: ['shock'] });
 }
 function chainZap(from, dmg, n, effect, owner) {
   const seen = new Set([from.id]); let cur = from;
@@ -304,6 +304,27 @@ function collideBullet(b) {
   });
 }
 
+// ---------- damage types ----------
+// A hit's types are what fired it: the firing item's own effects and fusion riders (or inst.hitTypes once a Hit augment changed
+// them), plus the bullet's own effect (a chain link's shots carry the link's effect). The shared pool never changes a hit's
+// type. b.dtype overrides it: burn and poison ticks, shock arcs, shrapnel and reactions say what they are.
+function hitTypes(b) {
+  if (b.dtype) return b.dtype;
+  const o = b.owner, out = o ? (o.hitTypes || instEffects(o)).slice() : [];
+  if (b.effect && !out.includes(b.effect)) out.push(b.effect);
+  return out;
+}
+// Damage × enemy e takes from a hit of types ts (weak / resist / only on ENEMY_TYPES and BOSSES, DAMAGE_TYPES in items.js).
+// The best type of the hit counts. `only`: immune (×0) to every type not listed. An untyped hit is neutral.
+function typeMul(e, ts) {
+  const T = e.T; if (!T || (!T.weak && !T.resist && !T.only)) return 1;
+  if (T.only && T.only.length && !ts.some(k => T.only.includes(k))) return 0;
+  if (!ts.length) return 1;
+  let best = 0;
+  for (const k of ts) { const m = T.weak && T.weak.includes(k) ? DAMAGE_TYPES.weak : T.resist && T.resist.includes(k) ? DAMAGE_TYPES.resist : 1; if (m > best) best = m; }
+  return best;
+}
+
 // ---------- damage & effects ----------
 let hitDepth = 0;
 function hitEnemy(e, b) {
@@ -311,13 +332,14 @@ function hitEnemy(e, b) {
   hitDepth++;
   const P = G.player;
   const S = k => poolStack(b, k);
-  let dmg = b.dmg * archComboMul(S), crit = false;
+  const tm = typeMul(e, hitTypes(b));
+  let dmg = b.dmg * archComboMul(S), crit = false, bonus = 0;
   // critical
   const cc = 0.03 * S('crit') + P.critBonus;
   if (cc > 0 && Math.random() < cc) { dmg *= 2 + 0.1 * S('crit'); crit = true; G.stats.crits++; }
   // reactions
   if (e.burnT > 0 && e.slowT > 0 && (S('burn') || S('chill')) && e.reactCd <= 0) {
-    dmg += dmg + 10; e.reactCd = 1.2; e.slowT = 0; fxText(e.x, e.y - 18, 'SHATTER', '#c9f4ff', 12); fxSpark(e.x, e.y, '#c9f4ff', 6, 160);
+    bonus = (dmg + 10) * typeMul(e, ['burn', 'chill']); e.reactCd = 1.2; e.slowT = 0; fxText(e.x, e.y - 18, 'SHATTER', '#c9f4ff', 12); fxSpark(e.x, e.y, '#c9f4ff', 6, 160);
   }
   // status application
   let s;
@@ -330,9 +352,11 @@ function hitEnemy(e, b) {
     const l = Math.hypot(ax, ay) || 1; e.kx += (ax / l) * kb * 12 / e.mass; e.ky += (ay / l) * kb * 12 / e.mass;
   }
   if ((s = S('vampiric')) > 0 && Math.random() < 0.012 * s) heal(1);
+  dmg = dmg * tm + bonus;
   if (b.lifesteal) heal(dmg * b.lifesteal);
   if (b.owner) e.by = b.owner; // the item credited with the kill (its burn and poison ticks count for it too)
-  damageEnemy(e, dmg, crit ? '#ffe14d' : (b.effect ? EFFECTS[b.effect].color : '#ffffff'), crit);
+  if (tm === 0 && !bonus) { if (!(e.immT > G.time)) { e.immT = G.time + 0.7; fxText(e.x, e.y - e.r - 4, 'IMMUNE', '#8a86a8', 11); } }
+  else damageEnemy(e, dmg, crit ? '#ffe14d' : tm > 1 ? '#ffd24c' : tm < 1 ? '#8a86a8' : (b.effect ? EFFECTS[b.effect].color : '#ffffff'), crit, tm);
   if (hitDepth < 3) chainHit(b, e); // fusion chains (chain.js)
   if (crit && hitDepth < 3 && !b.noTrig) trigger('crit', e); // noTrig: bullets made by a crit trigger, so crits cannot chain forever
   // shock arcs
@@ -347,15 +371,16 @@ function hitEnemy(e, b) {
   // split on kill
   if (e.dead && hitDepth < 3 && (s = S('split')) > 0 && Math.random() < 0.1 * s) {
     const a0 = rand(0, TAU);
-    for (let i = 0; i < 3; i++) shoot({ x: e.x, y: e.y, ang: a0 + i * TAU / 3, spd: 330, r: 3.5, dmg: b.dmg * 0.4 + 2, life: 0.5, color: '#5affd9', shape: 'shard', noMods: true });
+    for (let i = 0; i < 3; i++) shoot({ x: e.x, y: e.y, ang: a0 + i * TAU / 3, spd: 330, r: 3.5, dmg: b.dmg * 0.4 + 2, life: 0.5, color: '#5affd9', shape: 'shard', noMods: true, dtype: ['split'] });
   }
   hitDepth--;
 }
 
-function damageEnemy(e, dmg, color, crit) {
+// tm: the damage type × of the hit (core.js typeMul): weak hits show bigger with a "!", resisted ones smaller
+function damageEnemy(e, dmg, color, crit, tm = 1) {
   if (e.dead) return;
   e.hp -= dmg; e.flash = 0.07; G.stats.damage += dmg;
-  if (G.settings.numbers && (crit || dmg >= 3)) fxText(e.x, e.y - e.r, Math.round(dmg).toString(), color, crit ? 16 : 11);
+  if (G.settings.numbers && (crit || dmg >= 3)) fxText(e.x, e.y - e.r, Math.round(dmg) + (tm > 1 ? '!' : ''), color, crit ? 16 : tm > 1 ? 14 : tm < 1 ? 10 : 11);
   if (e.hp <= 0) killEnemy(e);
 }
 

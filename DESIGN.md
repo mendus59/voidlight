@@ -390,6 +390,17 @@ more socket bought in total, so 9 extra sockets (19 in all) once Level 10 is ope
 
 Every ~45s an Elite spawns (8× HP, drops a chest). Every 60s an encirclement wave rings you in.
 
+### Damage types and the Bestiary
+Every hit has a **type**: the effect of the item that fired it, plus its fusion riders (`hitTypes` in core.js). The shared pool
+never changes a hit's type, so holding one Burn item doesn't make every bullet Burn damage. Burn and poison ticks are Burn and
+Poison, shock arcs Shock, Split shrapnel Split, reactions both ingredients. Enemies list `weak`, `resist` and `only` effects
+(items.js): weak ×1.5, resist ×0.5 (`DAMAGE_TYPES`), `only` = immune to every other type (zone enemies). A hit with several types
+uses its best one. Weak hits show as bigger gold numbers with "!", resisted ones grey, immune ones "IMMUNE".
+
+The **Bestiary** (Codex > 👁 Bestiary, `src/bestiary.js`) has three entries per enemy: Sighted (free once met), Studied (gold:
+stats and attacks) and Mastered (gold once you've defeated `kills` of it: weaknesses, resistances, immunities). Prices are
+`CODEX_COSTS` (normal 40 / 150 / 60 kills, boss 300 / 1000 / 3 kills). A mastered enemy can be a Fusion Lab foe.
+
 ### Chests
 Elites and bosses drop a chest. A chest holds **1, 3 or 5 upgrades**, rolled when it drops (`DROPS.chest` in items.js: `three` 25%,
 `five` 5%), so its look tells you what is inside: blue 1, purple Rare 3, gold Legendary 5, each with a beam of light and a glow.

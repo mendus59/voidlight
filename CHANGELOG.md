@@ -6,6 +6,13 @@ Voidlight is in beta, so versions are `0.MINOR.PATCH`. The version lives in one 
 - Bump **PATCH** (0.11.0 → 0.11.1) for a bug fix or balance tweak.
 - Add a line here in the same PR.
 
+## 0.24.0 (2026-11-06)
+- **Damage types.** Every hit now has a type: the effect of the item that fired it (plus its fusion riders). The shared effect pool still strengthens effects, but it no longer changes what a bullet *is*. Burn and poison ticks are Burn and Poison damage, shock arcs are Shock, Split shrapnel is Split, and reactions count as both their ingredients.
+- **Enemies have weaknesses and resistances.** Weak hits do ×1.5 and pop as bigger gold numbers with a "!", resisted hits do ×0.5 and show grey. For example Swarmlings are weak to Burn and Split, Bombers are weak to Force and resist Burn, Wraiths are weak to Shock and Vampiric, and the Hollow Matriarch is weak to Burn. A hit with several types uses the best one, so fusions that carry more effects find more weaknesses. The pause menu shows what each of your items hits as.
+- **The Bestiary** (Codex & Armory > 👁 Bestiary): every enemy and boss you have met, with three entries. *Sighted* is free once met. *Studied* costs gold and shows its stats and attacks. *Mastered* costs gold after you defeat enough of them and reveals its weaknesses and resistances.
+- **Fusion Lab foes:** a mastered enemy can be picked as the Lab's target, with its real moves and resistances, and the Lab says how your item's damage type fares against it.
+- Admin: Enemies & difficulty has the damage type lists per enemy and boss, the weak / resist multipliers and the Codex prices.
+
 ## 0.23.0 (2026-11-06)
 - Chests worth chasing: every chest now holds **1, 3 or 5 upgrades**, rolled when it drops (about 70% / 25% / 5%). Luck raises the odds of the bigger ones (at the Forge's max Luck about 54% / 36% / 10%). Boss chests always hold at least 3.
 - Chests look the part: a beam of light, a pulsing glow, turning rays on 3 and 5 chests, and a colour that says what's inside (blue 1, purple Rare 3, gold Legendary 5). A banner announces Rare and Legendary drops.

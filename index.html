@@ -143,6 +143,11 @@
   .labRow select { max-width: 220px; } .labGrp { display: inline-flex; gap: 3px; align-items: center; }
   .labRow button.small { padding: 3px 8px; font-size: 12px; } .labRow button.on { border-color: #c9a0ff; color: #fff; background: rgba(201,160,255,0.2); }
   .labRow .lbl { color: var(--muted); font-size: 12px; } .labRow .note, .labPanel .note { color: var(--muted); font-size: 12px; }
+  /* enemy Codex (bestiary.js) */
+  .card.foe .ico { font-size: 28px; min-width: 34px; text-align: center; } .card.foe.mastered { border-color: var(--c); }
+  .card .trait { display: block; } .card .trait.weak { color: #ffd24c; } .card .trait.res { color: #b0aac8; } .card .trait.imm { color: #ff6b81; }
+  .card.foe .bar { height: 4px; background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden; } .card.foe .bar i { display: block; height: 100%; background: linear-gradient(90deg, #7a3cff, #c04cff); }
+  .labOut .trait { display: block; font-size: 12px; } .labOut .trait.weak { color: #ffd24c; } .labOut .trait.res { color: #b0aac8; } .labOut .trait.imm { color: #ff6b81; }
   /* chests: the panel glows in the chest's colour and the items flip in one by one */
   .chestPanel { width: min(900px, 100%); border-color: var(--c); box-shadow: 0 0 70px color-mix(in srgb, var(--c) 45%, transparent); }
   #chestTitle { font-size: 30px; letter-spacing: 0.08em; text-shadow: 0 0 18px currentColor; }
@@ -247,6 +252,7 @@
 <script src="src/content.js"></script>
 <script src="src/progress.js"></script>
 <script src="src/nexus.js"></script>
+<script src="src/bestiary.js"></script>
 <script src="src/main.js"></script>
 <script type="module" src="src/cloud.js"></script>
 </body>
