@@ -99,7 +99,7 @@ def('spell', 'thunder_call', 'Thunder Call', 'shock', '🌩️', { dmg: 18, cd: 
     list.forEach((e, k) => later(k * 0.08, () => { if (e.dead) return; fxStrikeV(e.x, e.y, '#fff36b'); strike(e.x, e.y, 38, c.d, 'shock', { owner: i }); })); } });
 def('spell', 'plague_cloud', 'Plague Cloud', 'poison', '☁️', { dmg: 4, cd: 3.2, pattern: 'Lingering toxic clouds dropped on enemies.',
   fire(i, c) { const m = 1 + Math.floor(c.L / 2) + c.n; for (let k = 0; k < m; k++) { const t = targetPoint(360); const R = (50 + 5 * c.L) * Math.sqrt(c.P.area);
-    deploy({ x: t.x, y: t.y, life: 4, r: R, kind: 'cloud', color: c.col, update(d, dt) { d.tick -= dt; if (d.tick <= 0) { d.tick = 0.4; strike(d.x, d.y, d.r, c.d, 'poison', { noFx: true, raw: true, owner: i }); } } }); } } });
+    deploy({ x: t.x, y: t.y, life: 4, r: R, kind: 'cloud', color: c.col, owner: i, update(d, dt) { d.tick -= dt; if (d.tick <= 0) { d.tick = 0.4; strike(d.x, d.y, d.r, c.d, 'poison', { noFx: true, raw: true, owner: i }); } } }); } } });
 def('spell', 'prism_shard', 'Prism Shard', 'bounce', '🔺', { dmg: 9, cd: 2.2, pattern: 'Rainbow shards that ricochet enemy-to-enemy.',
   fire(i, c) { const m = 1 + Math.floor(c.L / 2) + c.n; for (let k = 0; k < m; k++) B(c, { ang: c.aim + rand(-0.5, 0.5), spd: 520, r: 5, life: 2, bounces: 4 + c.L, shape: 'prism', rainbow: true }); } });
 def('spell', 'star_fall', 'Star Fall', 'homing', '🌠', { dmg: 11, cd: 2.5, lock: { stage: 7, stat: 'kills', min: 1000, text: 'Defeat 1000 enemies in Level 7', cost: 600 }, pattern: 'Stars summoned above you that dive onto targets.',
@@ -108,7 +108,7 @@ def('spell', 'spiral_sigil', 'Spiral Sigil', 'pierce', '🌀', { dmg: 7, cd: 4, 
   fire(i, c) { const arms = 2 + Math.floor(c.L / 2) + c.n, base = rand(0, TAU); for (let s = 0; s < 25; s++) later(s * 0.06, () => { for (let a = 0; a < arms; a++) B(c, { ang: base + s * 0.32 + a * TAU / arms, spd: 300, r: 4.5, life: 1.2, pierce: 2, shape: 'shard' }); }); } });
 def('spell', 'shockwave', 'Shockwave', 'knockback', '🔊', { dmg: 8, cd: 3.5, pattern: 'Expanding ring wave that blasts enemies outward.',
   fire(i, c) { const hit = new Set(); const maxR = 170 * Math.sqrt(c.P.area) * (1 + 0.1 * c.L);
-    deploy({ x: c.x, y: c.y, life: 0.55, kind: 'wave', color: c.col, R: 0, update(d) { d.R = maxR * Math.min(1, d.t / d.life);
+    deploy({ x: c.x, y: c.y, life: 0.55, kind: 'wave', color: c.col, owner: i, R: 0, update(d) { d.R = maxR * Math.min(1, d.t / d.life);
       for (const e of enemiesNear(d.x, d.y, d.R + 10)) { if (hit.has(e.id) || Math.sqrt(d2(d.x, d.y, e.x, e.y)) < d.R - 30) continue; hit.add(e.id); hitEnemy(e, { dmg: c.d, effect: 'knockback', x: d.x, y: d.y, vx: 0, vy: 0, kb: 45, owner: i }); } } }); } });
 def('spell', 'judgment_cross', 'Judgment Cross', 'crit', '✝️', { dmg: 16, cd: 3, lock: { stage: 5, stat: 'best', min: 480, text: 'Survive 8:00 in Level 5', cost: 600 }, pattern: 'Four beams in a +, then an ×.',
   fire(i, c) { const beams = off => { for (let k = 0; k < 4; k++) B(c, { beam: { len: 320, w: 10, ang: off + k * Math.PI / 2, follow: true }, hitCd: 0.12, life: 0.4, noMods: true, shape: 'beam' }); };
@@ -183,37 +183,37 @@ def('orbit', 'arc_halo', 'Arc Halo', 'shock', '🔘', { dmg: 9, cd: 2.2, lock: {
 def('trap', 'fire_trail', 'Fire Trail', 'burn', '🔥', { dmg: 4, cd: 0.12, pattern: 'Flames left behind as you move.',
   fire(i, c) { if (!c.P.moving) return; B(c, { spd: 0, r: 9, life: 1.2 + 0.25 * c.L, hitCd: 0.45, shape: 'flame', noMods: true }); } });
 def('trap', 'ice_mine', 'Ice Mine', 'chill', '🧊', { dmg: 15, cd: 2.6, pattern: 'Proximity mines that burst into a ring of shards.',
-  fire(i, c) { const m = 1 + Math.floor(c.L / 2) + c.n; for (let k = 0; k < m; k++) deploy({ x: c.x + rand(-70, 70), y: c.y + rand(-70, 70), life: 12, kind: 'mine', color: c.col, update(d, dt) {
+  fire(i, c) { const m = 1 + Math.floor(c.L / 2) + c.n; for (let k = 0; k < m; k++) deploy({ x: c.x + rand(-70, 70), y: c.y + rand(-70, 70), life: 12, kind: 'mine', color: c.col, owner: i, update(d, dt) {
     if (d.t < 0.5) return; d.tick -= dt; if (d.tick > 0) return; d.tick = 0.1;
     if (enemiesNear(d.x, d.y, 45).length) { d.dead = true; strike(d.x, d.y, 50, c.d, 'chill', { owner: i }); radial(c, d.x, d.y, 8 + c.L, { spd: 340, r: 4, life: 0.5, dmg: c.d * 0.5, shape: 'shard' }); } } }); } });
 def('trap', 'tesla_coil', 'Tesla Coil', 'shock', '🗼', { dmg: 10, cd: 5, pattern: 'Coil that zaps several enemies at once.',
-  fire(i, c) { deploy({ x: c.x + rand(-40, 40), y: c.y + rand(-40, 40), life: 5 + c.L, kind: 'coil', color: c.col, update(d, dt) { d.tick -= dt; if (d.tick > 0) return; d.tick = 0.6;
+  fire(i, c) { deploy({ x: c.x + rand(-40, 40), y: c.y + rand(-40, 40), life: 5 + c.L, kind: 'coil', color: c.col, owner: i, update(d, dt) { d.tick -= dt; if (d.tick > 0) return; d.tick = 0.6;
     for (const e of enemiesNear(d.x, d.y, 190).slice(0, 1 + Math.floor(c.L / 2) + c.n)) zap(d.x, d.y - 10, e, c.d, 'shock', i); } }); } });
 def('trap', 'spore_pod', 'Spore Pod', 'poison', '🍄', { dmg: 6, cd: 3, pattern: 'Lobbed pod that sprays a spore spiral.',
-  fire(i, c) { const m = 1 + c.n; for (let k = 0; k < m; k++) { const t = targetPoint(320); lob(c, t.x, t.y, { shape: 'pod', T: 0.6, onExpire: b => deploy({ x: b.x, y: b.y, life: 1.2, kind: 'pod', color: c.col, a: 0, update(d, dt) {
+  fire(i, c) { const m = 1 + c.n; for (let k = 0; k < m; k++) { const t = targetPoint(320); lob(c, t.x, t.y, { shape: 'pod', T: 0.6, onExpire: b => deploy({ x: b.x, y: b.y, life: 1.2, kind: 'pod', color: c.col, owner: i, a: 0, update(d, dt) {
     d.tick -= dt; if (d.tick > 0) return; d.tick = 0.05; d.a += 0.5; for (let arm = 0; arm < 3; arm++) B(c, { x: d.x, y: d.y, ang: d.a + arm * TAU / 3, spd: 200, r: 4, life: 0.9, shape: 'spore' }); } }) }); } } });
 def('trap', 'bumper_totem', 'Bumper Totem', 'bounce', '🗿', { dmg: 8, cd: 5.5, pattern: 'Totem spraying rotating, wall-bouncing shots.',
-  fire(i, c) { deploy({ x: c.x, y: c.y, life: 4.5, kind: 'totem', color: c.col, a: 0, update(d, dt) { d.tick -= dt; if (d.tick > 0) return; d.tick = 0.25; d.a += 0.4;
+  fire(i, c) { deploy({ x: c.x, y: c.y, life: 4.5, kind: 'totem', color: c.col, owner: i, a: 0, update(d, dt) { d.tick -= dt; if (d.tick > 0) return; d.tick = 0.25; d.a += 0.4;
     for (let k = 0; k < 4; k++) B(c, { x: d.x, y: d.y, ang: d.a + k * Math.PI / 2, spd: 320, bounceWalls: 2 + Math.floor(c.L / 2), life: 2.5, r: 5, shape: 'disc' }); } }); } });
 def('trap', 'hunter_turret', 'Hunter Turret', 'homing', '🎯', { dmg: 9, cd: 6, pattern: 'Turret firing homing missiles.',
-  fire(i, c) { deploy({ x: c.x + rand(-30, 30), y: c.y + rand(-30, 30), life: 6 + c.L, kind: 'turret', color: c.col, update(d, dt) { d.tick -= dt; if (d.tick > 0) return; d.tick = 0.55 / (1 + 0.1 * c.n);
+  fire(i, c) { deploy({ x: c.x + rand(-30, 30), y: c.y + rand(-30, 30), life: 6 + c.L, kind: 'turret', color: c.col, owner: i, update(d, dt) { d.tick -= dt; if (d.tick > 0) return; d.tick = 0.55 / (1 + 0.1 * c.n);
     const e = nearest(d.x, d.y, 450); if (e) B(c, { x: d.x, y: d.y, ang: angTo(d.x, d.y, e.x, e.y) + rand(-0.4, 0.4), spd: 260, home: 6, r: 4.5, life: 2, shape: 'missile' }); } }); } });
 def('trap', 'spike_line', 'Spike Line', 'pierce', '🔱', { dmg: 14, cd: 2.2, pattern: 'A line of spikes erupting toward enemies.',
   fire(i, c) { const lines = 1 + c.n; for (let l = 0; l < lines; l++) { const ang = c.aim + (l - (lines - 1) / 2) * 0.5, sx = c.x, sy = c.y, m = 6 + c.L;
     for (let k = 0; k < m; k++) later(k * 0.04, () => { const x = sx + Math.cos(ang) * (30 + k * 28), y = sy + Math.sin(ang) * (30 + k * 28); G.fx.push({ k: 'spike', x, y, color: c.col, t: 0, dur: 0.3 }); strike(x, y, 20, c.d, 'pierce', { owner: i, noFx: true }); }); } } });
 def('trap', 'gravity_well', 'Gravity Well', 'knockback', '🕳️', { dmg: 4, cd: 6.5, lock: { stage: 3, stat: 'bosses', min: 1, text: 'Defeat a boss in Level 3', cost: 400 }, pattern: 'Vortex that pulls enemies in, then detonates outward.',
   fire(i, c) { const x = c.x + Math.cos(c.aim) * 160, y = c.y + Math.sin(c.aim) * 160, R = 190 * Math.sqrt(c.P.area);
-    deploy({ x, y, life: 2.5, kind: 'well', color: c.col, r: R, update(d, dt) { for (const e of enemiesNear(d.x, d.y, d.r)) { if (e.boss) continue; const a = angTo(e.x, e.y, d.x, d.y); e.x += Math.cos(a) * 130 * dt; e.y += Math.sin(a) * 130 * dt; }
+    deploy({ x, y, life: 2.5, kind: 'well', color: c.col, owner: i, r: R, update(d, dt) { for (const e of enemiesNear(d.x, d.y, d.r)) { if (e.boss) continue; const a = angTo(e.x, e.y, d.x, d.y); e.x += Math.cos(a) * 130 * dt; e.y += Math.sin(a) * 130 * dt; }
       d.tick -= dt; if (d.tick <= 0) { d.tick = 0.35; strike(d.x, d.y, 70, c.d, 'knockback', { noFx: true, owner: i }); } },
       onEnd(d) { strike(d.x, d.y, 130, c.d * 4, 'knockback', { kb: 80, owner: i }); fxRing(d.x, d.y, 160, c.col, 0.5, 6); } }); } });
 def('trap', 'sniper_nest', 'Sniper Nest', 'crit', '🔭', { dmg: 40, cd: 7, lock: { stage: 6, stat: 'best', min: 300, text: 'Survive 5:00 in Level 6', cost: 600 }, pattern: 'Turret sniping the toughest enemy around.',
-  fire(i, c) { deploy({ x: c.x, y: c.y, life: 7, kind: 'nest', color: c.col, update(d, dt) { d.tick -= dt; if (d.tick > 0) return; d.tick = c.E ? 0.6 : 1.0;
+  fire(i, c) { deploy({ x: c.x, y: c.y, life: 7, kind: 'nest', color: c.col, owner: i, update(d, dt) { d.tick -= dt; if (d.tick > 0) return; d.tick = c.E ? 0.6 : 1.0;
     const e = toughest(d.x, d.y, 650); if (e) B(c, { x: d.x, y: d.y, ang: angTo(d.x, d.y, e.x, e.y), spd: 1000, r: 4, life: 0.8, pierce: 3, shape: 'bolt' }); } }); } });
 def('trap', 'cluster_bomb', 'Cluster Bomb', 'split', '💣', { dmg: 18, cd: 3.2, lock: { stage: 9, stat: 'best', min: 300, text: 'Survive 5:00 in Level 9', cost: 800 }, pattern: 'Lobbed bomb that scatters bomblets.',
   fire(i, c) { const m = 1 + c.n; for (let k = 0; k < m; k++) { const t = targetPoint(360); lob(c, t.x, t.y, { shape: 'bomb', r: 8, T: 0.7, onExpire: b => { strike(b.x, b.y, 55, c.d, 'split', { owner: i });
     const q = 6 + c.L; for (let j = 0; j < q; j++) B(c, { x: b.x, y: b.y, ang: rand(0, TAU), spd: rand(150, 320), drag: 3, r: 4, life: 0.6, dmg: c.d * 0.4, shape: 'pellet', noMods: true, onExpire: bb => strike(bb.x, bb.y, 26, c.d * 0.5, 'split', { owner: i }) }); } }); } } });
 def('trap', 'blood_altar', 'Blood Altar', 'vampiric', '⛩️', { dmg: 7, cd: 8, lock: { stage: 10, stat: 'kills', min: 1500, text: 'Defeat 1500 enemies in Level 10', cost: 900 }, pattern: 'Altar spraying a 3-arm spiral; heals you while near it.',
-  fire(i, c) { deploy({ x: c.x, y: c.y, life: 6, kind: 'altar', color: c.col, a: 0, healT: 1, update(d, dt) { d.healT -= dt; if (d.healT <= 0) { d.healT = 1; if (d2(d.x, d.y, G.player.x, G.player.y) < 100 * 100) heal(1 + 0.25 * c.L); }
+  fire(i, c) { deploy({ x: c.x, y: c.y, life: 6, kind: 'altar', color: c.col, owner: i, a: 0, healT: 1, update(d, dt) { d.healT -= dt; if (d.healT <= 0) { d.healT = 1; if (d2(d.x, d.y, G.player.x, G.player.y) < 100 * 100) heal(1 + 0.25 * c.L); }
     d.tick -= dt; if (d.tick > 0) return; d.tick = 0.08; d.a += 0.21; for (let k = 0; k < 3; k++) B(c, { x: d.x, y: d.y, ang: d.a + k * TAU / 3, spd: 220, r: 5, life: 1.6 }); } }); } });
 
 // two effects, passive: no attack of their own. They raise your stats each level, and their two effects let them fuse
@@ -350,11 +350,13 @@ const TIER_KEYS = Object.keys(FUSION);
 
 // ======================= FUSION CHAINS =======================
 // Rules for the chains in chain.js: every attacking item a fusion absorbs plays its own attack off the kept item's.
+// rate also limits riders: each volley, arc, pulse or patch a riding link makes spends one play. ride = damage × for links
+// riding an aura, a placed object or a patch (they replace popping on every one of its hits).
 // dmg = share of the absorbed item's damage its link deals, rate = plays per second per link, depth = how many steps a
 // chain may nest (3 = a Mega's grandchildren still play), kids = damage × for each step of nesting.
-// Each item's own chain form is its `chain` field ({ form, shape, n, size, scale, on }), defaults in chain.js.
+// Each item's own chain is its `chain` field ({ cat, spread, act, shape, n, size, scale, on }), defaults and the category rules in chain.js.
 const CHAIN_RULES = {
-  rules: { dmg: 0.5, rate: 8, depth: 3, kids: 1 },
+  rules: { dmg: 0.5, rate: 8, depth: 3, kids: 1, ride: 1.5 },
 };
 const tierOf = inst => FUSION[TIER_KEYS[(inst && inst.tier) || 0]];
 

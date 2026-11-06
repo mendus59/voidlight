@@ -306,7 +306,7 @@ function fuse(keep, others, quiet) {
   if (!quiet) {
     banner(`${T > 1 ? tierName(T).toUpperCase() + ' ' : ''}FUSION: ${itemName(keep)}`, TIER_COLORS[T], 2.5); fxRing(G.player.x, G.player.y, 160 + 60 * T, TIER_COLORS[T], 0.6, 6);
     const freed = [...new Set(others.map(o => SLOTS[o.def.slot].name))].join(', ');
-    const ch = others.filter(o => !isPassive(o.def)).map(o => o.def.icon + ' ' + CHAIN_FORMS[chainOf(o.def).form].name.toLowerCase());
+    const ch = others.filter(o => !isPassive(o.def)).map(o => o.def.icon + ' ' + CHAIN_CATS[chainOf(o.def).cat].name.toLowerCase());
     toast(`${others.map(o => o.def.icon).join(' ')} fused into ${keep.def.icon} ${itemName(keep)}. Its bullets now carry ${effNames(instEffects(keep))}${ch.length ? ` and chain ${ch.join(', ')}` : ''}. Free sockets: ${freed}.`);
   }
   for (const id of ready) toast(`✦ ${ITEM[id].icon} ${ITEM[id].name} can now ${tierName(T + 1)} Fuse.`);
@@ -460,7 +460,7 @@ function update(dt) {
     if (d.fire) { inst.timer -= dt; if (inst.timer <= 0) { inst.timer = cdFor(inst, d.cd); d.fire(inst, ctxOf(inst)); } }
     if (d.update) d.update(inst, dt);
   }
-  for (const d of G.deploys) { if (d.dead) continue; d.t += dt; if (d.update) d.update(d, dt); if (d.t >= d.life) { d.dead = true; if (d.onEnd) d.onEnd(d); } }
+  for (const d of G.deploys) { if (d.dead) continue; d.t += dt; if (d.update) d.update(d, dt); if (d.rides) chainRide(d, dt); if (d.t >= d.life) { d.dead = true; if (d.onEnd) d.onEnd(d); } }
   G.deploys = G.deploys.filter(d => !d.dead);
   for (const b of G.bullets) { if (!b.dead) updateBullet(b, dt); }
   for (const b of G.bullets) collideBullet(b);
@@ -522,7 +522,7 @@ function elong(x, y, ang, len, w, col) {
   ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.ellipse(len * 0.2, 0, len * 0.5, w * 0.45, 0, 0, TAU); ctx.fill(); ctx.restore();
 }
 function drawBullet(b, x, y) {
-  if (b.travel) drawChainTravel(b, x, y); // fusion chain halos (chain.js)
+  if (b.rides) drawChainRides(b, x, y); // fusion chain riders (chain.js)
   const col = b.rainbow ? `hsl(${(G.time * 400 + b.t * 700) % 360},100%,65%)` : b.color;
   let ang = Math.atan2(b.vy, b.vx);
   if (b.orbit) ang = b.orbit.a + Math.PI / 2 * Math.sign(b.orbit.w);
@@ -603,6 +603,9 @@ function drawDeploy(d, x, y) {
     case 'wave': { ctx.strokeStyle = c; ctx.globalAlpha = 1 - d.t / d.life; ctx.lineWidth = 8; ctx.beginPath(); ctx.arc(x, y, Math.max(1, d.R), 0, TAU); ctx.stroke(); ctx.globalAlpha = 1; break; }
     case 'well': { ctx.strokeStyle = c; ctx.lineWidth = 2; for (let k = 0; k < 4; k++) { const rr = ((d.t * 0.8 + k / 4) % 1) * d.r; ctx.globalAlpha = rr / d.r * 0.6; ctx.beginPath(); ctx.arc(x, y, d.r - rr, 0, TAU); ctx.stroke(); } ctx.globalAlpha = 1; ctx.fillStyle = '#000'; circle(x, y, 14); ctx.strokeStyle = c; ctx.beginPath(); ctx.arc(x, y, 14, 0, TAU); ctx.stroke(); break; }
     case 'mine': { ctx.fillStyle = c; ctx.globalAlpha = d.t < 0.5 ? 0.4 : 0.6 + 0.4 * Math.sin(G.time * 10); circle(x, y, 7); ctx.globalAlpha = 0.25; circle(x, y, 14); ctx.globalAlpha = 1; break; }
+    case 'flash': { const p = d.t / d.life, r = d.r * (0.7 + 0.3 * p); ctx.fillStyle = c; ctx.globalAlpha = 0.18 * (1 - p); circle(x, y, r); ctx.strokeStyle = c; ctx.lineWidth = 2.5; ctx.globalAlpha = 0.8 * (1 - p); ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.stroke(); ctx.globalAlpha = 1; break; } // a chain aura pop
+    case 'mini': { const a = Math.min(1, (d.life - d.t) * 3); ctx.fillStyle = c; ctx.globalAlpha = 0.3 * a; circle(x, y, 11); ctx.strokeStyle = c; ctx.lineWidth = 1.5; ctx.globalAlpha = a; ctx.beginPath(); ctx.arc(x, y, 11, -Math.PI / 2, -Math.PI / 2 + TAU * (1 - d.t / d.life)); ctx.stroke(); // a chain's small deployable
+      ctx.font = '13px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(d.icon, x, y + 1); ctx.globalAlpha = 1; break; }
     case 'pod': { ctx.fillStyle = c; ctx.globalAlpha = 0.6; circle(x, y, 10 + Math.sin(G.time * 20) * 2); ctx.globalAlpha = 1; break; }
     default: { // turret-like objects and pets
       const icon = d.icon || ({ coil: '🗼', totem: '🗿', turret: '🎯', nest: '🔭', altar: '⛩️' })[d.kind] || '•';
@@ -635,7 +638,7 @@ function render() {
   ctx.beginPath(); for (let x = ((ox % gs) + gs) % gs; x < W; x += gs) { ctx.moveTo(x, 0); ctx.lineTo(x, H); } for (let y = ((oy % gs) + gs) % gs; y < H; y += gs) { ctx.moveTo(0, y); ctx.lineTo(W, y); } ctx.stroke();
   const vis = (x, y, m = 80) => x > -m && x < W + m && y > -m && y < H + m;
   for (const p of G.pickups) { const x = p.x + ox, y = p.y + oy; if (vis(x, y)) drawPickup(p, x, y); }
-  for (const d of G.deploys) { const x = d.x + ox, y = d.y + oy; if (vis(x, y, 220)) drawDeploy(d, x, y); }
+  for (const d of G.deploys) { const x = d.x + ox, y = d.y + oy; if (vis(x, y, 220)) { drawDeploy(d, x, y); if (d.rides) drawChainRides(d, x, y); } }
   for (const e of G.enemies) { const x = e.x + ox, y = e.y + oy; if (vis(x, y)) drawEnemy(e, x, y); }
   ctx.globalCompositeOperation = 'lighter';
   for (const b of G.bullets) { const x = b.x + ox, y = b.y + oy; if (b.beam || vis(x, y, b.r * 3 + 20)) drawBullet(b, x, y); }
@@ -870,7 +873,7 @@ function renderCodex() {
 }
 function fuseLine(d) {
   const effs = effectsOf(d), f = fuseLockOf(d);
-  const c = isPassive(d) ? null : chainOf(d), as = c ? ` Absorbed into another item, it chains as a ${CHAIN_FORMS[c.form].name.toLowerCase()}: ${CHAIN_FORMS[c.form].text}.` : '';
+  const as = isPassive(d) ? '' : ` Chain: ${chainAbout(d)}`;
   return fuseUnlocked(SAVE, d) ? `<small class="fuse">✦ Mastered. At level 5 it can absorb any level 5 ${effs.map(k => EFFECTS[k].name).join(' or ')} item${isPassive(d) ? ' (as a passive it can only absorb other passives)' : ''}.${as}</small>`
     : `<small class="fuse">✦ Not mastered: ${fuseLockText(d)} (${Math.min(runsAt(SAVE, d.id, f.level), f.runs)}/${f.runs}). Until then a mastered item can still absorb it.${as}</small>`;
 }
@@ -990,7 +993,7 @@ function describeChoice(o) {
   if (o.type === 'keep') { const { s, others } = o, T = o.tier, effs = [...new Set([s, ...others].flatMap(instEffects))], sh = commonEffects([s, ...others]);
     const pre = FUSE_PREFIX[s.fuseEff || (sh.includes(s.def.effect) ? s.def.effect : sh[0])], nm = (T > 1 ? tierName(T) + ' ' : '') + pre + ' ' + s.def.name;
     const after = virtualInv(o).hit[1], P = G.player, newLinks = after.links.slice((s.links || []).length);
-    return { icon: s.def.icon, title: 'Keep ' + itemName(s), tag: '→ ' + nm, slot: s.def.slot, effs, fuse: true, tier: T, chain: chainHtml(newLinks, P.might),
+    return { icon: s.def.icon, title: 'Keep ' + itemName(s), tag: '→ ' + nm, slot: s.def.slot, effs, fuse: true, tier: T, chain: chainHtml(newLinks, P.might, s.def),
       text: `${others.map(x => x.def.icon + ' ' + itemName(x)).join(', ')} ${others.length > 1 ? 'are' : 'is'} absorbed into it. ` + (isPassive(s.def) ? `Passive stats: ${statText(instStats(s))} now, ${statText(instStats(after))} after (and more per level).` : `Hits for ${Math.round(hitDmg(after, P))} (now ${Math.round(hitDmg(s, P))}). Its bullets carry ${effNames(effs)}.`) + ` ${tierLine(T)}. Starts at level ${arrivalLevel()}.` + (newLinks.length ? ' Chains:' : '') }; }
   if (o.type === 'back') return { icon: '↩', title: 'Back', tag: 'CHOICES', text: 'Go back to the level-up cards.' };
   if (o.type === 'heal') return { icon: '❤️', title: 'Restore', tag: 'HEAL', text: 'Recover 40 HP.' };
@@ -1156,7 +1159,7 @@ function invChip(i) {
   const fuseNote = i.level < MAX_LEVEL || !next ? '' : !T && !fuseUnlocked(SAVE, i.def) ? `Not mastered (${fuseLockText(i.def)}): a mastered item can absorb it, but it can't remain.` : !tierUnlocked(SAVE, TIER_KEYS[T + 1]) ? `${next.name} fusion locked: ${lockLabel(next.lock)}.` : !histMet(SAVE, i.def.id, T + 1) ? `${next.name} fusion locked for ${i.def.name}: ${histText(T + 1)} first (${histProgress(SAVE, i.def.id, T + 1).join('/')}). See its Codex page.` : `Ready: ${next.need} level 5 ${tierName(T).toLowerCase()} items sharing an effect make a ${next.name} item.`;
   return `<div class="chip" style="--c:${T ? TIER_COLORS[T] : EFFECTS[i.def.effect].color}">${i.def.icon} ${itemName(i)} <b>Lv${i.level}</b>${T ? ` <b style="color:${TIER_COLORS[T]}">${tierName(T)}</b>` : ''}${isPassive(i.def) ? ' <b style="color:#c9f">Passive</b>' : ''} <span style="font-size:11px">${effNames(instEffects(i))}</span>` +
     `<small>${isPassive(i.def) ? 'Passive: ' + (statText(st) || 'no stats') : i.def.pattern}</small>` + (i.riders.length && !isPassive(i.def) ? `<small>Its bullets also carry ${effNames(i.riders)}.</small>` : '') +
-    (!isPassive(i.def) && Object.keys(st).length ? `<small>Stats from fused passives: ${statText(st)}.</small>` : '') + (i.gone.length ? `<small>Made from ${i.gone.length + 1} items: ${[i.def, ...i.gone].map(d => d.icon).join('')}</small>` : '') + ((i.links || []).length ? `<div class="chain">${chainHtml(i.links, G.player.might)}</div>` : '') + (i.nexus ? nexusPauseLine(i) : fuseNote ? `<small>${fuseNote}</small>` : '') + '</div>';
+    (!isPassive(i.def) && Object.keys(st).length ? `<small>Stats from fused passives: ${statText(st)}.</small>` : '') + (i.gone.length ? `<small>Made from ${i.gone.length + 1} items: ${[i.def, ...i.gone].map(d => d.icon).join('')}</small>` : '') + ((i.links || []).length ? `<div class="chain">${chainHtml(i.links, G.player.might, i.def)}</div>` : '') + (i.nexus ? nexusPauseLine(i) : fuseNote ? `<small>${fuseNote}</small>` : '') + '</div>';
 }
 function renderPause() {
   const inv = G.inv.map(invChip).join('');
@@ -1283,7 +1286,7 @@ function sandboxTick(dt) {
   G.sbLog.push([G.time, G.stats.damage]); while (G.sbLog.length > 11) G.sbLog.shift();
   const [t0, d0] = G.sbLog[0]; G.sbDps = G.time > t0 ? (G.stats.damage - d0) / (G.time - t0) : 0;
   if (G.lab) labReadout();
-  if (SANDBOX && window.parent !== window) window.parent.postMessage({ vl: 'sandbox-stats', dps: G.sbDps, shapes: [...G.seen], bullets: G.bullets.length, hit: G.inv[0] ? hitDmg(G.inv[0], G.player) : 0, chain: G.inv[0] ? chainLines(G.inv[0].links) : [] }, location.origin);
+  if (SANDBOX && window.parent !== window) window.parent.postMessage({ vl: 'sandbox-stats', dps: G.sbDps, shapes: [...G.seen], bullets: G.bullets.length, hit: G.inv[0] ? hitDmg(G.inv[0], G.player) : 0, chain: G.inv[0] ? chainLines(G.inv[0].links, 1, G.inv[0].def) : [] }, location.origin);
 }
 function sandboxTrigger(name) {
   const live = G.enemies.filter(e => !e.dead && !e.boss), P = G.player;
@@ -1339,7 +1342,7 @@ function labExit() { SB.lab = false; G = null; showScreen('menu'); }
 function labReadout() {
   const el = $('#labOut'), i = G && G.inv[0]; if (!el || !i) return;
   el.innerHTML = `<b>${i.def.icon} ${itemName(i)}</b> · Lv ${i.level} · one hit ${Math.round(hitDmg(i, G.player))} · ${Math.round(G.sbDps)} damage/s` +
-    ((i.links || []).length ? `<div class="chain">${chainHtml(i.links, G.player.might)}</div>` : i.tier ? '<div class="note">Only stand-ins or passives were fused in, so there is no chain. Pick partners below.</div>' : '<div class="note">Not fused. Pick a tier to fuse items into it.</div>');
+    ((i.links || []).length ? `<div class="chain">${chainHtml(i.links, G.player.might, i.def)}</div>` : i.tier ? '<div class="note">Only stand-ins or passives were fused in, so there is no chain. Pick partners below.</div>' : '<div class="note">Not fused. Pick a tier to fuse items into it.</div>');
 }
 function renderLab() {
   const keep = labKeepers();

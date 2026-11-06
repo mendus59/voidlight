@@ -478,20 +478,23 @@ function itemView(slot) {
 }
 // How this item plays when another item absorbs it: its fusion chain (chain.js). Stored as the item's `chain` field.
 function chainFields(def, v) {
-  const T = 'items', id = def.id, cur = v.chain || {}, d = CHAIN_DEFAULTS[id] || [], dflt = { form: d[0] || CHAIN_SLOT[def.slot], shape: d[1] || 'orb' };
-  const c = chainOf(Object.assign({}, def, { chain: cur })), F = CHAIN_FORMS[c.form];
-  const setC = (k, x) => { const n = clone(get(T, id).chain || {}); if (x === null || x === '' || x === undefined) delete n[k]; else n[k] = x; set(T, id, 'chain', Object.keys(n).length ? n : null, { rerender: true }); };
+  const T = 'items', id = def.id, cur = v.chain || {}, d = CHAIN_DEFAULTS[id] || [], c0 = chainOf(def.chain ? Object.assign({}, def, { chain: null }) : def), dflt = { cat: c0.cat, spread: c0.spread, act: c0.act, shape: c0.shape };
+  const c = chainOf(Object.assign({}, def, { chain: cur })), K = CHAIN_CATS[c.cat];
+  const setC = (k, x) => { const n = clone(get(T, id).chain || {}); delete n.form; if (x === null || x === '' || x === undefined) delete n[k]; else n[k] = x; set(T, id, 'chain', Object.keys(n).length ? n : null, { rerender: true }); };
   const numIn = (k, step, min, max, ph) => h('input', { type: 'number', step, min, max, value: cur[k] ?? '', placeholder: ph, onchange: e => { const x = parseFloat(e.target.value); setC(k, isFinite(x) && x >= min && x <= max ? x : null); } });
+  const rideOn = Object.keys(CHAIN_HOSTS).filter(k => chainPair(k, c.cat) === 'ride').map(k => CHAIN_HOSTS[k].name);
   return h('div', {},
     h('h3', {}, 'Fusion chain (when another item absorbs it)'),
     h('div', { class: 'fields' },
-      field('Form', sel(CHAIN_FORM_KEYS.map(k => [k, CHAIN_FORMS[k].name + (CHAIN_FORMS[k].travel ? ' (rides on bullets)' : '') + (k === dflt.form ? ' · default' : '')]), c.form, x => setC('form', x === dflt.form ? null : x)), T, id, 'chain', { sub: 'form', hint: `Default: ${CHAIN_FORMS[dflt.form].name}` }),
-      field('Plays when a bullet', F.travel ? h('div', { class: 'hint' }, `Rides on the bullets while they fly. A keeper without bullets plays a ${CHAIN_FORMS[F.alt].name.toLowerCase()} where it hits.`) : sel(Object.entries(CHAIN_ONS).map(([k, l]) => [k, l]), c.on, x => setC('on', x === 'end' ? null : x)), T, id, 'chain', { sub: 'on' }),
+      field('Category', sel(CHAIN_CAT_KEYS.map(k => [k, `${CHAIN_CATS[k].icon} ${CHAIN_CATS[k].name}` + (k === dflt.cat ? ' · default' : '')]), c.cat, x => setC('cat', x === dflt.cat ? null : x)), T, id, 'chain', { sub: 'cat', hint: `Its animation: ${K.text}. Also decides what its links ride on when it is the item that remains.` }),
+      c.cat === 'projectile' ? field('Pattern', sel([['aim', 'Volley at the nearest enemy'], ['ring', 'Ring all around']], c.spread, x => setC('spread', x === dflt.spread ? null : x)), T, id, 'chain', { sub: 'spread' }) : null,
+      c.cat === 'deployable' ? field('Its small copies', sel(Object.entries(CHAIN_ACTS).map(([k, t]) => [k, t + (k === dflt.act ? ' · default' : '')]), c.act, x => setC('act', x === dflt.act ? null : x)), T, id, 'chain', { sub: 'act' }) : null,
+      field('Pops when a bullet', sel(Object.entries(CHAIN_ONS).map(([k, l]) => [k, l]), c.on, x => setC('on', x === 'end' ? null : x)), T, id, 'chain', { sub: 'on', hint: 'Only when it pops off a bullet (not when it rides)' }),
       field('Shape', sel(C.CHAIN_SHAPES.map(x => [x, x + (x === dflt.shape ? ' · default' : '')]), c.shape, x => setC('shape', x === dflt.shape ? null : x)), T, id, 'chain', { sub: 'shape' }),
-      field('Count', numIn('n', 1, 1, 24, String(d[2] || F.n)), T, id, 'chain', { sub: 'n', hint: 'Shots, satellites or arc jumps' }),
-      field('Size ×', numIn('size', 0.1, 0.3, 3, '1'), T, id, 'chain', { sub: 'size', hint: 'Shot size, orbit and halo radius' }),
+      field('Count', numIn('n', 1, 1, 24, String(chainOf(Object.assign({}, def, { chain: { cat: c.cat, spread: c.spread } })).n)), T, id, 'chain', { sub: 'n', hint: 'Shots, orbiting shots or arc jumps' }),
+      field('Size ×', numIn('size', 0.1, 0.3, 3, '1'), T, id, 'chain', { sub: 'size', hint: 'Shot size, orbit, aura and blast radius' }),
       field('Damage ×', numIn('scale', 0.05, 0, 5, '1'), T, id, 'chain', { sub: 'scale', hint: `On top of the chain rules (Progression tab): ${Math.round(100 * CHAIN_RULES.rules.dmg)}% of what it hit for` }),
-      h('div', { class: 'f wide note' }, `Absorbed into another item, ${v.name} ${F.travel ? '' : `plays when one of that item's bullets ${CHAIN_ONS[c.on]}: it `}${F.text}. Try it on the test canvas: pick the item that absorbs it, a tier, and ${v.name} as a partner.`)));
+      h('div', { class: 'f wide note' }, `Absorbed into another item, ${v.name} rides on ${rideOn.join(', ')} of that item (${chainSentence(c, 'object', '', v.icon, false).toLowerCase()}), and everywhere else pops where that item hits (${chainSentence(c, 'impact', '', v.icon, false).replace(/^Where it strikes, it /, '')}). Try it on the test canvas: pick the item that absorbs it, a tier, and ${v.name} as a partner.`)));
 }
 // a passive item's stat boosts, per item level (×level, ×the fusion tier's statMul)
 function passiveFields(id) {
@@ -643,16 +646,20 @@ function chainCard() {
   const T = 'chain', id = 'rules', R = get(T, id);
   const f = (k, label, hint, step) => field(label, h('input', { type: 'number', step, min: 0, value: R[k], onchange: e => { const x = parseFloat(e.target.value); if (C.valid(T, k, x)) set(T, id, k, x, { rerender: true }); else toast('Out of range', true); } }), T, id, k, { hint });
   const rows = ITEMS.filter(d => !d.passive && !get('items', d.id).disabled).map(d => { const c = chainOf(Object.assign({}, d, { chain: get('items', d.id).chain })); return [d, c]; });
+  const hosts = Object.keys(CHAIN_HOSTS), catsOf = k => CHAIN_CAT_KEYS.filter(c => CHAIN_CATS[c].host === k).map(c => CHAIN_CATS[c].icon + ' ' + CHAIN_CATS[c].name).join(', ');
   return h('div', { class: 'card' }, h('h2', {}, 'Fusion chains', h('span', { class: 'spacer' }), entryChanged(T, id) ? h('button', { class: 'small', onclick: () => resetEntry(T, id) }, 'Reset') : null),
-    h('p', { class: 'note', style: 'margin-top:-6px' }, 'Every attacking item a fusion absorbs plays its own attack, in a small form, off the bullets of the item that remains: when one of its bullets first hits or runs out (volley, burst, orbit ring, zone, arc, blast), or riding on each bullet while it flies (halo, satellites, trail). The shots a link makes trigger the links of the item it came from, so Super and Mega fusions nest. Each item\'s form is under “Fusion chain” on its own page; try any combination on the test canvas.'),
+    h('p', { class: 'note', style: 'margin-top:-6px' }, 'Every attacking item has an animation category. Every attacking item a fusion absorbs plays its own attack, in a small form, off the item that remains, depending on the two categories: it RIDES on the main body of the item that remains (each bullet, each orbiting shot, its aura, each object it places, its patches) as a visible part that acts on its own, or it POPS where that item hits. The table below is the whole rule; there are no rules for pairs of items, so new items chain automatically. What a link makes triggers the links of the item it came from, so Super and Mega fusions nest. Each item\'s category is under “Fusion chain” on its own page; try any combination on the test canvas.'),
+    h('div', { class: 'tablewrap', style: 'margin:8px 0' }, h('table', {}, h('tr', {}, h('th', {}, 'Item that remains ↓ / absorbed →'), CHAIN_CAT_KEYS.map(k => h('th', {}, CHAIN_CATS[k].icon + ' ' + CHAIN_CATS[k].name))),
+      hosts.map(k => h('tr', {}, h('td', {}, `${catsOf(k)}: ${CHAIN_HOSTS[k].name}`), CHAIN_CAT_KEYS.map(c => h('td', { style: chainPair(k, c) === 'ride' ? 'color:#8f8' : 'opacity:.6' }, chainPair(k, c))))))),
     h('div', { class: 'fields' },
       f('dmg', 'Damage share', 'Of what the absorbed item hit for. 0.5 = 50%', 0.05),
-      f('rate', 'Plays per second (each link)', 'Rate limit, so fast weapons and orbitals stay readable', 0.5),
+      f('rate', 'Plays per second (each link)', 'Rate limit for pops and for what riders do (volleys, arcs, pulses, patches), so fast weapons and many hosts stay readable', 0.5),
       f('depth', 'Nesting depth', '1 = only the items fused straight in. 3 = a Mega\'s grandchildren still play', 1),
-      f('kids', 'Damage × per nesting step', '1 = every step deals its own 50%', 0.05)),
-    h('div', { class: 'tablewrap', style: 'max-height:300px;overflow-y:auto;margin-top:8px' }, h('table', {}, h('tr', {}, h('th', {}, 'Item'), h('th', {}, 'Chains as'), h('th', {}, 'Shape'), h('th', {}, 'Count')),
+      f('kids', 'Damage × per nesting step', '1 = every step deals its own 50%', 0.05),
+      f('ride', 'Damage × when riding a body', 'For links riding an aura, a placed object or a patch: they take the place of popping on every hit, so they hit harder', 0.05)),
+    h('div', { class: 'tablewrap', style: 'max-height:300px;overflow-y:auto;margin-top:8px' }, h('table', {}, h('tr', {}, h('th', {}, 'Item'), h('th', {}, 'Category'), h('th', {}, 'Shape'), h('th', {}, 'Count')),
       rows.map(([d, c]) => h('tr', {}, h('td', {}, h('button', { class: 'link', onclick: () => { tab = d.slot; pickId[tab] = d.id; render(); window.scrollTo(0, 0); } }, `${get('items', d.id).icon} ${get('items', d.id).name}`)),
-        h('td', { class: changed('items', d.id, 'chain') ? 'changed' : '' }, CHAIN_FORMS[c.form].name + (CHAIN_FORMS[c.form].travel ? '' : ` (${c.on})`)), h('td', {}, c.shape), h('td', {}, String(c.n)))))));
+        h('td', { class: changed('items', d.id, 'chain') ? 'changed' : '' }, CHAIN_CATS[c.cat].icon + ' ' + CHAIN_CATS[c.cat].name + (c.cat === 'projectile' ? ` (${c.spread})` : c.cat === 'deployable' ? ` (${CHAIN_ACTS[c.act]})` : '')), h('td', {}, c.shape), h('td', {}, String(c.n)))))));
 }
 function stagesCard() {
   const cols = [{ f: 'name', label: 'Name', kind: 'text' }, { f: 'color', label: 'Color', kind: 'color' }, { f: 'hp', label: 'Enemy HP ×' }, { f: 'ramp', label: 'HP ramp by 15:00' }, { f: 'spawn', label: 'Spawns ×' }, { f: 'dmg', label: 'Enemy dmg ×' },

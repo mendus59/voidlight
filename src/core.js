@@ -2,7 +2,7 @@
 // ===== VOIDLIGHT core engine: math, state, bullets, effects, enemies helpers =====
 // Game version shown on the title screen. Beta, so 0.MINOR.PATCH: bump MINOR for a feature PR, PATCH for a fix/tweak.
 // Add a matching line to CHANGELOG.md whenever you bump it.
-const VERSION = '0.21.0';
+const VERSION = '0.22.0';
 const TAU = Math.PI * 2;
 const rand = (a, b) => a + Math.random() * (b - a);
 const randi = (a, b) => Math.floor(a + Math.random() * (b - a + 1));
@@ -204,7 +204,8 @@ function chainZap(from, dmg, n, effect, owner) {
 function deploy(o) {
   const d = Object.assign({ x: G.player.x, y: G.player.y, t: 0, life: 5, r: 14, color: '#fff', icon: '', tick: 0 }, o);
   if (isFinite(d.life)) d.life *= G.player.duration;
-  G.deploys.push(d); return d;
+  G.deploys.push(d); chainDeploy(d); // fusion chains (chain.js): links ride on the objects of the item that absorbed them
+  return d;
 }
 
 function updateBullet(b, dt) {
@@ -212,7 +213,10 @@ function updateBullet(b, dt) {
   b.t += dt;
   if (b.orbit) {
     const o = b.orbit; o.a += o.w * dt; if (o.grow) o.r += o.grow * dt;
-    const c = o.center || P; if (c.dead) b.dead = true; // satellites die with the bullet they circle
+    let c = o.center || P;
+    if (c.dead) { // satellites of a fusion chain spin outward when what they circle is gone; others die with it
+      if (o.free) { o.center = c = { x: c.x, y: c.y }; o.free = false; o.grow = 150; o.w *= 0.7; b.life = Math.min(b.life, b.t + 0.5); } else b.dead = true;
+    }
     const rr = o.r * Math.sqrt(P.area) * (o.pulse ? (1 + 0.35 * Math.sin(b.t * o.pulse + o.a)) : 1);
     if (o.fig8) { b.x = c.x + Math.sin(o.a) * rr; b.y = c.y + Math.sin(2 * o.a) * rr * 0.5; }
     else { b.x = c.x + Math.cos(o.a) * rr; b.y = c.y + Math.sin(o.a) * rr * (o.ry || 1); }
@@ -256,7 +260,7 @@ function updateBullet(b, dt) {
   }
   if (b.beam && b.beam.follow) { b.x = P.x; b.y = P.y; }
   if (b.trail) { b.trail.push(b.x, b.y); if (b.trail.length > 16) b.trail.splice(0, 2); }
-  if (b.travel) chainTravel(b, dt);
+  if (b.rides) chainRide(b, dt);
   if (b.t >= b.life) { b.dead = true; if (b.onExpire && !b.expired) { b.expired = true; b.onExpire(b); } chainExpire(b); }
 }
 

@@ -6,6 +6,12 @@ Voidlight is in beta, so versions are `0.MINOR.PATCH`. The version lives in one 
 - Bump **PATCH** (0.11.0 → 0.11.1) for a bug fix or balance tweak.
 - Add a line here in the same PR.
 
+## 0.22.0 (2026-11-06)
+- Fusion chains by category: every attacking item now has an animation category (➶ Projectile, ◎ Orbital, ◌ Aura, ▣ Deployable, 〰 Trail, ▒ Zone, ✸ Blast, ϟ Arc), and how an absorbed item chains depends only on the two categories, so new items chain automatically. An absorbed item either rides on the main body of the item that remains (each bullet, each orbiting shot, its aura, each object it places, its patches) as a visible part that acts on its own, or pops where that item hits.
+- Auras, deployables and patches now visibly change with every absorbed item: e.g. Frost Halo with Tesla Coil gets little coils circling its rim that arc lightning; Tesla Coil with Frost Halo gives every coil a frost aura; Tesla Coil with Cinder Ring has fireballs circling each coil; Plague Cloud with an absorbed projectile fires volleys from every cloud. Absorbed deployables drop or carry small copies of themselves. Orbital chains on bullets now fly outward when the bullet hits.
+- Chain lines (level-up, pause, Fusion Lab, Codex) say how each link rides or pops on that item.
+- Admin: each item's "Fusion chain" picks a category (plus volley/ring pattern for projectiles and what a deployable's copies do); Progression > Fusion chains shows the category rule table and a new "Damage × when riding a body" (1.5). Older form overrides still load.
+
 ## 0.21.0 (2026-11-06)
 - Every level has its own colour scheme: enemies wear the level's palette by role (swarm, fast, heavy, ranged), enemy shots share one level colour, and the floor carries a faint wash of the level's colour. Bosses keep their own colours so they stand apart.
 - Three new enemies that some levels swap in for a classic one: Lancer (stops, aims, then dashes; replaces the Darter), Husk (bursts into Swarmlings; replaces the Bomber) and Sentinel (fires a ring of shots; replaces the Spitter or Warlock).
