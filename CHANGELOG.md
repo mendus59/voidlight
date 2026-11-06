@@ -6,6 +6,10 @@ Voidlight is in beta, so versions are `0.MINOR.PATCH`. The version lives in one 
 - Bump **PATCH** (0.11.0 → 0.11.1) for a bug fix or balance tweak.
 - Add a line here in the same PR.
 
+## 0.15.0 (2026-11-06)
+- Overtime: if the 15:00 boss is still alive at 20:00, the run keeps getting harder every minute. Damage you take doubles each minute, new enemies get ×1.6 HP per minute and spawns rise 50% per minute, all compounding, so surviving indefinitely is near impossible. The clock turns red and a banner warns each minute.
+- All four overtime numbers (start minute, damage, HP, spawns) are editable in the admin panel (Enemies > Difficulty); start minute 0 turns it off.
+
 ## 0.14.0 (2026-11-06)
 - Codex & Armory tiles show each item's mastery badge (★ Mastered, ✓ Mastered when this run ends, or ☆ Not mastered with the level and runs needed), the same badge as on level-up cards. The item detail view shows it too.
 
