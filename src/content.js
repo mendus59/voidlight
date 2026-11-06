@@ -29,7 +29,7 @@ const VOIDLIGHT_CONTENT = (() => {
     bosses:   { get: () => BOSSES, fields: ['name', 'hp', 'spd', 'r', 'dmg', 'xp', 'color'] },
     drops:    { get: () => DROPS, fields: ['chance', 'min', 'max', 'value', 'elite', 'boss'] },
     options:  { get: () => OPTIONS, fields: ['choices'] },
-    chain:    { get: () => CHAIN_RULES, fields: ['dmg', 'rate', 'depth', 'kids'] },
+    chain:    { get: () => CHAIN_RULES, fields: ['dmg', 'rate', 'depth', 'kids', 'ride'] },
   };
   const clone = v => v === undefined ? undefined : JSON.parse(JSON.stringify(v));
   // Pristine values from items.js, taken once at load so overrides can always be undone.
@@ -64,10 +64,11 @@ const VOIDLIGHT_CONTENT = (() => {
   }
   // game speeds: 1 to 8 different values from 0.25 to 10
   const validSpeeds = v => Array.isArray(v) && v.length >= 1 && v.length <= 8 && v.every(x => num(x) && x >= 0.25 && x <= 10) && new Set(v).size === v.length;
-  // an item's fusion chain (chain.js): { form, shape, n, size, scale, on }, every part optional
+  // an item's fusion chain (chain.js): { cat, spread, act, shape, n, size, scale, on }, every part optional
+  // (form is the v0.18 field, still read from older overrides)
   function validChain(v) {
     if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
-    const ok = { form: x => x in CHAIN_FORMS, shape: x => CHAIN_SHAPES.includes(x), n: x => num(x) && x >= 1 && x <= 24, size: x => num(x) && x >= 0.3 && x <= 3,
+    const ok = { cat: x => x in CHAIN_CATS, spread: x => x === 'aim' || x === 'ring', act: x => x in CHAIN_ACTS, form: x => x in CHAIN_LEGACY, shape: x => CHAIN_SHAPES.includes(x), n: x => num(x) && x >= 1 && x <= 24, size: x => num(x) && x >= 0.3 && x <= 3,
       scale: x => num(x) && x >= 0 && x <= 5, on: x => x in CHAIN_ONS };
     return Object.entries(v).every(([k, x]) => ok[k] && ok[k](x));
   }

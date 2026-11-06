@@ -82,30 +82,50 @@ Fusion needs several **level 5 items of the same tier that share at least one ef
 
 ### Fusion chains
 Inspired by spell-chaining games: every attacking item a fusion absorbs becomes a **link** on the survivor, and plays its own
-attack, in a small form, off the survivor's attacks at **50% of the damage it did**. The engine (`src/chain.js`) never handles
-pairs of items. Each item only names the **form** its link takes, and each form knows how to play itself:
+attack, in a small form, off the survivor at **50% of the damage it did**. The engine (`src/chain.js`) never handles pairs of
+items, only pairs of **animation categories**. Every attacking item has one category (`CHAIN_DEFAULTS`, or its `chain.cat` from
+the admin page):
 
-| Form | Plays | Default for |
-|---|---|---|
-| Volley | where a bullet first hits or runs out: a few of its shots at the nearest enemy | most weapons, homing items |
-| Burst | same place: a ring of its shots | most spells and relics |
-| Orbit ring | same place: its shots spin outward in a widening orbit | Cinder Ring, Blade Wheel, Bat Swarm... |
-| Zone | same place: a lingering damaging patch | Plague Cloud, Spore Pod, Cinder Mortar |
-| Arc | same place: lightning jumping to nearby enemies | Arc Rifle, Thunder Call, Tesla Coil |
-| Blast | same place: an area hit (knocks back for Force) | Blizzard, Shockwave, Gravity Well |
-| Halo | rides on every bullet while it flies, hurting what it passes | Frost Halo |
-| Satellites | small copies circle every bullet | Pinball Wisp, Guardian Shield, Gemini Satellites |
-| Trail | every bullet leaves a trail | Fire Trail, Venom Moth, Static Boots |
+| Category | Its animation | As the item that remains, its links ride on | Items |
+|---|---|---|---|
+| ➶ Projectile | shots that fly (a volley at the nearest enemy, or a ring) | each bullet | most weapons, most spells and relics |
+| ◎ Orbital | shots circling a centre | each orbiting shot | Cinder Ring, Blade Wheel, Bat Swarm, Pinball Wisp... |
+| ◌ Aura | a field that hurts what is inside | the aura | Frost Halo |
+| ▣ Deployable | an object placed to act on its own (turrets, coils, mines, pets) | each object it places | Tesla Coil, Hunter Turret, Ice Mine, Storm Sprite, Owl Familiar... |
+| 〰 Trail | damage left behind as it moves | the patches it leaves | Fire Trail, Venom Moth, Static Boots |
+| ▒ Zone | lingering patches | the patches it leaves | Plague Cloud, Cinder Mortar |
+| ✸ Blast | instant area hits | nothing (links pop where it strikes) | Blizzard, Shockwave, Spike Line, Cluster Bomb, War Drum... |
+| ϟ Arc | lightning jumping between enemies | nothing (links pop where it strikes) | Thunder Call |
 
-So Cinder Ring fused into Ember Pistol: every fireball, when it hits or expires, releases a small cinder ring spinning out from
-that point. Frost Halo fused into Frost Fan: every shard carries a frost halo. Area attacks (strikes, clouds, zaps) play end forms
-where they hit; a keeper with no bullets plays a travel form's end form instead (halo → blast, satellites → orbit ring, trail → zone).
+A link either **rides** the survivor's main body (a visible part of it that acts on its own while it lives) or **pops** at a point
+where the survivor hits. The whole rule is which link categories ride which body (`CHAIN_HOSTS`):
+
+| Survivor's body ↓ / absorbed → | Projectile | Orbital | Aura | Deployable | Trail | Zone | Blast | Arc |
+|---|---|---|---|---|---|---|---|---|
+| Each bullet | pop | ride | ride | pop | ride | pop | pop | pop |
+| Each orbiting shot | ride | ride | ride | pop | ride | pop | pop | pop |
+| The aura, each placed object, each patch | ride | ride | ride | ride | ride | ride | ride | ride |
+| Strike points (blast, arc) | pop | pop | pop | pop | pop | pop | pop | pop |
+
+How each category rides: **projectile** fires volleys (or rings) of its shots from the body at enemies; **orbital** shots circle
+the body and fly outward when it is gone; **aura** wraps the body in its own aura; **deployable** puts small copies of itself on
+the body that act (Tesla Coil's arc, Hunter Turret's shots, Ice Mine's blast...); **trail** leaves its shots behind the body (in a
+smouldering ring when it stands still); **zone** drops patches; **blast** charges a ring and pulses; **arc** crackles on the rim
+and arcs to enemies. How each pops: a volley or ring of shots, an orbit ring spinning out, a brief aura flash, a small copy that
+acts for 3 s, a short streak, a patch, a blast, or lightning jumps.
+
+So Frost Halo with Tesla Coil gets two little coils circling its rim that arc lightning; Tesla Coil with Frost Halo gives every
+coil its own frost aura; Tesla Coil with Cinder Ring has fireballs circling every coil; Ember Pistol with Cinder Ring sends each
+fireball out with cinders circling it, which fly outward when it hits. A new item only needs a category to chain with everything.
+A link that is riding does not also pop off the survivor's other hits, so nothing plays twice. Links riding an aura, a placed
+object or a patch (and projectiles and arcs riding orbiting shots) take the place of popping on every hit, so they hit
+`CHAIN_RULES.rules.ride` × harder (1.5).
 
 **Super and Mega nest.** A link remembers the links of the item it came from, and the shots a link makes trigger those. A Super
 item that absorbed a Fused Ember Pistol (which had absorbed Cinder Ring) plays the pistol's volley off its bullets, and every
 volley shot then releases its own cinder ring. A Mega goes three steps deep. Each link has a rate limit (8 plays per second by
-default) so fast weapons and orbitals stay readable. Rules (`CHAIN_RULES` in items.js: damage share, rate, nesting depth, damage
-per nesting step) and each item's form, shape, count, size, damage × and trigger (hit, expiry or both) are editable in the admin
+default; every pop and every volley, arc, pulse or patch a rider makes spends one) so fast weapons and many bodies stay readable. Rules (`CHAIN_RULES` in items.js: damage share, rate, nesting depth, damage
+per nesting step, riding damage) and each item's category, pattern, shape, count, size, damage × and trigger (hit, expiry or both) are editable in the admin
 panel (Progression > Fusion chains, and "Fusion chain" on every item page).
 
 **Testing them.** The admin test canvas has a fusion tester: pick a tier and the items it absorbs, and for Super and Mega the
