@@ -2,7 +2,7 @@
 // ===== VOIDLIGHT content: 74 items (10 of them two-effect passives), 15 characters, categories, 10 levels, fusion tiers,
 // enemies, pickups, difficulty, meta upgrades =====
 // admin.html edits this content and can export a new copy of this file. For that to work, keep each
-// def(...)'s plain-data properties (dmg, cd, effect2, passive, lock, fuseLock, color, vis, disabled, pattern, trig) on its first line,
+// def(...)'s plain-data properties (dmg, cd, effect2, passive, lock, fuseLock, color, vis, disabled, chain, pattern, trig) on its first line,
 // and each character, category, level, fusion tier, upgrade, enemy, boss, pickup and difficulty entry on a single line.
 // Locks: { stage: 3, stat: 'kills'|'best'|'wins'|'bosses'|'runs', min, text, cost } is an achievement in one level, and cost is the
 // gold the player then pays for it (0 or missing = free once earned). Lifetime { stat, min }, { effect, level }, { item, level, runs },
@@ -341,6 +341,15 @@ const FUSION = {
   mega:  { name: 'Mega',  need: 5, mul: 16,  cdMul: 0.55, own: 12, pool: 12,  statMul: 2,   hist: 5, lock: { stage: 6, stat: 'wins', min: 1, text: 'Beat Level 6' } },
 };
 const TIER_KEYS = Object.keys(FUSION);
+
+// ======================= FUSION CHAINS =======================
+// Rules for the chains in chain.js: every attacking item a fusion absorbs plays its own attack off the kept item's.
+// dmg = share of the absorbed item's damage its link deals, rate = plays per second per link, depth = how many steps a
+// chain may nest (3 = a Mega's grandchildren still play), kids = damage × for each step of nesting.
+// Each item's own chain form is its `chain` field ({ form, shape, n, size, scale, on }), defaults in chain.js.
+const CHAIN_RULES = {
+  rules: { dmg: 0.5, rate: 8, depth: 3, kids: 1 },
+};
 const tierOf = inst => FUSION[TIER_KEYS[(inst && inst.tier) || 0]];
 
 // ======================= DIFFICULTY =======================

@@ -679,7 +679,7 @@ let currentScreen = 'menu';
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(el => el.classList.toggle('show', el.id === id));
   currentScreen = id;
-  if (id === 'menu') renderMenu(); if (id === 'chars') renderChars(); if (id === 'forge') renderForge(); if (id === 'codex') renderCodex(); if (id === 'achievements') renderAchievements();
+  if (id === 'menu') renderMenu(); if (id === 'lab') renderLab(); if (id === 'chars') renderChars(); if (id === 'forge') renderForge(); if (id === 'codex') renderCodex(); if (id === 'achievements') renderAchievements();
 }
 function goldPill() { return `<span class="gold">● ${Math.floor(SAVE.gold)}</span>`; }
 function renderMenu() {
@@ -1100,6 +1100,8 @@ $('#btnPlay').onclick = () => showScreen('chars');
 $('#btnForge').onclick = () => showScreen('forge');
 $('#btnCodex').onclick = () => showScreen('codex');
 $('#btnAch').onclick = () => showScreen('achievements');
+$('#btnLab').onclick = () => { SB.lab = true; labStart(); };
+$('#btnLabBack').onclick = labExit;
 document.querySelectorAll('[data-back]').forEach(b => b.onclick = () => (b.closest('#codex') ? codexBack() : showScreen('menu')));
 $('#btnPauseCodex').onclick = () => { if (G && G.paused) { codexFilter = 'run'; showScreen('codex'); } };
 $('#btnStart').onclick = () => { const c = CHARACTERS.find(x => x.id === selectedChar); if (c && charPlayable(SAVE, c)) newRun(c.id, selectedStage); else toast('Pick a hero you have unlocked'); };
@@ -1142,7 +1144,7 @@ function sandboxStart() {
   const def = ITEM[SB.item] || ITEMS[0];
   const ch = Object.assign({}, CHARACTERS.find(c => c.weapon === def.id) || CHARACTERS[0], { mods: {}, arch: null }); // neutral stats, no archetype
   freshRun(ch);
-  Object.assign(G, { sandbox: true, seen: new Set(), sbTargets: [], sbWait: [], sbLog: [], sbDps: 0, sbPost: 0 });
+  Object.assign(G, { sandbox: true, lab: !!SB.lab, seen: new Set(), sbTargets: [], sbWait: [], sbLog: [], sbDps: 0, sbPost: 0 });
   const inst = addItem(def);
   if (SB.tier > 0) synthFusion(inst, sbPartners(def), clamp(SB.tier | 0, 1, TIER_KEYS.length - 1));
   inst.level = clamp(SB.level | 0, 1, MAX_LEVEL); recomputePool(); rebuild(inst);
@@ -1188,7 +1190,8 @@ function sandboxTick(dt) {
   G.sbPost -= dt; if (G.sbPost > 0) return; G.sbPost = 0.5;
   G.sbLog.push([G.time, G.stats.damage]); while (G.sbLog.length > 11) G.sbLog.shift();
   const [t0, d0] = G.sbLog[0]; G.sbDps = G.time > t0 ? (G.stats.damage - d0) / (G.time - t0) : 0;
-  if (SANDBOX && window.parent !== window) window.parent.postMessage({ vl: 'sandbox-stats', dps: G.sbDps, shapes: [...G.seen], bullets: G.bullets.length }, location.origin);
+  if (G.lab) labReadout();
+  if (SANDBOX && window.parent !== window) window.parent.postMessage({ vl: 'sandbox-stats', dps: G.sbDps, shapes: [...G.seen], bullets: G.bullets.length, hit: G.inv[0] ? hitDmg(G.inv[0], G.player) : 0, chain: G.inv[0] ? chainLines(G.inv[0].links) : [] }, location.origin);
 }
 function sandboxTrigger(name) {
   const live = G.enemies.filter(e => !e.dead && !e.boss), P = G.player;
@@ -1219,6 +1222,75 @@ function sandboxBoot() {
   sandboxStart();
   if (window.parent !== window) window.parent.postMessage({ vl: 'sandbox-ready' }, location.origin);
 }
+
+// ---------------- Fusion Lab (players) ----------------
+// A practice canvas from the main menu: pick an item you have unlocked, a fusion tier you have opened and the items to fuse
+// into it, and watch the result, chains and all, against training targets. It runs on the admin test canvas engine
+// (SB, sandboxStart) in this page, and nothing in it is saved or rewarded.
+const LAB = { item: null, tier: 1, fuse: [], level: 5, layout: 'ring' };
+const labOwned = d => !d.disabled && (itemUnlocked(SAVE, d) || CHARACTERS.some(c => c.weapon === d.id && charPlayable(SAVE, c)));
+const labKeepers = () => ITEMS.filter(d => labOwned(d) && !isPassive(d));
+// items that can fuse into `id` (they share an effect; a passive only takes passives), never the lab's own item twice
+const labPartners = id => { const me = ITEM[id], mine = effectsOf(me); return ITEMS.filter(d => d.id !== id && d.id !== LAB.item && labOwned(d) && effectsOf(d).some(k => mine.includes(k)) && (!isPassive(me) || isPassive(d))); };
+// tiers this save can try with this item: plain always, Fused once it is mastered, Super and Mega once they are unlocked
+const labTiers = id => TIER_KEYS.map((k, t) => t === 0 || (fuseUnlocked(SAVE, ITEM[id]) && (t === 1 || tierUnlocked(SAVE, k))));
+function labStart() {
+  const keep = labKeepers(); if (!keep.length) return;
+  if (!LAB.item || !keep.some(d => d.id === LAB.item)) LAB.item = (keep.find(d => fuseUnlocked(SAVE, d)) || keep[0]).id;
+  const ok = labTiers(LAB.item); if (!ok[LAB.tier]) LAB.tier = ok.lastIndexOf(true) >= 1 ? 1 : 0;
+  const def = ITEM[LAB.item];
+  Object.assign(SB, { lab: true, item: LAB.item, level: LAB.level, tier: LAB.tier, fuse: LAB.tier ? LAB.fuse : [], layout: LAB.layout, tough: true,
+    move: !!(def.on && def.on.move) || /P\.moving|moveAng/.test(String(def.fire || '')) });
+  sandboxStart();
+}
+function labExit() { SB.lab = false; G = null; showScreen('menu'); }
+function labReadout() {
+  const el = $('#labOut'), i = G && G.inv[0]; if (!el || !i) return;
+  el.innerHTML = `<b>${i.def.icon} ${itemName(i)}</b> · Lv ${i.level} · one hit ${Math.round(hitDmg(i, G.player))} · ${Math.round(G.sbDps)} damage/s` +
+    ((i.links || []).length ? `<div class="chain">${chainHtml(i.links, G.player.might)}</div>` : i.tier ? '<div class="note">Only stand-ins or passives were fused in, so there is no chain. Pick partners below.</div>' : '<div class="note">Not fused. Pick a tier to fuse items into it.</div>');
+}
+function renderLab() {
+  const keep = labKeepers();
+  if (!keep.length) { $('#labBody').innerHTML = '<p class="note">Unlock an item first.</p>'; return; }
+  const ok = labTiers(LAB.item), T = LAB.tier, need = t => Math.max(1, FUSION[TIER_KEYS[t]].need - 1), opt = (v, l, on) => `<option value="${v}"${on ? ' selected' : ''}>${l}</option>`;
+  const itemOpt = (d, cur) => opt(d.id, `${d.icon} ${d.name}${isPassive(d) ? ' (passive)' : ''}${!isPassive(d) && fuseUnlocked(SAVE, d) ? ' ★' : ''}`, d.id === cur);
+  let h = `<div class="labRow"><label>Item <select data-lab="item">${keep.map(d => itemOpt(d, LAB.item)).join('')}</select></label>` +
+    `<span class="labGrp">${TIER_KEYS.map((k, t) => `<button class="small${t === T ? ' on' : ''}" data-tier="${t}" ${ok[t] ? '' : 'disabled'} title="${ok[t] ? '' : t === 1 ? 'Master this item first' : lockLabel(FUSION[k].lock)}">${t ? FUSION[k].name : 'Plain'}</button>`).join('')}</span>` +
+    `<span class="labGrp">Lv ${[1, 2, 3, 4, 5].map(L => `<button class="small${L === LAB.level ? ' on' : ''}" data-lvl="${L}">${L}</button>`).join('')}</span>` +
+    `<label>Targets <select data-lab="layout">${[['ring', 'Ring'], ['line', 'Line'], ['scatter', 'Scattered'], ['swarm', 'Walking swarm']].map(([v, l]) => opt(v, l, v === LAB.layout)).join('')}</select></label></div>`;
+  if (T) {
+    const parts = labPartners(LAB.item), pOpt = (list, cur) => opt('', '— stand-in —', !cur) + list.map(d => itemOpt(d, cur)).join('');
+    for (let k = 0; k < need(T); k++) {
+      const [a, b] = String(LAB.fuse[k] || '').split('>'), subs = (b || '').split('+');
+      h += `<div class="labRow"><span class="lbl">${k ? 'and' : 'Absorbs'}</span><select data-p="${k}">${pOpt(parts, a)}</select>`;
+      if (T >= 2 && a) for (let j = 0; j < need(T - 1); j++) h += `<span class="lbl">${j ? '+' : '← made with'}</span><select data-p="${k}" data-s="${j}">${pOpt(labPartners(a), subs[j])}</select>`;
+      h += '</div>';
+    }
+    h += `<div class="labRow"><button class="small" data-lab-rnd>🎲 Random partners</button><span class="note">Stand-ins are as strong as the item they replace but add no chain. ★ = mastered. In a run, ${T >= 2 ? `${FUSION[TIER_KEYS[T]].name} fusion also needs fusion history, and ` : ''}only a mastered item can remain.</span></div>`;
+  }
+  $('#labBody').innerHTML = h + '<div id="labOut" class="labOut"></div>';
+  labReadout();
+}
+$('#labBody').addEventListener('change', e => {
+  const t = e.target;
+  if (t.dataset.lab === 'item') { LAB.item = t.value; LAB.fuse = []; }
+  else if (t.dataset.lab === 'layout') LAB.layout = t.value;
+  else if (t.dataset.p !== undefined) {
+    const k = +t.dataset.p, [a, b] = String(LAB.fuse[k] || '').split('>'), subs = (b || '').split('+');
+    if (t.dataset.s === undefined) LAB.fuse[k] = t.value; else { subs[+t.dataset.s] = t.value; LAB.fuse[k] = a + (subs.filter(Boolean).length ? '>' + subs.filter(Boolean).join('+') : ''); }
+  } else return;
+  labStart();
+});
+$('#labBody').addEventListener('click', e => {
+  const t = e.target.closest('button'); if (!t || t.disabled) return;
+  if (t.dataset.tier !== undefined) { LAB.tier = +t.dataset.tier; LAB.fuse = []; }
+  else if (t.dataset.lvl !== undefined) LAB.level = +t.dataset.lvl;
+  else if (t.dataset.labRnd !== undefined) {
+    const T = LAB.tier, need = x => Math.max(1, FUSION[TIER_KEYS[x]].need - 1), rnd = id => { const l = labPartners(id); return l.length ? pick(l).id : ''; };
+    LAB.fuse = Array.from({ length: need(T) }, () => { const a = rnd(LAB.item); if (!a || T < 2) return a; return a + '>' + Array.from({ length: need(T - 1) }, () => rnd(a)).filter(Boolean).join('+'); });
+  } else return;
+  labStart();
+});
 
 // ---------------- main loop ----------------
 let last = performance.now();

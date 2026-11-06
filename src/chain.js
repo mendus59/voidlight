@@ -12,11 +12,9 @@
 //   * A link keeps the links of the item it came from as its KIDS, and the bullets a link makes trigger those kids. So a
 //     Super item's absorbed Fused item still plays its own chain, one step further out; a Mega goes three steps deep.
 // Every link has a rate limit (CHAIN_RULES.rules.rate plays per second), so fast weapons and orbitals can't flood the screen.
-// Loaded after items.js and before content.js (the admin page edits CHAIN_RULES and each item's `chain`).
+// Loaded after items.js and before content.js (the admin page edits CHAIN_RULES and each item's `chain`, both in items.js).
 
-// dmg: share of the absorbed item's damage its link deals. rate: plays per second per link. depth: how many steps a chain
-// may nest (3 = a Mega's Fused grandchildren still play). kids: damage × for each step of nesting.
-const CHAIN_RULES = { rules: { dmg: 0.5, rate: 8, depth: 3, kids: 1 } };
+// The tunable rules (CHAIN_RULES) live in items.js, so the admin page can export them.
 
 // The forms. n = default count. alt = the end form a travel form plays when its keeper has no bullets.
 const CHAIN_FORMS = {

@@ -130,6 +130,17 @@
   .panel.wide .achGrid { grid-template-columns: repeat(auto-fill, minmax(clamp(200px, 12vw, 280px), 1fr)); }
   @media (min-width: 1800px) { .panel.wide .card, .panel.lu .card { font-size: 17px; } .panel.wide .card small, .panel.lu .card small { font-size: 13px; } }
   @media (max-width: 600px) { .panel { padding: 14px; } .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); } #codexGrid, .panel.wide #codexGrid { grid-template-columns: 1fr; } .panel.wide .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); } }
+  /* fusion chains (chain.js): one line per link, nested links indented */
+  .chain { margin-top: 4px; font-size: 11px; color: var(--muted); text-align: left; } .chainLn { line-height: 1.35; } .chainLn i { color: #c9a0ff; font-style: normal; }
+  .card.lu .chain { border-top: 1px dashed rgba(255,255,255,0.15); padding-top: 4px; }
+  /* Fusion Lab: docked at the bottom so the canvas stays visible above it */
+  .screen.dock { background: none; backdrop-filter: none; align-items: flex-end; pointer-events: none; padding: 8px; }
+  .screen.dock .panel { pointer-events: auto; width: 100%; max-width: 920px; max-height: 48vh; overflow-y: auto; background: rgba(14, 11, 30, 0.92); }
+  .labRow { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin: 6px 0; font-size: 13px; }
+  .labRow select { max-width: 220px; } .labGrp { display: inline-flex; gap: 3px; align-items: center; }
+  .labRow button.small { padding: 3px 8px; font-size: 12px; } .labRow button.on { border-color: #c9a0ff; color: #fff; background: rgba(201,160,255,0.2); }
+  .labRow .lbl { color: var(--muted); font-size: 12px; } .labRow .note, .labPanel .note { color: var(--muted); font-size: 12px; }
+  .labOut { margin-top: 8px; font-size: 13px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 6px; }
 </style>
 </head>
 <body>
@@ -145,6 +156,7 @@
     <button class="big" id="btnForge">⚒ Forge (upgrades)</button>
     <button class="big" id="btnCodex">📖 Codex &amp; Armory</button>
     <button class="big" id="btnAch">🏆 Achievements</button>
+    <button class="big" id="btnLab">🧪 Fusion Lab</button>
   </div>
   <div class="stats"></div>
   <div id="account" hidden></div>
@@ -173,6 +185,11 @@
   <div class="head"><button data-back class="backBtn">← Back</button><h2>📖 Codex &amp; Armory</h2><div class="gold-line"></div></div>
   <div class="tabs" id="codexTabs"></div>
   <div class="grid" id="codexGrid"></div>
+</div></div>
+
+<div class="screen dock" id="lab"><div class="panel labPanel">
+  <div class="head"><button class="backBtn" id="btnLabBack">← Back</button><h2>🧪 Fusion Lab</h2><small class="note">Try your items and fusions on training targets. Nothing here is saved.</small></div>
+  <div id="labBody"></div>
 </div></div>
 
 <div class="screen" id="achievements"><div class="panel wide">
