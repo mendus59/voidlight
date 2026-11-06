@@ -6,6 +6,18 @@ Voidlight is in beta, so versions are `0.MINOR.PATCH`. The version lives in one 
 - Bump **PATCH** (0.11.0 → 0.11.1) for a bug fix or balance tweak.
 - Add a line here in the same PR.
 
+## 0.28.0 (2026-11-06)
+- **Item augments.** Every item has fixed augment slots (Weapons 4, Spells and Orbitals 5, Deployables and Relics 6, passives 3) that open by using it: 100 kills with it, mastering it, 1,000 kills, fusing it, 5,000 kills, a Super fusion, 20,000 kills. Fill a slot from the item's Armory page (Codex, between runs) with gold and materials:
+  - **Power** (+6% damage; all Power on one item, fused ones included, caps at +30%),
+  - **Hit** (the item's hits also count as that damage type: the answer to an immune zone),
+  - **Effect** (the item carries that effect: its bullets apply it and it fuses with that effect's items),
+  - **Stat** (−4% cooldown, +8% area, +8% duration, +10% projectile speed, +3% crit, or +1 projectile for that item),
+  - **Form** (bullet trails or impact sparks; looks only).
+- Small Stat and Form augments need only slot and attribute materials, so you can augment in the first levels; Power, Hit, Effect and Twinning need Catalysts and Essences from zones.
+- Changing a filled slot refunds 50% of the old augment's materials (not its gold) for a small fee.
+- **Augments add up through fusion:** the item that remains carries every augment of every item fused into it, at full value. They apply in runs and in the Fusion Lab, and show in the pause menu and on Codex cards.
+- Admin: Pickups has Augments (name, gold) and Augment rules (Power cap, refund, fee, slots per kind); each item has its own augment slot count on the Items tab.
+
 ## 0.27.0 (2026-11-06)
 - **Shrines.** Each level now holds 4 buff shrines and 2 challenge shrines. Stand on one for 2 seconds to use it. They show on the minimap once you have seen them.
 - **Buff shrines** (one use each): Might (+30% damage), Haste (−20% cooldowns), Reach (+30% area), Wings (+25% move speed), Mending (+3 HP/s), Fortune (+15% crit) and Twins (+1 projectile), each for 60 seconds, plus one of that stat's attribute material. Active buffs and their time left show under the HP bar.

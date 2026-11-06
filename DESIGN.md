@@ -420,6 +420,16 @@ through `G.buffs`, which `recomputeStats` adds on top, and drop one attribute ma
 `spawn` 3 extra enemies/s, rising to 6. Success: a chest of `chestMin` (3)+ and `mats` (3) slot materials. Per-level stats count
 `zones` and `shrines` cleared; the per-level feats *Warden-breaker* (2 zones) and *Challenger* (3 challenges) gate Forge recipes.
 
+### Augments (augments.js)
+Each item has `augSlots` slots (default by kind, `AUG_RULES.run`: weapon 4, spell 5, orbit 5, trap 6, relic 6, passive 3), opened
+in order by `AUG_OPEN` (100 / mastery / 1000 / Fused / 5000 / Super / 20000 kills with it). `SAVE.augments[id]` holds one augment id
+per slot. Kinds (`AUGMENTS`): Power `+6%` damage (capped at `powerCap` 30% on an item's total), Hit (`hit:<effect>`: adds a hit type),
+Effect (`effect:<effect>`: a rider, so own stacks, hit type and fusion matching), Stat (cooldown, area, duration, projectile speed,
+crit, projectiles, on that item only) and Form (trails, impact sparks). Costs are gold plus materials (`slot` = the item's slot
+material, `ess` = the effect's Essence). Passives take only Effect and Form. Re-augmenting refunds `refund` (50%) of the old
+materials and costs `fee` gold more. In a run `inst.augs` / `inst.aug` hold them; a fusion adds the absorbed items' augments to
+the item that remains. The slot defaults are a first guess (weak/niche kinds get more slots) to be tuned with play data.
+
 ### Damage types and the Bestiary
 Every hit has a **type**: the effect of the item that fired it, plus its fusion riders (`hitTypes` in core.js). The shared pool
 never changes a hit's type, so holding one Burn item doesn't make every bullet Burn damage. Burn and poison ticks are Burn and
