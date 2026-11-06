@@ -2,7 +2,7 @@
 // ===== VOIDLIGHT core engine: math, state, bullets, effects, enemies helpers =====
 // Game version shown on the title screen. Beta, so 0.MINOR.PATCH: bump MINOR for a feature PR, PATCH for a fix/tweak.
 // Add a matching line to CHANGELOG.md whenever you bump it.
-const VERSION = '0.25.0';
+const VERSION = '0.26.0';
 const TAU = Math.PI * 2;
 const rand = (a, b) => a + Math.random() * (b - a);
 const randi = (a, b) => Math.floor(a + Math.random() * (b - a + 1));
@@ -341,8 +341,9 @@ function hitEnemy(e, b) {
   if (e.burnT > 0 && e.slowT > 0 && (S('burn') || S('chill')) && e.reactCd <= 0) {
     bonus = (dmg + 10) * typeMul(e, ['burn', 'chill']); e.reactCd = 1.2; e.slowT = 0; fxText(e.x, e.y - 18, 'SHATTER', '#c9f4ff', 12); fxSpark(e.x, e.y, '#c9f4ff', 6, 160);
   }
-  // status application
+  // status application (an immune enemy shrugs them off too)
   let s;
+  if (tm > 0) {
   if ((s = S('burn')) > 0) { e.burnT = 2.5; e.burnDps = Math.max(e.burnDps, 2 + 1.6 * s); }
   if ((s = S('chill')) > 0) { e.slowT = 2; e.slow = Math.max(e.slow, Math.min(0.6, 0.07 * s)); if (s >= 5 && !e.boss && Math.random() < 0.035 * (s - 4)) e.freezeT = 1.2; }
   if ((s = S('poison')) > 0) { e.poisonT = 4; e.poison = Math.min(e.poison + 0.6 * s, 25 + G.time / 10); }
@@ -350,6 +351,7 @@ function hitEnemy(e, b) {
   if (kb > 0 && !e.boss) {
     let ax = b.vx, ay = b.vy; if (!ax && !ay) { ax = e.x - (b.x ?? P.x); ay = e.y - (b.y ?? P.y); }
     const l = Math.hypot(ax, ay) || 1; e.kx += (ax / l) * kb * 12 / e.mass; e.ky += (ay / l) * kb * 12 / e.mass;
+  }
   }
   if ((s = S('vampiric')) > 0 && Math.random() < 0.012 * s) heal(1);
   dmg = dmg * tm + bonus;
