@@ -6,6 +6,13 @@ Voidlight is in beta, so versions are `0.MINOR.PATCH`. The version lives in one 
 - Bump **PATCH** (0.11.0 → 0.11.1) for a bug fix or balance tweak.
 - Add a line here in the same PR.
 
+## 0.27.0 (2026-11-06)
+- **Shrines.** Each level now holds 4 buff shrines and 2 challenge shrines. Stand on one for 2 seconds to use it. They show on the minimap once you have seen them.
+- **Buff shrines** (one use each): Might (+30% damage), Haste (−20% cooldowns), Reach (+30% area), Wings (+25% move speed), Mending (+3 HP/s), Fortune (+15% crit) and Twins (+1 projectile), each for 60 seconds, plus one of that stat's attribute material. Active buffs and their time left show under the HP bar.
+- **Challenge shrines:** *Holding* (stay inside the circle for 20 s while extra enemies pour in; 3 s outside fails it) and *Culling* (defeat 60 enemies inside the circle in 30 s). Success drops a chest of 3 or more and slot materials; failure closes the shrine. The challenge and its progress show at the top of the screen, around the circle, and as an edge arrow when you are away.
+- **Level feats:** each level has two new achievements, *Warden-breaker* (clear 2 zones there) and *Challenger* (clear 3 challenge shrines there). Forge recipes (v0.29) will ask for them. Per-level stats now count zones and challenges cleared.
+- Admin: Pickups has Shrines (icon, name, value, time, kills) and Shrine rules (shrines per level, channel time, buff time, circle size, extra spawns, grace, chest, materials).
+
 ## 0.26.0 (2026-11-06)
 - **Zones.** Every level now holds 2 to 4 zones at fixed spots on its map: Emberfall, Rimehold, Stormglass, Blightmire, Ironfield, Spirewood, Fatefall, Mirrorpool, Huntgrounds, Shardvault and Bloodwell, each themed on one element. Their enemies (Warders, Strikers, Casters) are **immune to every damage type but two** (the first is also a weakness), much tougher than the horde, and never leave the zone, so you can always walk around one. A **Warden** guards the middle: defeat it to clear the zone for a Legendary-or-better chest, Essences and Catalysts. Zones show on the minimap and the pause map once that level's Map is found, and the pause menu lists them with what hurts them.
 - **Sealed rifts.** Levels 1 to 8 also hold a rift from a later level, sealed until you clear that zone in its own level (cross-level unlocks).

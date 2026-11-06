@@ -167,6 +167,7 @@ function killEnemy(e) {
   if (e.by && e.by.def) G.itemKills[e.by.def.id] = (G.itemKills[e.by.def.id] || 0) + 1; // the item that landed the last hit
   if (G.foes[e.type]) G.foes[e.type].kills++;
   matsOnKill(e); // materials.js (and zones.js for zone enemies)
+  shrineKill(e); // shrines.js: Cull challenges
   const D = DROPS;
   dropGem(e.x, e.y, e.xp * D.gem.value * STAGE().xp);
   if (Math.random() < D.coin.chance * (1 + P.luck * 2)) drop('coin', e.x + rand(-8, 8), e.y + rand(-8, 8), randi(D.coin.min, D.coin.max));
@@ -242,6 +243,7 @@ function recomputeStats() {
   const P = G.player; if (!P) return;
   const m = Object.assign({}, P.baseMods);
   for (const i of activeInsts()) for (const [s, v] of Object.entries(instStats(i))) m[s] = (m[s] || 0) + v;
+  for (const b of G.buffs || []) m[b.stat] = (m[b.stat] || 0) + b.value; // shrine buffs (shrines.js)
   applyStats(P, m); G.bonus = m;
 }
 function killOwned(inst) {
@@ -541,10 +543,10 @@ function endRun(won) {
   SAVE.gold += earned; s.totalGold += earned; s.totalKills += G.kills; s.bestTime = Math.max(s.bestTime, Math.floor(G.time)); s.bossKills += G.stats.bossKills;
   s.evolves += G.stats.evolves; s.supers += G.stats.supers; s.megas += G.stats.megas; s.runs++; if (won) s.wins++; s.maxLevel = Math.max(s.maxLevel, G.level);
   const key = String(G.stage), st = SAVE.stages[key] = Object.assign(emptyStage(), SAVE.stages[key]);
-  st.kills += G.kills; st.best = Math.max(st.best, Math.floor(G.time)); st.bosses += G.stats.bossKills; st.runs++; if (won) st.wins++;
+  st.kills += G.kills; st.best = Math.max(st.best, Math.floor(G.time)); st.bosses += G.stats.bossKills; st.runs++; if (won) st.wins++; st.zones += G.stats.zones || 0; st.shrines += G.stats.challenges || 0;
   // the same, for this hero only (hero unlocks can ask for a level beaten with another hero)
   const cs = (SAVE.charStages = SAVE.charStages || {})[G.char.id] = SAVE.charStages[G.char.id] || {}, ct = cs[key] = Object.assign(emptyStage(), cs[key]);
-  ct.kills += G.kills; ct.best = Math.max(ct.best, Math.floor(G.time)); ct.bosses += G.stats.bossKills; ct.runs++; if (won) ct.wins++;
+  ct.kills += G.kills; ct.best = Math.max(ct.best, Math.floor(G.time)); ct.bosses += G.stats.bossKills; ct.runs++; if (won) ct.wins++; ct.zones += G.stats.zones || 0; ct.shrines += G.stats.challenges || 0;
   writeSave();
   const fresh = checkUnlocks();
   fresh.push(...progressDiff(before, progressSnapshot(SAVE)));
@@ -786,7 +788,10 @@ function drawHUD() {
   ctx.fillStyle = '#300'; ctx.fillRect(L, 36, hpW, 10); ctx.fillStyle = '#ff3b5c'; ctx.fillRect(L, 36, hpW * clamp(P.hp / P.maxHp, 0, 1), 10);
   ctx.fillStyle = '#fff'; ctx.font = '11px system-ui,sans-serif'; ctx.fillText(Math.ceil(P.hp) + ' / ' + P.maxHp, L + 4, 36);
   ctx.font = '12px system-ui,sans-serif'; ctx.fillStyle = P.dashCd > 0 ? '#888' : '#7fdcff'; ctx.fillText(P.dashCd > 0 ? 'Dash ' + P.dashCd.toFixed(1) : 'Dash ready', L, 52);
-  if (G.threat) { ctx.fillStyle = '#ff4cc3'; ctx.fillText(`✴ Nexus threat ${+G.threat.toFixed(1)}: enemies +${Math.round((nexusMul('hp') - 1) * 100)}% HP`, L, 68); }
+  let ly = 68;
+  if (G.threat) { ctx.fillStyle = '#ff4cc3'; ctx.fillText(`✴ Nexus threat ${+G.threat.toFixed(1)}: enemies +${Math.round((nexusMul('hp') - 1) * 100)}% HP`, L, ly); ly += 16; }
+  for (const b of G.buffs || []) { ctx.fillStyle = b.color; ctx.fillText(`${b.icon} ${b.name} ${Math.ceil(b.t)}s`, L, ly); ly += 16; } // shrine buffs
+  const ch = shrineStatus(); if (ch) { ctx.textAlign = 'center'; ctx.font = 'bold 16px system-ui,sans-serif'; ctx.fillStyle = ch.warn && Math.floor(G.time * 6) % 2 ? '#ff3b5c' : ch.color; ctx.fillText(ch.text, W / 2, 78); ctx.font = '12px system-ui,sans-serif'; ctx.textAlign = 'left'; }
   // timer
   ctx.textAlign = 'center'; ctx.font = 'bold 26px system-ui,sans-serif'; ctx.fillStyle = overtime(G.time) > 0 ? '#ff3b5c' : '#fff'; ctx.fillText(fmtTime(G.time), W / 2, 16);
   if (!G.enemies.some(e => e.boss)) { ctx.font = '11px system-ui,sans-serif'; ctx.fillStyle = STAGE().color; ctx.fillText(`Level ${G.stage} · ${STAGE().name}`, W / 2, 46); }

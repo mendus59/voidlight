@@ -51,6 +51,7 @@ function worldInit(g) {
 }
 function worldUpdate(dt) {
   const W = G.world; if (!W) return;
+  if (typeof buffsTick === 'function') buffsTick(dt); // shrines.js
   const P = G.player, view = Math.hypot(VIEW.w, VIEW.h) / 2;
   for (const f of W.feats) {
     if (f.gone) continue;

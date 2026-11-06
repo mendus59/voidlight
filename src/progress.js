@@ -10,10 +10,10 @@ const FUSE_LOCK = { level: 5, runs: 1 };
 const effectsOf = d => (d.effect2 && d.effect2 !== d.effect ? [d.effect, d.effect2] : [d.effect]);
 const isPassive = d => !!(d && d.passive);
 // per-level stats in a save: kills and runs add up, best is the longest survival in seconds, wins and bosses count
-const STAGE_STATS = { kills: 'Enemies defeated', best: 'Best survival time (seconds)', wins: 'Times beaten', bosses: 'Bosses defeated', runs: 'Runs played' };
+const STAGE_STATS = { kills: 'Enemies defeated', best: 'Best survival time (seconds)', wins: 'Times beaten', bosses: 'Bosses defeated', runs: 'Runs played', zones: 'Zones cleared', shrines: 'Challenge shrines cleared' };
 const stageCount = () => STAGES.length;
 const stageDef = n => STAGES[Math.max(1, Math.min(stageCount(), n | 0)) - 1];
-const emptyStage = () => ({ kills: 0, best: 0, wins: 0, bosses: 0, runs: 0 });
+const emptyStage = () => ({ kills: 0, best: 0, wins: 0, bosses: 0, runs: 0, zones: 0, shrines: 0 });
 
 function defaultSave() {
   return { ver: SAVE_VERSION, gold: 0, upg: {}, unlockedItems: [], unlockedCats: [], unlockedChars: ['kael', 'mira', 'volt'], itemRuns: {}, fuseLog: {}, nexusMade: {}, stages: {}, charStages: {}, lastStage: 1,
@@ -244,6 +244,8 @@ function reqText(l) {
       case 'wins': return one ? `Beat ${L}` : `Beat ${L} ${l.min} times`;
       case 'bosses': return one ? `Defeat a boss in ${L}` : `Defeat ${l.min} bosses in ${L}`;
       case 'runs': return `Play ${l.min} runs in ${L}`;
+      case 'zones': return one ? `Clear a zone in ${L}` : `Clear ${l.min} zones in ${L}`;
+      case 'shrines': return one ? `Clear a challenge shrine in ${L}` : `Clear ${l.min} challenge shrines in ${L}`;
     }
     return '';
   }
@@ -335,6 +337,12 @@ function achievementList(s) {
     const parts = lock.all ? lockParts(lock).map(p => { const [a, b] = lockProgress(p, s); return { text: partLabel(p), have: Math.min(a, b), need: b, done: a >= b }; }) : null;
     out.push({ group, stage: lockStage(lock), icon, name, text: lockLabel(lock), have: Math.min(have, need), need, done, owned, cost: lockCost(lock), reward, parts }); };
   for (let n = 2; n <= stageCount(); n++) add('stages', '🗺', `Level ${n}: ${stageDef(n).name}`, { stage: n - 1, stat: 'wins', min: 1 }, `Level ${n} and a Forge socket`, stageUnlocked(s, n));
+  // per-level feats (v0.27): Forge recipes (v0.29) will ask for them
+  for (let n = 1; n <= stageCount(); n++) {
+    const z = { stage: n, stat: 'zones', min: 2 }, c = { stage: n, stat: 'shrines', min: 3 };
+    add('feats', '🛡', `Level ${n}: Warden-breaker`, z, 'A feat that Forge recipes ask for', lockMet(z, s));
+    add('feats', '⛩', `Level ${n}: Challenger`, c, 'A feat that Forge recipes ask for', lockMet(c, s));
+  }
   for (const k of TIER_KEYS) { const l = FUSION[k].lock; if (l) add('tiers', '✦', `${FUSION[k].name} fusion`, l, `${FUSION[k].name} fusion (${FUSION[k].need} items → 1)`, tierUnlocked(s, k)); }
   for (const nx of NEXUS) if (!nx.disabled && hasReq(nx.lock)) add('nexus', nx.icon, `Nexus: ${nx.name}`, nx.lock, `${nx.name} recipe (${FUSION[nx.tier].name} Nexus)`, lockMet(nx.lock, s));
   for (const k of EFFECT_KEYS) { const l = catLock(k); if (l) add('cats', EFFECTS[k].icon, `${EFFECTS[k].name} awakened`, l, `${EFFECTS[k].name} items`, catUnlocked(s, k)); }

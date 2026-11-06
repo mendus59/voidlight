@@ -534,6 +534,27 @@ const ZONES = {
 // of its edge; sleep: it empties (keeping what's left) when you are this far away.
 const ZONE_RULES = { run: { radius: 750, count: 12, hp: 2.5, wardenHp: 14, perLevel: 3, xp: 3, wake: 900, sleep: 3000 } };
 
+// ======================= SHRINES (shrines.js) =======================
+// Buff shrines: stand on one for SHRINE_RULES.channel s for `value` of `stat` for buffTime s (one use per run), plus one of its
+// attribute material `mat`. Challenge shrines: hold (stay inside the circle for `time` s while extra enemies pour in; leaving it
+// for `grace` s fails) and cull (defeat `kills` enemies inside the circle within `time` s). Success drops a chest of chestMin+
+// and `mats` slot materials; failure just closes the shrine. Shrines show on the map once seen (no Map needed).
+const SHRINES = {
+  might: { name: 'Shrine of Might',    icon: '⚔️', kind: 'buff', stat: 'might', value: 0.3,  mat: 'might_ore',  color: '#ff8a8a' },
+  haste: { name: 'Shrine of Haste',    icon: '⏳', kind: 'buff', stat: 'cd',    value: 0.2,  mat: 'haste_sand', color: '#a0ffd0' },
+  reach: { name: 'Shrine of Reach',    icon: '🕸️', kind: 'buff', stat: 'area',  value: 0.3,  mat: 'reach_silk', color: '#c9a0ff' },
+  swift: { name: 'Shrine of Wings',    icon: '🪶', kind: 'buff', stat: 'speed', value: 0.25, mat: 'swift_quill', color: '#a0d8ff' },
+  mend:  { name: 'Shrine of Mending',  icon: '🕯️', kind: 'buff', stat: 'regen', value: 3,    mat: 'ever_wax',   color: '#6bff8f' },
+  keen:  { name: 'Shrine of Fortune',  icon: '🔍', kind: 'buff', stat: 'crit',  value: 0.15, mat: 'keen_lens',  color: '#ffe14d' },
+  twin:  { name: 'Shrine of Twins',    icon: '🌱', kind: 'buff', stat: 'amount', value: 1,   mat: 'twin_seed',  color: '#8cff5a' },
+  hold:  { name: 'Shrine of Holding',  icon: '⛩️', kind: 'hold', time: 20, color: '#ffb86b' },
+  cull:  { name: 'Shrine of Culling',  icon: '🗡️', kind: 'cull', time: 30, kills: 60, color: '#ff5a7a' },
+};
+// buffs / challenges: shrines of each kind per level. radius: a challenge's circle. spawn: extra enemies per second during a
+// challenge (rising to 2× by its end). grace: seconds a hold may be left. chestMin: least a challenge chest holds. mats: slot
+// materials for a challenge.
+const SHRINE_RULES = { run: { buffs: 4, challenges: 2, channel: 2, buffTime: 60, radius: 320, spawn: 3, grace: 3, chestMin: 3, mats: 3 } };
+
 // ======================= FORGE (meta upgrades) =======================
 const UPGRADES = [
   { id: 'might',    name: 'Might',       icon: '⚔️', max: 5, cost: 60,  per: 0.05, desc: '+5% damage' },

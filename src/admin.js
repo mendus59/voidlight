@@ -33,7 +33,7 @@ let ov = {};                                   // what you are editing
 let live = { ov: {}, updatedAt: 0, by: '' };   // content/live, what players get
 let draft = null;                              // content/draft
 let history = [];
-const TABLE_NAMES = { zones: 'Zone', zonerules: 'Zone rules', matdrops: 'Material drops', world: 'World', codex: 'Codex prices', dmgtypes: 'Damage types', items: 'Item', chars: 'Character', cats: 'Category', stages: 'Level', tiers: 'Fusion tier', difficulty: 'Difficulty', upgrades: 'Forge upgrade', enemies: 'Enemy', bosses: 'Boss', drops: 'Pickup', options: 'Game option', chain: 'Fusion chains' };
+const TABLE_NAMES = { shrines: 'Shrine', shrinerules: 'Shrine rules', zones: 'Zone', zonerules: 'Zone rules', matdrops: 'Material drops', world: 'World', codex: 'Codex prices', dmgtypes: 'Damage types', items: 'Item', chars: 'Character', cats: 'Category', stages: 'Level', tiers: 'Fusion tier', difficulty: 'Difficulty', upgrades: 'Forge upgrade', enemies: 'Enemy', bosses: 'Boss', drops: 'Pickup', options: 'Game option', chain: 'Fusion chains' };
 
 // current value of one entry: items.js default with the overrides on top
 function get(t, id) {
@@ -424,7 +424,7 @@ function render() {
   if (isItem) { itemView(tab); sb.renderControls(); renderShapes(); return; }
   if (tab === 'chars') other.replaceChildren(charView());
   else if (tab === 'enemies') other.replaceChildren(enemyView());
-  else if (tab === 'drops') other.replaceChildren(h('div', { style: 'display:grid;gap:16px' }, dropView(), matDropView()));
+  else if (tab === 'drops') other.replaceChildren(h('div', { style: 'display:grid;gap:16px' }, dropView(), matDropView(), shrineView()));
   else if (tab === 'upgrades') other.replaceChildren(upgradeView());
   else if (tab === 'progress') other.replaceChildren(progressView());
   else if (tab === 'options') other.replaceChildren(optionsView());
@@ -627,6 +627,13 @@ function matDropView() {
   return tableView('Material drops', 'Elites: slot materials (min to max) for a slot the player holds items in, plus a chance of an attribute material from "Attr from level" on. Bosses: attribute materials each, and a chance of a Form Catalyst. Chests: slot materials per item in the chest. Zone enemies: chance of their zone\'s Essence. Wardens: Essences and Catalysts; "Repeat" is the share a Warden gives once its zone was cleared in that level before. First clear: extra Essences and Catalysts the first time ever.', 'matdrops', ['run'], [
     { f: 'eliteMin', label: 'Elite min', step: 1 }, { f: 'eliteMax', label: 'Elite max', step: 1 }, { f: 'eliteAttr', label: 'Elite attr %', pct: true }, { f: 'eliteAttrFrom', label: 'Attr from level', step: 1 }, { f: 'boss', label: 'Boss attr', step: 1 }, { f: 'bossForm', label: 'Boss Form %', pct: true },
     { f: 'chest', label: 'Per chest item' }, { f: 'zone', label: 'Zone Essence %', pct: true }, { f: 'warden', label: 'Warden Essences', step: 1 }, { f: 'wardenCat', label: 'Warden Catalysts', step: 1 }, { f: 'repeat', label: 'Repeat ×' }, { f: 'firstEss', label: 'First: Essences', step: 1 }, { f: 'firstCat', label: 'First: Catalysts', step: 1 }]);
+}
+function shrineView() {
+  return h('div', { style: 'display:grid;gap:16px' },
+    tableView('Shrines', 'Buff shrines give "Value" of their stat (0.3 = +30%; Mending is HP/s, Twins is projectiles) for the buff time, and one attribute material. Hold: stay in the circle for "Time" s. Cull: defeat "Kills" enemies inside the circle within "Time" s.', 'shrines', Object.keys(BASE.shrines),
+      [{ f: 'icon', label: 'Icon', kind: 'text' }, { f: 'name', label: 'Name', kind: 'text' }, { f: 'value', label: 'Value' }, { f: 'time', label: 'Time (s)', step: 1 }, { f: 'kills', label: 'Kills', step: 1 }]),
+    tableView('Shrine rules', 'Buff and challenge shrines per level. Channel: seconds to stand on one. Radius: a challenge\'s circle. Spawn: extra enemies per second during a challenge (×2 by its end). Grace: seconds a Hold may be left. Chest: least a challenge chest holds. Materials: slot materials for a challenge.', 'shrinerules', ['run'],
+      [{ f: 'buffs', label: 'Buffs', step: 1 }, { f: 'challenges', label: 'Challenges', step: 1 }, { f: 'channel', label: 'Channel (s)' }, { f: 'buffTime', label: 'Buff time (s)', step: 5 }, { f: 'radius', label: 'Radius', step: 10 }, { f: 'spawn', label: 'Spawn /s' }, { f: 'grace', label: 'Grace (s)' }, { f: 'chestMin', label: 'Chest (least)', step: 1 }, { f: 'mats', label: 'Materials', step: 1 }]));
 }
 function upgradeView() {
   return tableView('Forge upgrades', 'Rank n costs cost × 1.6ⁿ. "Per rank" is the bonus each rank adds (0.05 = 5%).', 'upgrades', Object.keys(BASE.upgrades), [
