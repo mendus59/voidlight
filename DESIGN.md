@@ -389,6 +389,14 @@ more socket bought in total, so 9 extra sockets (19 in all) once Level 10 is ope
 | 20:00 | **Overtime** if the Eclipse still lives: damage taken ×2, enemy HP ×1.6 and +50% spawns per minute, compounding. Clock turns red |
 
 Every ~45s an Elite spawns (8× HP, drops a chest). Every 60s an encirclement wave rings you in.
+
+### Chests
+Elites and bosses drop a chest. A chest holds **1, 3 or 5 upgrades**, rolled when it drops (`DROPS.chest` in items.js: `three` 25%,
+`five` 5%), so its look tells you what is inside: blue 1, purple Rare 3, gold Legendary 5, each with a beam of light and a glow.
+Luck raises the odds: a 3 chest `three × (1 + luck × Luck)`, a 5 chest `five × (1 + 2 × luck × Luck)`, with `luck` 3, so at the
+Forge's max Luck (15%) the odds are about 54 / 36 / 10. `elite` and `boss` are the least a chest from them holds (boss: 3).
+Each upgrade is a level for a held item, or a fusion that is ready (you choose what remains after the chest closes), or a heal or
+gold when nothing can level. Opening one pauses on the chest screen. An arrow at the screen edge points to any chest off screen.
 You have a small hitbox (bullet-hell style) and a **dash** (Space / Shift) with brief invulnerability.
 
 ## 9. Levels

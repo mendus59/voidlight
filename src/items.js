@@ -440,7 +440,10 @@ const DROPS = {
   coin:   { name: 'Void Gold',  icon: '🪙', chance: 0.035, min: 1, max: 3, desc: 'Gold kept between runs' },
   heart:  { name: 'Heart',      icon: '❤️', chance: 0.0015, value: 25, desc: 'Restores HP' },
   magnet: { name: 'Magnet',     icon: '🧲', chance: 0.0008, desc: 'Pulls every XP crystal to you' },
-  chest:  { name: 'Chest',      icon: '📦', elite: 1, boss: 3, desc: 'Free upgrades: count per elite and per boss' },
+  // A chest holds 1, 3 or 5 upgrades. three / five: base chance of a 3 or 5 chest. luck: how strongly the player's Luck raises
+  // them (a 3 chest: three × (1 + luck × Luck); a 5 chest: five × (1 + 2 × luck × Luck)). elite / boss: the least a chest from
+  // an elite or a boss holds (a boss chest holds at least 3).
+  chest:  { name: 'Chest',      icon: '📦', elite: 1, boss: 3, three: 0.25, five: 0.05, luck: 3, desc: 'Free upgrades: 1, 3 or 5 per chest (Luck helps). Elite / boss: the least it holds' },
 };
 
 // ======================= FORGE (meta upgrades) =======================

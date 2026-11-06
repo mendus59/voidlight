@@ -611,8 +611,9 @@ function enemyView() {
     tableView('Bosses', 'Bosses arrive at 5:00, 10:00 and 15:00. Their HP does not scale.', 'bosses', Object.keys(BASE.bosses), cols));
 }
 function dropView() {
-  return tableView('Pickups', 'Drop chance is per normal kill, before Luck. Elites and bosses also drop chests and piles of gold.', 'drops', Object.keys(BASE.drops), [
-    { f: 'chance', label: 'Drop chance %', pct: true }, { f: 'min', label: 'Min', step: 1 }, { f: 'max', label: 'Max', step: 1 }, { f: 'value', label: 'Value' }, { f: 'elite', label: 'Per elite', step: 1 }, { f: 'boss', label: 'Per boss', step: 1 }]);
+  return tableView('Pickups', 'Drop chance is per normal kill, before Luck. Elites and bosses also drop chests and piles of gold. A chest holds 1, 3 or 5 upgrades: the 3 and 5 chances rise with the player\'s Luck (3: chance × (1 + weight × Luck), 5: chance × (1 + 2 × weight × Luck)).', 'drops', Object.keys(BASE.drops), [
+    { f: 'chance', label: 'Drop chance %', pct: true }, { f: 'min', label: 'Min', step: 1 }, { f: 'max', label: 'Max', step: 1 }, { f: 'value', label: 'Value' }, { f: 'elite', label: 'Per elite (least)', step: 1 }, { f: 'boss', label: 'Per boss (least)', step: 1 },
+    { f: 'three', label: '3-item chest %', pct: true }, { f: 'five', label: '5-item chest %', pct: true }, { f: 'luck', label: 'Luck weight' }]);
 }
 function upgradeView() {
   return tableView('Forge upgrades', 'Rank n costs cost × 1.6ⁿ. "Per rank" is the bonus each rank adds (0.05 = 5%).', 'upgrades', Object.keys(BASE.upgrades), [

@@ -3,7 +3,7 @@
 // Shared by the game (main.js) and the admin panel's progress simulator (admin.js), so both apply the same rules.
 // Everything here is a pure function of a save object `s`; nothing reads or writes storage.
 // Loaded after items.js and content.js.
-const SAVE_VERSION = 3;
+const SAVE_VERSION = 4;
 // Default fusion lock of every item: fusing it opens up once you reach `level` with it in `runs` different runs.
 // An item's own `fuseLock` overrides parts of it; runs: 0 means it can always fuse.
 const FUSE_LOCK = { level: 5, runs: 1 };
@@ -17,6 +17,7 @@ const emptyStage = () => ({ kills: 0, best: 0, wins: 0, bosses: 0, runs: 0 });
 
 function defaultSave() {
   return { ver: SAVE_VERSION, gold: 0, upg: {}, unlockedItems: [], unlockedCats: [], unlockedChars: ['kael', 'mira', 'volt'], itemRuns: {}, fuseLog: {}, nexusMade: {}, stages: {}, charStages: {}, lastStage: 1,
+    itemKills: {}, bestiary: {}, materials: {}, augments: {}, mapsFound: [], forged: [], attuned: [],
     stats: { totalKills: 0, bestTime: 0, bossKills: 0, evolves: 0, supers: 0, megas: 0, nexus: 0, wins: 0, runs: 0, maxLevel: 0, totalGold: 0 }, settings: { numbers: true }, lastChar: 'kael' };
 }
 const strList = v => (Array.isArray(v) ? v.filter(x => typeof x === 'string') : []);
@@ -104,6 +105,16 @@ function normalizeSave(s) {
   out.charStages = {};
   for (const [c, m] of Object.entries(s.charStages || {})) if (m && typeof m === 'object') out.charStages[c] = stageMap(m);
   out.lastStage = Math.max(1, Math.min(stageCount(), +s.lastStage || 1));
+  // v4: per-item kills, the enemy Codex (bestiary), materials, item augments, maps found per level, forged recipes, attuned items
+  out.itemKills = {}; for (const [id, n] of Object.entries(s.itemKills || {})) if (cnt(n)) out.itemKills[id] = cnt(n);
+  out.bestiary = {};
+  for (const [id, b] of Object.entries(s.bestiary || {})) if (b && typeof b === 'object') out.bestiary[id] = { seen: cnt(b.seen), kills: cnt(b.kills), tier: Math.min(3, cnt(b.tier)) };
+  out.materials = {}; for (const [id, n] of Object.entries(s.materials || {})) if (cnt(n)) out.materials[id] = cnt(n);
+  out.augments = {};
+  for (const [id, a] of Object.entries(s.augments || {})) if (Array.isArray(a)) out.augments[id] = a.slice(0, 12).map(x => (typeof x === 'string' ? x : null));
+  out.mapsFound = [...new Set((Array.isArray(s.mapsFound) ? s.mapsFound : []).map(n => n | 0).filter(n => n >= 1))];
+  out.forged = strList(s.forged);
+  out.attuned = strList(s.attuned).slice(0, 3);
   if (ver < 2) {
     // v1 had no item categories. Anything a player bought with gold stays usable, so its categories open up.
     for (const id of out.unlockedItems) {
@@ -147,6 +158,18 @@ function mergeSaves(a, b) {
   m.charStages = {};
   for (const c of new Set([...Object.keys(a.charStages), ...Object.keys(b.charStages)])) m.charStages[c] = addStageMaps(a.charStages[c], b.charStages[c]);
   m.lastStage = Math.max(a.lastStage, b.lastStage);
+  const addMap = (x, y) => { const z = {}; for (const k of new Set([...Object.keys(x), ...Object.keys(y)])) z[k] = (x[k] || 0) + (y[k] || 0); return z; };
+  m.itemKills = addMap(a.itemKills, b.itemKills);
+  m.materials = addMap(a.materials, b.materials);
+  m.bestiary = {};
+  for (const id of new Set([...Object.keys(a.bestiary), ...Object.keys(b.bestiary)])) { const x = a.bestiary[id] || {}, y = b.bestiary[id] || {};
+    m.bestiary[id] = { seen: (x.seen || 0) + (y.seen || 0), kills: (x.kills || 0) + (y.kills || 0), tier: Math.max(x.tier || 0, y.tier || 0) }; }
+  // augments: per item, the side with more filled slots wins (they cost materials, so neither side's work is lost silently)
+  m.augments = {};
+  for (const id of new Set([...Object.keys(a.augments), ...Object.keys(b.augments)])) { const x = a.augments[id] || [], y = b.augments[id] || [], n = l => l.filter(Boolean).length; m.augments[id] = (n(x) > n(y) ? x : y).slice(); }
+  m.mapsFound = [...new Set([...a.mapsFound, ...b.mapsFound])];
+  m.forged = [...new Set([...a.forged, ...b.forged])];
+  m.attuned = (b.attuned.length ? b.attuned : a.attuned).slice();
   return m;
 }
 

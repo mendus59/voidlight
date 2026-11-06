@@ -2,7 +2,7 @@
 // ===== VOIDLIGHT core engine: math, state, bullets, effects, enemies helpers =====
 // Game version shown on the title screen. Beta, so 0.MINOR.PATCH: bump MINOR for a feature PR, PATCH for a fix/tweak.
 // Add a matching line to CHANGELOG.md whenever you bump it.
-const VERSION = '0.22.0';
+const VERSION = '0.23.0';
 const TAU = Math.PI * 2;
 const rand = (a, b) => a + Math.random() * (b - a);
 const randi = (a, b) => Math.floor(a + Math.random() * (b - a + 1));
@@ -331,6 +331,7 @@ function hitEnemy(e, b) {
   }
   if ((s = S('vampiric')) > 0 && Math.random() < 0.012 * s) heal(1);
   if (b.lifesteal) heal(dmg * b.lifesteal);
+  if (b.owner) e.by = b.owner; // the item credited with the kill (its burn and poison ticks count for it too)
   damageEnemy(e, dmg, crit ? '#ffe14d' : (b.effect ? EFFECTS[b.effect].color : '#ffffff'), crit);
   if (hitDepth < 3) chainHit(b, e); // fusion chains (chain.js)
   if (crit && hitDepth < 3 && !b.noTrig) trigger('crit', e); // noTrig: bullets made by a crit trigger, so crits cannot chain forever
