@@ -601,7 +601,7 @@ function tableView(title, note, t, ids, cols) {
       ids.map(id => h('tr', {}, h('td', {}, h('code', {}, id)), cols.map(c => cell(id, c)), h('td', {}, entryChanged(t, id) ? h('button', { class: 'small', onclick: () => resetEntry(t, id) }, 'reset') : null))))));
 }
 function enemyView() {
-  const shapes = ['circle', 'tri', 'diamond', 'square', 'hex', 'star'].map(s => [s, s]);
+  const shapes = ['circle', 'tri', 'diamond', 'square', 'hex', 'star', 'oct', 'star4', 'arrow'].map(s => [s, s]);
   const cols = [{ f: 'name', label: 'Name', kind: 'text' }, { f: 'hp', label: 'HP' }, { f: 'spd', label: 'Speed' }, { f: 'r', label: 'Size' }, { f: 'dmg', label: 'Contact dmg' }, { f: 'xp', label: 'XP' }, { f: 'color', label: 'Color', kind: 'color' }];
   return h('div', { style: 'display:grid;gap:16px' }, difficultyView(),
     tableView('Enemies', 'HP and damage are the values at 0:00; both grow with the run clock.', 'enemies', Object.keys(BASE.enemies), [...cols, { f: 'shape', label: 'Shape', kind: 'select', options: shapes }]),

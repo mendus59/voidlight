@@ -36,6 +36,7 @@ function checkUnlocks() {
 }
 
 // ---------------- enemies ----------------
+// [type, first second it can spawn, weight]. A level's STAGES[].swap turns a type here into another (Lancer, Husk, Sentinel).
 const SPAWN_TABLE = [['drone', 0, 10], ['swarm', 0, 4], ['darter', 60, 5], ['spitter', 120, 3], ['brute', 210, 3], ['bomber', 270, 3], ['warlock', 390, 2], ['wraith', 480, 4]];
 const RUN_LENGTH = 900;
 const BOSS_TIMES = [[300, 'matriarch'], [600, 'seraph'], [900, 'eclipse']];
@@ -47,17 +48,23 @@ const overtime = t => { const D = DIFF(), at = D.overtimeAt; return G && !G.sand
 const otMul = (t, per) => Math.pow(Math.max(1, per || 1), overtime(t));
 const hpMul = t => { const D = DIFF(), S = STAGE(), m = t / 60, f = Math.min(1, t / RUN_LENGTH); return (1 + m * D.hpGrowth + m * m * D.hpCurve) * S.hp * (1 + S.ramp * f * f * f) * otMul(t, D.overtimeHp); };
 
+// The level's look (STAGES[].palette / swap in items.js): which enemy type really spawns, the colour it wears by its role,
+// and the colour of regular enemy shots. The admin test canvas keeps the plain colours from ENEMY_TYPES.
+const levelFoe = type => { const sw = G && !G.sandbox && STAGE().swap; return sw && sw[type] && ENEMY_TYPES[sw[type]] ? sw[type] : type; };
+const foeColor = T => { const pal = G && !G.sandbox && STAGE().palette; return (pal && T.role && pal[T.role]) || T.color; };
+const shotColor = () => { const pal = G && !G.sandbox && STAGE().palette; return (pal && pal.shot) || '#ff3b8b'; };
 function spawnEnemy(type, x, y, o = {}) {
+  if (!o.boss) type = levelFoe(type);
   const T = ENEMY_TYPES[type] || BOSSES[type] || SANDBOX_TYPES[type];
   const S = STAGE(), m = (o.boss ? DIFF().bossHp * S.bossHp * nexusMul('boss') : hpMul(G.time) * (o.elite ? DIFF().eliteHp : 1) * nexusMul('hp'));
-  const e = { id: G.nextId++, type, T, x, y, r: T.r * (o.elite ? 1.6 : 1), hp: T.hp * m, maxHp: T.hp * m, spd: T.spd * (o.elite ? 0.9 : 1) * (1 + Math.min(0.35, G.time / 2400)),
-    dmg: T.dmg * (1 + DIFF().dmgGrowth * G.time / 60) * S.dmg * nexusMul('dmg'), xp: T.xp * (o.elite ? 10 : 1), color: T.color, mass: T.mass || (o.boss ? 50 : o.elite ? 6 : 1), elite: !!o.elite, boss: !!o.boss,
+  const e = { id: G.nextId++, type, T, x, y, r: T.r * (o.elite ? 1.3 : 1), hp: T.hp * m, maxHp: T.hp * m, spd: T.spd * (o.elite ? 0.9 : 1) * (1 + Math.min(0.35, G.time / 2400)),
+    dmg: T.dmg * (1 + DIFF().dmgGrowth * G.time / 60) * S.dmg * nexusMul('dmg'), xp: T.xp * (o.elite ? 10 : 1), color: foeColor(T), mass: T.mass || (o.boss ? 50 : o.elite ? 6 : 1), elite: !!o.elite, boss: !!o.boss,
     kx: 0, ky: 0, burnT: 0, burnDps: 0, slowT: 0, slow: 0, poisonT: 0, poison: 0, freezeT: 0, reactCd: 0, dot: 0, dotT: 0, flash: 0, shootT: rand(0.5, 2), at: 0, spin: 0, phase: 0 };
   G.enemies.push(e); return e;
 }
 function spawnRing(dist) { const a = rand(0, TAU); const P = G.player; return { x: P.x + Math.cos(a) * dist, y: P.y + Math.sin(a) * dist }; }
 function viewRadius() { return Math.hypot(VIEW.w, VIEW.h) / 2 + 40; }
-function ebullet(x, y, ang, spd, r = 6, dmg = 8, color = '#ff3b8b') { if (G.ebullets.length < 900) G.ebullets.push({ x, y, vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd, r, dmg, color, t: 0, life: 6 }); }
+function ebullet(x, y, ang, spd, r = 6, dmg = 8, color = shotColor()) { if (G.ebullets.length < 900) G.ebullets.push({ x, y, vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd, r, dmg, color, t: 0, life: 6 }); }
 
 function director(dt) {
   const t = G.time, D = DIFF(), m = t / 60;
@@ -68,13 +75,13 @@ function director(dt) {
   while (G.spawnAcc >= 1) {
     G.spawnAcc -= 1; if (G.enemies.length > 380) continue;
     let r = Math.random() * totalW, type = avail[0][0]; for (const s of avail) { r -= s[2]; if (r <= 0) { type = s[0]; break; } }
-    const p = spawnRing(viewRadius()); const pack = type === 'swarm' ? 4 : 1;
+    const p = spawnRing(viewRadius()); const pack = (ENEMY_TYPES[levelFoe(type)] || {}).pack || 1;
     for (let k = 0; k < pack; k++) spawnEnemy(type, p.x + rand(-20, 20), p.y + rand(-20, 20));
   }
   // encirclement waves
   if (t >= G.nextRing) { G.nextRing += Math.max(10, D.ringEvery); const n = 22 + Math.floor(t / 60) * 2; const R = 360; for (let k = 0; k < n; k++) { const a = k * TAU / n; spawnEnemy(t > 400 ? 'darter' : 'swarm', G.player.x + Math.cos(a) * R, G.player.y + Math.sin(a) * R); } banner('Encirclement!', '#ff9e4c'); }
   // elites
-  if (t >= G.nextElite) { G.nextElite += Math.max(5, D.eliteEvery); const p = spawnRing(viewRadius()); spawnEnemy(pick(avail)[0], p.x, p.y, { elite: true }); banner('An elite approaches', '#ffe14d'); }
+  if (t >= G.nextElite) { G.nextElite += Math.max(5, D.eliteEvery); const p = spawnRing(viewRadius()); spawnEnemy(pick(avail)[0], p.x, p.y, { elite: true }); banner('An elite approaches', '#ffd27a'); }
   // overtime warning, once a minute
   const ot = overtime(t);
   if (ot > 0 && Math.floor(ot) >= (G.otWarned || 0)) { G.otWarned = Math.floor(ot) + 1; banner(ot < 1 ? '☠ OVERTIME: the Void grows stronger ☠' : `☠ OVERTIME ×${+otMul(t, D.overtimeDmg).toFixed(1)} damage ☠`, '#ff3b5c', 3); }
@@ -87,11 +94,11 @@ function director(dt) {
 function bossAI(e, dt) {
   e.at += dt; const P = G.player; const toP = angTo(e.x, e.y, P.x, P.y);
   if (e.type === 'matriarch') {
-    e.shootT -= dt; if (e.shootT <= 0) { e.shootT = 2.2; e.spin += 0.17; for (let k = 0; k < 18; k++) ebullet(e.x, e.y, e.spin + k * TAU / 18, 150, 7, 12); }
+    e.shootT -= dt; if (e.shootT <= 0) { e.shootT = 2.2; e.spin += 0.17; for (let k = 0; k < 18; k++) ebullet(e.x, e.y, e.spin + k * TAU / 18, 150, 7, 12, e.color); }
     e.phase -= dt; if (e.phase <= 0) { e.phase = 6; for (let k = 0; k < 8; k++) spawnEnemy('swarm', e.x + rand(-40, 40), e.y + rand(-40, 40)); }
   } else if (e.type === 'seraph') {
     e.shootT -= dt; if (e.shootT <= 0) { e.shootT = 0.09; e.spin += 0.23; for (let k = 0; k < 2; k++) ebullet(e.x, e.y, e.spin + k * Math.PI, 150, 6, 12, '#ffd24c'); }
-    e.phase -= dt; if (e.phase <= 0) { e.phase = 2.5; for (let k = -1; k <= 1; k++) ebullet(e.x, e.y, toP + k * 0.18, 230, 7, 14); }
+    e.phase -= dt; if (e.phase <= 0) { e.phase = 2.5; for (let k = -1; k <= 1; k++) ebullet(e.x, e.y, toP + k * 0.18, 230, 7, 14, '#fff3b0'); }
   } else if (e.type === 'eclipse') {
     const ph = Math.floor(e.at / 6) % 3; e.shootT -= dt;
     if (e.shootT <= 0) {
@@ -124,9 +131,18 @@ function updateEnemies(dt) {
       if (dist < R.range * 0.8) spd *= -0.4; else if (dist < R.range) spd *= 0.15;
       e.shootT -= dt;
       if (e.shootT <= 0 && dist < R.range + 60) { e.shootT = R.cd * rand(0.85, 1.15);
-        if (R.pat === 'aim') ebullet(e.x, e.y, a, 170, 6, 8); else for (let k = -1; k <= 1; k++) ebullet(e.x, e.y, a + k * 0.25, 160, 6, 9, '#4c9bff'); }
+        if (R.pat === 'aim') ebullet(e.x, e.y, a, 170, 6, 8);
+        else if (R.pat === 'ring') { const n = R.n || 8; for (let k = 0; k < n; k++) ebullet(e.x, e.y, a + k * TAU / n, 130, 6, 9); }
+        else for (let k = -1; k <= 1; k++) ebullet(e.x, e.y, a + k * 0.25, 160, 6, 9); }
     }
-    e.x += (Math.cos(a) * spd + e.kx) * dt; e.y += (Math.sin(a) * spd + e.ky) * dt;
+    // chargers (Lancer): stop and aim (windT, drawn as a line), then dash in a straight line (dashT)
+    let dir = a; const C = e.T.charge;
+    if (C) {
+      if (e.dashT > 0) { e.dashT -= dt; dir = e.dashA; spd = C.spd * (1 - e.slow); }
+      else if (e.windT > 0) { e.windT -= dt; spd = 0; e.dashA = a; if (e.windT <= 0) e.dashT = C.time; }
+      else { e.shootT -= dt; if (e.shootT <= 0 && dist < C.range) { e.windT = 0.55; e.shootT = C.cd * rand(0.8, 1.2); } }
+    }
+    e.x += (Math.cos(dir) * spd + e.kx) * dt; e.y += (Math.sin(dir) * spd + e.ky) * dt;
     const damp = Math.max(0, 1 - 7 * dt); e.kx *= damp; e.ky *= damp;
     // contact damage
     if (dist < e.r + P.r + 2) hurtPlayer(e.dmg);
@@ -150,7 +166,8 @@ function killEnemy(e) {
   if (e.elite) { drop('chest', e.x, e.y, D.chest.elite); for (let k = 0; k < 6; k++) drop('coin', e.x + rand(-30, 30), e.y + rand(-30, 30), 3); }
   if (e.boss) { G.stats.bossKills++; drop('chest', e.x, e.y, D.chest.boss); for (let k = 0; k < 15; k++) drop('coin', e.x + rand(-60, 60), e.y + rand(-60, 60), 5); fxRing(e.x, e.y, 200, e.color, 0.8, 8); banner(e.T.name + ' defeated!', '#6bff8f', 2.5);
     if (e.type === 'eclipse') later(1.5, () => endRun(true)); }
-  if (e.T.deathRing) for (let k = 0; k < e.T.deathRing; k++) ebullet(e.x, e.y, k * TAU / e.T.deathRing + rand(0, 0.3), 130, 6, 8, '#ffd24c');
+  if (e.T.deathRing) for (let k = 0; k < e.T.deathRing; k++) ebullet(e.x, e.y, k * TAU / e.T.deathRing + rand(0, 0.3), 130, 6, 8);
+  if (e.T.deathSpawn && ENEMY_TYPES[e.T.deathSpawn.type]) { const S = e.T.deathSpawn, x0 = e.x, y0 = e.y; later(0, () => { if (!G || G.over) return; for (let k = 0; k < S.n && G.enemies.length < 400; k++) { const a = k * TAU / S.n; spawnEnemy(S.type, x0 + Math.cos(a) * 14, y0 + Math.sin(a) * 14); } }); }
   if (e.burnT > 0 && e.poisonT > 0) { fxText(e.x, e.y - 14, 'COMBUST', '#ffb86b', 12); const boom = 8 + Math.min(e.maxHp * 0.15, 4 * (e.burnDps + e.poison)); later(0, () => strike(e.x, e.y, 55, boom, 'burn', { color: '#ffb86b' })); } // capped by the toxin on it, so it cannot snowball off tough enemies' HP
   fxSpark(e.x, e.y, e.color, e.boss ? 30 : 4, e.boss ? 300 : 110);
   trigger('kill', e);
@@ -536,25 +553,48 @@ function drawBullet(b, x, y) {
     default: glow(x, y, r, col);
   }
 }
-function drawEnemy(e, x, y) {
-  const col = e.flash > 0 ? '#ffffff' : e.color;
-  const r = e.r;
-  if (e.elite || e.boss) { ctx.fillStyle = e.color; ctx.globalAlpha = 0.15 + 0.08 * Math.sin(G.time * 6); circle(x, y, r * 1.6); ctx.globalAlpha = 1; }
-  ctx.fillStyle = col; ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 2;
-  const sh = e.T.shape, rot = e.boss ? G.time * 0.6 : angTo(e.x, e.y, G.player.x, G.player.y);
+// Bosses get the loudest frame: a dark well, a pulsing aura and two counter-rotating rings, plus a white outline.
+// Elites stay quieter: a slightly bigger body with a thin gold crown ring and a small health bar.
+function drawBossFrame(e, x, y, r) {
+  const p = 0.5 + 0.5 * Math.sin(G.time * 3);
+  ctx.fillStyle = '#000'; ctx.globalAlpha = 0.5; circle(x, y, r * 2);
+  ctx.fillStyle = e.color; ctx.globalAlpha = 0.14 + 0.1 * p; circle(x, y, r * 1.8);
+  ctx.strokeStyle = e.color; ctx.lineCap = 'round';
+  ctx.lineWidth = 4; ctx.globalAlpha = 0.9; for (let k = 0; k < 3; k++) { const a = G.time * 1.2 + k * TAU / 3; ctx.beginPath(); ctx.arc(x, y, r * 1.45, a, a + 1.4); ctx.stroke(); }
+  ctx.lineWidth = 2; ctx.globalAlpha = 0.55 + 0.3 * p; for (let k = 0; k < 6; k++) { const a = -G.time * 0.8 + k * TAU / 6; ctx.beginPath(); ctx.arc(x, y, r * 1.75, a, a + 0.6); ctx.stroke(); }
+  ctx.lineCap = 'butt'; ctx.globalAlpha = 1;
+}
+function drawEliteMark(e, x, y, r) {
+  ctx.strokeStyle = '#ffd27a'; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.8;
+  for (let k = 0; k < 3; k++) { const a = G.time * 0.7 + k * TAU / 3; ctx.beginPath(); ctx.arc(x, y, r + 6, a, a + 1.5); ctx.stroke(); }
+  ctx.globalAlpha = 1; const w = r * 2; ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x - w / 2, y - r - 11, w, 3); ctx.fillStyle = '#ffd27a'; ctx.fillRect(x - w / 2, y - r - 11, w * clamp(e.hp / e.maxHp, 0, 1), 3);
+}
+function enemyPath(sh, x, y, r, rot) {
   if (sh === 'circle') { ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); }
   else if (sh === 'tri') poly(x, y, r * 1.2, 3, rot);
   else if (sh === 'diamond') poly(x, y, r * 1.2, 4, rot);
   else if (sh === 'square') poly(x, y, r * 1.2, 4, Math.PI / 4);
   else if (sh === 'hex') poly(x, y, r * 1.1, 6, rot);
+  else if (sh === 'oct') poly(x, y, r * 1.1, 8, rot);
+  else if (sh === 'star4') poly(x, y, r * 1.35, 4, rot, 0.45);
+  else if (sh === 'arrow') { const c = Math.cos(rot), s = Math.sin(rot), pt = (u, v) => [x + u * c - v * s, y + u * s + v * c]; ctx.beginPath(); for (const [u, v] of [[1.4, 0], [-1, -0.95], [-0.35, 0], [-1, 0.95]]) ctx.lineTo(...pt(u * r, v * r)); ctx.closePath(); }
   else poly(x, y, r * 1.3, 5, rot, 0.5);
+}
+function drawEnemy(e, x, y) {
+  const col = e.flash > 0 ? '#ffffff' : e.color;
+  const r = e.r;
+  if (e.boss) drawBossFrame(e, x, y, r);
+  const sh = e.T.shape, rot = e.boss ? G.time * 0.6 : e.dashT > 0 || e.windT > 0 ? e.dashA : angTo(e.x, e.y, G.player.x, G.player.y);
+  if (e.windT > 0) { ctx.strokeStyle = e.color; ctx.globalAlpha = 0.5; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(rot) * 90, y + Math.sin(rot) * 90); ctx.stroke(); ctx.globalAlpha = 1; } // a Lancer about to dash
+  ctx.fillStyle = col; ctx.strokeStyle = e.boss ? '#ffffff' : 'rgba(0,0,0,0.6)'; ctx.lineWidth = e.boss ? 3 : 2;
+  enemyPath(sh, x, y, r, rot);
   ctx.fill(); ctx.stroke();
   ctx.fillStyle = 'rgba(0,0,0,0.45)'; circle(x, y, r * 0.45);
   ctx.fillStyle = e.boss ? '#fff' : '#ffe'; circle(x + Math.cos(rot) * r * 0.35, y + Math.sin(rot) * r * 0.35, Math.max(1.6, r * 0.16));
   // status rings
   let ring = 0; const st = [[e.burnT > 0, '#ff7a2f'], [e.slowT > 0, '#7fdcff'], [e.poisonT > 0, '#8cff5a'], [e.freezeT > 0, '#ffffff']];
   for (const [on, c] of st) if (on) { ctx.strokeStyle = c; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, r + 3 + ring * 3, 0, TAU); ctx.stroke(); ring++; }
-  if (e.elite && !e.boss) { const w = r * 2.4; ctx.fillStyle = '#300'; ctx.fillRect(x - w / 2, y - r - 12, w, 4); ctx.fillStyle = '#ffe14d'; ctx.fillRect(x - w / 2, y - r - 12, w * clamp(e.hp / e.maxHp, 0, 1), 4); }
+  if (e.elite && !e.boss) drawEliteMark(e, x, y, r);
 }
 function drawDeploy(d, x, y) {
   const c = d.color;
@@ -583,6 +623,11 @@ function render() {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.fillStyle = '#07060f'; ctx.fillRect(0, 0, W, H);
   if (!G) return;
+  if (!G.sandbox) { // the level's colour washes the floor faintly, so each level reads as one scheme
+    const c = STAGE().color, k = W + 'x' + H + c;
+    if (render.bgKey !== k) { const g = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * 0.8); g.addColorStop(0, c + '16'); g.addColorStop(1, c + '04'); render.bg = g; render.bgKey = k; }
+    ctx.fillStyle = render.bg; ctx.fillRect(0, 0, W, H);
+  }
   const sx0 = (G.shake ? rand(-G.shake, G.shake) : 0), sy0 = (G.shake ? rand(-G.shake, G.shake) : 0);
   const ox = W / 2 - G.cam.x + sx0, oy = H / 2 - G.cam.y + sy0;
   // grid
@@ -606,7 +651,14 @@ function render() {
   // player hp bar
   ctx.fillStyle = '#300'; ctx.fillRect(px - 18, py + 20, 36, 4); ctx.fillStyle = '#ff3b5c'; ctx.fillRect(px - 18, py + 20, 36 * clamp(P.hp / P.maxHp, 0, 1), 4);
   // enemy bullets
-  for (const b of G.ebullets) { const x = b.x + ox, y = b.y + oy; if (!vis(x, y)) continue; ctx.fillStyle = b.color; ctx.globalAlpha = 0.3; circle(x, y, b.r * 1.7); ctx.globalAlpha = 1; circle(x, y, b.r); ctx.fillStyle = '#fff'; circle(x, y, b.r * 0.5); }
+  // Enemy bullets read as hostile: drawn over everything without additive blending, a dark core inside a coloured shell
+  // and a pulsing outer ring. Player bullets are the opposite: additive soft glow around a white-hot core.
+  const ep = 0.5 + 0.5 * Math.sin(G.time * 10);
+  for (const b of G.ebullets) { const x = b.x + ox, y = b.y + oy; if (!vis(x, y)) continue;
+    ctx.fillStyle = '#000'; ctx.globalAlpha = 0.45; circle(x, y, b.r * 1.9);
+    ctx.strokeStyle = b.color; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.45 + 0.4 * ep; ctx.beginPath(); ctx.arc(x, y, b.r * (1.45 + 0.15 * ep), 0, TAU); ctx.stroke();
+    ctx.globalAlpha = 1; ctx.fillStyle = b.color; circle(x, y, b.r); ctx.fillStyle = '#16040f'; circle(x, y, b.r * 0.5); }
+  ctx.globalAlpha = 1;
   // fx
   for (const f of G.fx) {
     const p = f.t / f.dur;
