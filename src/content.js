@@ -20,6 +20,8 @@ const VOIDLIGHT_CONTENT = (() => {
   const TABLES = {
     items:    { get: () => ITEM, fields: ['name', 'icon', 'effect', 'effect2', 'passive', 'dmg', 'cd', 'pattern', 'trig', 'lock', 'fuseLock', 'color', 'vis', 'disabled', 'chain', 'augSlots'] },
     augments: { get: () => AUGMENTS, fields: ['name', 'gold'] },
+    caprules: { get: () => CAP_RULES, fields: ['steps', 'mats', 'matStep', 'gold', 'gate1', 'gate2', 'gate3'] },
+    recipes:  { get: () => RECIPE_COSTS, fields: ['gold', 'slot', 'ess', 'cat'] },
     augrules: { get: () => AUG_RULES, fields: ['powerCap', 'refund', 'fee', 'weapon', 'spell', 'orbit', 'trap', 'relic', 'passive'] },
     cats:     { get: () => CATEGORIES, fields: ['lock'] },
     stages:   { get: () => byId(STAGES), fields: ['name', 'color', 'hp', 'ramp', 'spawn', 'dmg', 'bossHp', 'xp', 'gold', 'start', 'mapSize'] },
@@ -113,6 +115,8 @@ const VOIDLIGHT_CONTENT = (() => {
     if (table === 'shrines' && (f === 'time' || f === 'kills')) return num(v) && v >= 1 && v <= 1000;
     if (table === 'shrinerules') return num(v) && v >= 0 && (f === 'buffs' || f === 'challenges' ? v <= 20 : f === 'radius' ? v >= 100 && v <= 2000 : f === 'chestMin' ? v <= 5 : v <= 600);
     if (table === 'items' && f === 'augSlots') return v === null || (num(v) && v >= 1 && v <= 7 && Math.round(v) === v);
+    if (table === 'caprules') return num(v) && v >= 0 && (f.startsWith('gate') ? v >= 1 && v <= STAGES.length && Math.round(v) === v : f === 'steps' ? v <= 10 && Math.round(v) === v : v <= 1000);
+    if (table === 'recipes') return num(v) && v >= 0 && v <= (f === 'gold' ? 1e6 : 100);
     if (table === 'augments' && f === 'gold') return num(v) && v >= 0 && v <= 1e6;
     if (table === 'augrules') return num(v) && v >= 0 && (f === 'powerCap' ? v <= 3 : f === 'refund' ? v <= 1 : f === 'fee' ? v <= 1e5 : v >= 1 && v <= 7 && Math.round(v) === v);
     if (table === 'matdrops') return num(v) && v >= 0 && (['eliteAttr', 'bossForm', 'zone', 'repeat'].includes(f) ? v <= 1 : v <= 50);

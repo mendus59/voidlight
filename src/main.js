@@ -343,11 +343,12 @@ function buildChoices() {
     const cands = ITEMS.filter(d => d.slot === s && available(d) && !G.inv.some(i => i.def === d));
     // items that share an effect with something held are offered more often, so a build can be steered toward a fusion
     // and, a little, toward the hero's archetype (archLeans)
-    const w = d => 1 + (G.inv.some(i => instEffects(i).some(k => effectsOf(d).includes(k))) ? 1 : 0) + (archLeans(d) ? 0.5 : 0), tw = cands.reduce((n, d) => n + w(d), 0);
+    const w = d => (1 + (G.inv.some(i => instEffects(i).some(k => effectsOf(d).includes(k))) ? 1 : 0) + (archLeans(d) ? 0.5 : 0)) * attuneMul(d), tw = cands.reduce((n, d) => n + w(d), 0); // attuneMul: forge.js
     for (const d of cands) opts.push({ type: 'new', def: d, w: 2.4 * w(d) / tw });
   }
   const k = 3 + (Math.random() < 0.15 + G.player.luck * 2 ? 1 : 0);
-  const out = [];
+  const out = [], first = attuneFirstPick(opts); // forge.js: at Attunement rank 3 the first level-up offers an attuned item
+  if (first) { opts.splice(opts.indexOf(first), 1); out.push(first); }
   while (out.length < k && opts.length) {
     const tw = opts.reduce((a, o) => a + o.w, 0); let r = Math.random() * tw, idx = 0;
     for (; idx < opts.length; idx++) { r -= opts[idx].w; if (r <= 0) break; }
@@ -886,6 +887,7 @@ function renderChars() {
   const S = stageDef(selectedStage);
   $('#stageInfo').innerHTML = selectedStage === 1 ? 'The first level. Beat it (defeat the 15:00 boss) to open the next one.'
     : `Enemies ×${S.hp} HP, rising to ×${+(S.hp * (1 + S.ramp)).toFixed(1)} by 15:00, ×${S.spawn} spawns, ×${S.dmg} damage, bosses ×${S.bossHp}. XP ×${S.xp}, gold ×${S.gold}. New items and fusions arrive at level ${S.start}.`;
+  $('#stageInfo').innerHTML += briefingHtml(selectedStage); // forge.js
   const wrap = $('#charGrid'); wrap.innerHTML = '';
   for (const c of CHARACTERS) {
     const un = charUnlocked(SAVE, c), ok = un && charCatsOpen(SAVE, c), w = ITEM[c.weapon], L = charLock(c);
@@ -909,19 +911,25 @@ function renderChars() {
 function renderForge() {
   const wrap = $('#forgeGrid'); wrap.innerHTML = '';
   const cap = socketCap(SAVE), bought = socketsBought(SAVE);
-  for (const u of UPGRADES) {
-    const rank = SAVE.upg[u.id] || 0, maxed = rank >= u.max, cost = upgradeCost(u, rank), capped = u.socket && !maxed && bought >= cap;
+  // forge.js: the Upgrades / Attunement / Recipes tabs
+  $('#forgeTabs').innerHTML = forgeExtrasHtml();
+  $('#forgeMore').innerHTML = forgeTab === 'attune' ? attuneHtml() : forgeTab === 'recipes' ? recipesHtml() : '';
+  wrap.style.display = forgeTab === 'upgrades' ? '' : 'none'; $('#forgeSockets').style.display = forgeTab === 'upgrades' ? '' : 'none';
+  wireForgeExtras($('#forge'), renderForge);
+  if (forgeTab === 'upgrades') for (const u of UPGRADES) {
+    const max = upgMax(u), rank = SAVE.upg[u.id] || 0, maxed = rank >= max, cost = upgradeCost(u, rank), capped = u.socket && !maxed && bought >= cap;
     const el = document.createElement('button'); el.className = 'card up' + (maxed ? ' maxed' : '') + (u.socket ? ' sock' : '') + (capped ? ' poor' : !maxed && SAVE.gold < cost ? ' poor' : '');
-    el.innerHTML = `<div class="ico">${u.icon}</div><b>${u.name}</b><small>${u.desc}</small><div class="pips">${'■'.repeat(rank)}${'□'.repeat(u.max - rank)}</div><div class="cost">${maxed ? 'MAX' : capped ? '🔒 Open a new level' : '● ' + cost}</div>`;
+    el.innerHTML = `<div class="ico">${u.icon}</div><b>${u.name}</b><small>${u.desc}</small><div class="pips">${'■'.repeat(rank)}${'□'.repeat(Math.max(0, max - rank))}</div><div class="cost">${maxed ? 'MAX' : capped ? '🔒 Open a new level' : '● ' + cost}</div>${capLine(u, rank)}`;
     el.onclick = () => {
-      if (maxed) return;
+      if (maxed) { if (capStep(u)) { buyCap(u); renderForge(); } return; }
       if (capped) { toast(cap >= stageCount() - 1 ? 'Every socket slot is in use.' : `Sockets bought: ${bought}/${cap}. Each level you open adds one more.`); return; }
       if (SAVE.gold < cost) { toast('Not enough gold'); return; } SAVE.gold -= cost; SAVE.upg[u.id] = rank + 1; writeSave(); renderForge();
     };
     wrap.appendChild(el);
   }
   $('#forgeSockets').innerHTML = `Extra sockets: <b>${bought}</b> bought of <b>${cap}</b> available. Each level you open (beyond Level 1) lets you buy one more, up to ${stageCount() - 1}.`;
-  $('#forge .gold-line').innerHTML = goldPill() + ` <button class="link" id="refund">Refund all</button>`;
+  $('#forge .gold-line').innerHTML = goldPill() + (forgeTab === 'upgrades' ? ` <button class="link" id="refund">Refund all</button>` : '');
+  if (forgeTab !== 'upgrades') return;
   $('#refund').onclick = () => { let back = 0; for (const u of UPGRADES) for (let r = 0; r < (SAVE.upg[u.id] || 0); r++) back += upgradeCost(u, r); SAVE.gold += back; SAVE.upg = {}; writeSave(); renderForge(); toast('Refunded ● ' + back); };
 }
 const effTags = d => effectsOf(d).map(k => `<span style="color:${EFFECTS[k].color}">${EFFECTS[k].icon} ${EFFECTS[k].name}</span>`).join(' + ');
@@ -1063,7 +1071,7 @@ function renderAchievements() {
   section('Heroes', 'Each hero is earned with another hero: beat a level with them and master a weapon. A hero also needs the categories of their starting weapon.', list.filter(a => a.group === 'heroes'));
   for (const S of STAGES) section(`Level ${S.id}: ${S.name}`, stageUnlocked(SAVE, S.id) ? '' : `Opens when you beat Level ${S.id - 1}.`, list.filter(a => a.stage === S.id && a.group !== 'stages' && a.group !== 'tiers' && a.group !== 'heroes' && a.group !== 'nexus'));
   section('Other', '', list.filter(a => !a.stage && (a.group === 'cats' || a.group === 'unlocks')));
-  section('Nexus recipes', 'A Nexus is a fusion of specific items, keeping the first one. Nothing is halved, but enemies grow stronger while you hold it. Recipes are in the Codex (✴ Nexus).', list.filter(a => a.group === 'nexus'));
+  section('Nexus recipes', 'A Nexus is a fusion of specific items, keeping the first one. Nothing is halved, but enemies grow stronger while you hold it. Each achievement here lets you forge that recipe in the Forge (📜 Recipes); Super and Mega recipes also need level feats.', list.filter(a => a.group === 'nexus'));
   section('Mastery (unlocks fusion)', 'Level an item up to master it. Only a mastered item can remain in a fusion; it can absorb items that are not mastered yet.', list.filter(a => a.group === 'mastery'));
   if (!box.children.length) box.innerHTML = `<p class="note">${achShow === 'open' ? 'No achievements unlocked yet.' : 'Every achievement is unlocked.'}</p>`;
   $('#achievements .gold-line').innerHTML = `${nDone}/${all.length} done`;

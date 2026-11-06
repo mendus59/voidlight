@@ -2,7 +2,7 @@
 import re, pathlib
 root = pathlib.Path(__file__).parent
 html = (root / 'index.html').read_text()
-for name in ['firebase-config', 'core', 'items', 'chain', 'content', 'progress', 'nexus', 'bestiary', 'world', 'zones', 'materials', 'shrines', 'augments', 'main']:
+for name in ['firebase-config', 'core', 'items', 'chain', 'content', 'progress', 'nexus', 'bestiary', 'world', 'zones', 'materials', 'shrines', 'augments', 'forge', 'main']:
     js = (root / 'src' / f'{name}.js').read_text()
     html = html.replace(f'<script src="src/{name}.js"></script>', '<script>\n' + js + '\n</script>')
 js = (root / 'src' / 'cloud.js').read_text()

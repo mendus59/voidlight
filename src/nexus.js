@@ -8,7 +8,7 @@
 
 const nexusDef = id => NEXUS.find(n => n.id === id) || null;
 const nexusTier = nx => TIER_KEYS.indexOf(nx.tier);
-const nexusUnlocked = (s, nx) => !nx.lock || lockMet(nx.lock, s);
+const nexusUnlocked = (s, nx) => (s.forged || []).includes(nx.id); // learned by forging it (forge.js)
 const nexusMade = (s, id) => ((s.nexusMade || {})[id]) || 0;
 const nexusOk = nx => nx && !nx.disabled && nexusTier(nx) > 0 && nx.recipe.length === FUSION[nx.tier].need && nx.recipe.every(id => ITEM[id]);
 // every item instance working in the run: held items, and the parts living inside held Nexus items
@@ -107,7 +107,7 @@ function renderNexusCodex(wrap, show = () => true) {
     const tierLock = FUSION[nx.tier].lock && !tierUnlocked(SAVE, nx.tier) ? `<div class="req">🔒 ${tierName(t)} fusion: ${lockLabel(FUSION[nx.tier].lock)}</div>` : '';
     el.innerHTML = `<div class="ico">${nx.icon}</div><div class="body"><b>${nx.name}</b><div class="tags"><span style="color:${TIER_COLORS[t]}">✴ ${tierName(t)} Nexus</span><span>Threat ${nx.threat}</span>${made ? `<span>Formed ${made}×</span>` : ''}${held ? '<span class="held">In this run</span>' : ''}</div>` +
       `<small>${nexusRecipeText(nx)}</small><small class="perk">${tierName(t)} fusion of these ${need}, keeping ${ITEM[nx.recipe[0]].name}. Every part keeps 100% of its power. While held: ${nexusThreatText(nx.threat || 0)}.</small>` +
-      (known ? '<small class="fuse">✴ Recipe known</small>' : `<div class="req">🔒 Learn the recipe: ${lockLabel(nx.lock)}</div>`) + tierLock + '</div>';
+      (known ? '<small class="fuse">✴ Recipe forged</small>' : recipeReady(SAVE, nx) ? '<div class="req">⚒ Ready to forge in the Forge (Recipes)</div>' : `<div class="req">🔒 Forge it once: ${lockLabel(recipeGate(nx))}</div>`) + tierLock + '</div>';
     wrap.appendChild(el);
   }
 }

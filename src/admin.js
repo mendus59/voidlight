@@ -33,7 +33,7 @@ let ov = {};                                   // what you are editing
 let live = { ov: {}, updatedAt: 0, by: '' };   // content/live, what players get
 let draft = null;                              // content/draft
 let history = [];
-const TABLE_NAMES = { augments: 'Augment', augrules: 'Augment rules', shrines: 'Shrine', shrinerules: 'Shrine rules', zones: 'Zone', zonerules: 'Zone rules', matdrops: 'Material drops', world: 'World', codex: 'Codex prices', dmgtypes: 'Damage types', items: 'Item', chars: 'Character', cats: 'Category', stages: 'Level', tiers: 'Fusion tier', difficulty: 'Difficulty', upgrades: 'Forge upgrade', enemies: 'Enemy', bosses: 'Boss', drops: 'Pickup', options: 'Game option', chain: 'Fusion chains' };
+const TABLE_NAMES = { caprules: 'Forge rank caps', recipes: 'Forge recipe costs', augments: 'Augment', augrules: 'Augment rules', shrines: 'Shrine', shrinerules: 'Shrine rules', zones: 'Zone', zonerules: 'Zone rules', matdrops: 'Material drops', world: 'World', codex: 'Codex prices', dmgtypes: 'Damage types', items: 'Item', chars: 'Character', cats: 'Category', stages: 'Level', tiers: 'Fusion tier', difficulty: 'Difficulty', upgrades: 'Forge upgrade', enemies: 'Enemy', bosses: 'Boss', drops: 'Pickup', options: 'Game option', chain: 'Fusion chains' };
 
 // current value of one entry: items.js default with the overrides on top
 function get(t, id) {
@@ -644,6 +644,13 @@ function shrineView() {
       [{ f: 'buffs', label: 'Buffs', step: 1 }, { f: 'challenges', label: 'Challenges', step: 1 }, { f: 'channel', label: 'Channel (s)' }, { f: 'buffTime', label: 'Buff time (s)', step: 5 }, { f: 'radius', label: 'Radius', step: 10 }, { f: 'spawn', label: 'Spawn /s' }, { f: 'grace', label: 'Grace (s)' }, { f: 'chestMin', label: 'Chest (least)', step: 1 }, { f: 'mats', label: 'Materials', step: 1 }]));
 }
 function upgradeView() {
+  return h('div', { style: 'display:grid;gap:16px' }, upgradeTable(),
+    tableView('Rank caps', 'A maxed upgrade can be raised "Steps" more ranks. Step k (from 0) needs Level gate(k+1) beaten, materials + per step × k of its attribute material, and gold × the rank\'s normal price.', 'caprules', ['run'],
+      [{ f: 'steps', label: 'Steps', step: 1 }, { f: 'mats', label: 'Materials', step: 1 }, { f: 'matStep', label: '+ per step', step: 1 }, { f: 'gold', label: 'Gold ×' }, { f: 'gate1', label: 'Gate 1 (level)', step: 1 }, { f: 'gate2', label: 'Gate 2', step: 1 }, { f: 'gate3', label: 'Gate 3', step: 1 }]),
+    tableView('Nexus recipe costs', 'Forging a Nexus recipe (once its achievement is met): gold, "Slot" of each part\'s slot material, "Essence" of each of its effects\' Essences, and "Catalysts" Effect Catalysts.', 'recipes', Object.keys(BASE.recipes),
+      [{ f: 'gold', label: 'Gold', step: 50 }, { f: 'slot', label: 'Slot', step: 1 }, { f: 'ess', label: 'Essence', step: 1 }, { f: 'cat', label: 'Catalysts', step: 1 }]));
+}
+function upgradeTable() {
   return tableView('Forge upgrades', 'Rank n costs cost × 1.6ⁿ. "Per rank" is the bonus each rank adds (0.05 = 5%).', 'upgrades', Object.keys(BASE.upgrades), [
     { f: 'icon', label: 'Icon', kind: 'text' }, { f: 'name', label: 'Name', kind: 'text' }, { f: 'desc', label: 'Description', kind: 'text' }, { f: 'max', label: 'Ranks', step: 1 }, { f: 'cost', label: 'Base cost', step: 5 }, { f: 'per', label: 'Per rank' }]);
 }
