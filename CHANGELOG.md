@@ -6,6 +6,9 @@ Voidlight is in beta, so versions are `0.MINOR.PATCH`. The version lives in one 
 - Bump **PATCH** (0.11.0 → 0.11.1) for a bug fix or balance tweak.
 - Add a line here in the same PR.
 
+## 0.14.0 (2026-11-06)
+- Codex & Armory tiles show each item's mastery badge (★ Mastered, ✓ Mastered when this run ends, or ☆ Not mastered with the level and runs needed), the same badge as on level-up cards. The item detail view shows it too.
+
 ## 0.13.0 (2026-11-05)
 - Fusion history: every item remembers, across runs, which items it has fused with and which Super fusions it was part of.
 - Super fusion now also needs every item in it to have fused with 3 different items before; Mega needs each one to have made 5 different Super fusions. Both counts are editable in the admin panel (Fusion tiers, "History needed").
