@@ -136,6 +136,33 @@ from level 1 items (fewer from a higher start level), and Level 10 gives roughly
 can reach is **about 4 Megas**. Level 10 is tuned so that around 3 early Megas just survive the final boss and 4 is comfortable
 (tested with a bot and injected builds, not by hand).
 
+### Nexus items (named recipe fusions)
+A **Nexus** is a fusion of specific items (`NEXUS` in `src/items.js`). When a fusion is made from exactly a recipe's items and the
+player keeps the recipe's **first item (the core)**, the group becomes that Nexus instead of a normal fusion. The order matters: keep
+any other item and it's a normal fusion. Super and Mega recipes name the core items of the Fused / Super items that go in.
+* **Nothing is halved.** The other items are not consumed: they live on inside the core's socket as its parts, in recipe order, each
+  keeping **100% of its own damage, attack pattern, cooldown and passive stats**, raised to the new tier (×1.6 / ×3.2 / ×16 damage).
+* Every part's bullets carry every effect in the Nexus. Parts level up with the core.
+* A Nexus is final: it can't fuse any further.
+* **Threat.** Each Nexus has a threat value (Fused 1, Super 2, Mega 4). While you hold Nexus items, per threat point: enemy HP +4%,
+  boss HP +5%, enemy damage +2%, spawns +1.5% (`NEXUS_THREAT`). Forming one also calls a ring of elites (2 per threat point).
+  The HUD shows the current threat.
+* **Recipes are learned with achievements** (Achievements > Nexus recipes). Fused recipes: beat the level their effect belongs to.
+  Super recipes: form 3 to 5 Nexus items and beat Level 4 to 7. Mega recipes: form 8 Nexus items and beat Level 8 to 10. The Codex
+  has a ✴ Nexus tab with every recipe, its threat and how often you've formed it. A fusion card for a recipe you haven't learned
+  says so.
+
+| Tier | Recipes |
+|---|---|
+| Fused (11) | Solar Requiem, Whiteout Choir, Thunderhead Engine, Rotbloom Sermon, Siegebreaker, Endless Spiral, The Verdict, Kaleidoscope, Starhunter Array, Infinite Bloom, Red Covenant |
+| Super (6) | Cataclysm Furnace, Absolute Zero, Storm Cathedral, Blight Mother, Iron Maelstrom, Night Parliament |
+| Mega (3) | The Last Sun, Godstorm, Crimson Throne |
+
+**Balance (bot tested, invulnerable player, 4 level 5 Megas injected).** A Mega Nexus does about 1.7× the damage of a normal Mega
+(5 parts at full strength against 1 + 4 × 50%). With three Mega Nexus items (threat 12) Level 10 is only slightly easier than with
+four normal Megas, so the threat roughly cancels the power gain. The two Nexus levels (see section 9) are tuned for Nexus builds:
+the same build takes about twice the pressure on Nexus Spire and three times on Event Horizon. Hand playtests should drive tuning.
+
 ## 3b. Progression: levels, categories, mastery and achievements
 * **Nothing unlocks by gold alone.** Every locked item, character, category and fusion tier has an achievement. Most items and
   characters then still have to be bought with gold (the price shows once the achievement is done); categories and tiers are free.
