@@ -33,6 +33,8 @@ const zoneKey = (stage, z) => stage + ':' + z;
 const zoneClears = (s, stage, z) => (s.zonesCleared || {})[zoneKey(stage, z)] || 0;
 // cleared in the level it belongs to (or any later one): what opens its sealed rifts
 const zoneOpened = (s, z) => Object.entries(s.zonesCleared || {}).some(([k, n]) => n > 0 && k.endsWith(':' + z) && (+k.split(':')[0]) >= (ZONES[z] || {}).from);
+// the damage types that hurt a zone's enemies in this level
+const zoneTypes = (Z, stage = G && G.stage) => (stage >= ENDGAME.run.strictFrom ? Z.only.slice(0, 1) : Z.only);
 const zoneEffNames = ks => ks.map(k => EFFECTS[k] ? EFFECTS[k].icon + ' ' + EFFECTS[k].name : k).join(' and ');
 
 // this run's zones (from worldInit in world.js)
@@ -63,7 +65,7 @@ function zoneUpdate(f, dt, d) {
   if (d < f.zoneR && !f.entered) {
     f.entered = true;
     if (f.sealed) banner(`🔒 Sealed: clear ${Z.name} in Level ${Z.from} to open it`, '#8a86a8', 3);
-    else if (!f.cleared) { banner(`${EFFECTS[Z.element].icon} ${f.name}`, f.color, 2.5); later(0.9, () => banner(`Only ${zoneEffNames(Z.only)} hurt them`, f.color, 3)); }
+    else if (!f.cleared) { banner(`${EFFECTS[Z.element].icon} ${f.name}`, f.color, 2.5); later(0.9, () => banner(`Only ${zoneEffNames(zoneTypes(Z))} hurt${zoneTypes(Z).length > 1 ? '' : 's'} them`, f.color, 3)); }
   } else if (d > f.zoneR + 200) f.entered = false;
   if (f.sealed) return;
   f.live = f.live.filter(e => !e.dead);
@@ -74,6 +76,7 @@ function zoneUpdate(f, dt, d) {
       const warden = k === 'warden', a = rand(0, TAU), rr = warden ? 0 : f.zoneR * 0.85 * Math.sqrt(Math.random());
       const e = spawnEnemy(zoneFoeId(f.zone, k), c.x + Math.cos(a) * rr, c.y + Math.sin(a) * rr, { zone: f, warden });
       e.zk = k; e.hx = Math.cos(a) * rr; e.hy = Math.sin(a) * rr; f.live.push(e);
+      if (G.stage >= ENDGAME.run.strictFrom) e.only = Z.only.slice(0, 1); // late levels: only the zone's first type hurts
     }
     f.pending = [];
   } else if (f.awake && d > f.zoneR + R.sleep) { // empty it, keeping who is left for next time
@@ -118,7 +121,7 @@ function drawZone(f, x, y) {
   ctx.beginPath(); ctx.arc(x, y, R, 0, TAU); ctx.stroke(); ctx.setLineDash([]); ctx.lineDashOffset = 0;
   if (!f.cleared) { ctx.strokeStyle = c + '30'; ctx.lineWidth = 1; for (let k = 0; k < 3; k++) { const rr = R * (0.25 + 0.25 * k + 0.05 * Math.sin(t + k)); ctx.beginPath(); ctx.arc(x, y, rr, 0, TAU); ctx.stroke(); } }
   ctx.font = 'bold 14px system-ui,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = c;
-  const Z = ZONES[f.zone], label = f.sealed ? `🔒 ${f.name}: clear ${Z.name} in Level ${Z.from}` : f.cleared ? `✔ ${f.name} cleared` : `${EFFECTS[Z.element].icon} ${f.name} · only ${zoneEffNames(Z.only)}`;
+  const Z = ZONES[f.zone], label = f.sealed ? `🔒 ${f.name}: clear ${Z.name} in Level ${Z.from}` : f.cleared ? `✔ ${f.name} cleared` : `${EFFECTS[Z.element].icon} ${f.name} · only ${zoneEffNames(zoneTypes(Z))}`;
   ctx.fillText(label, x, y - R - 16);
   if (f.sealed) { ctx.font = '42px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif'; ctx.globalAlpha = 0.6; ctx.fillText('🔒', x, y); ctx.globalAlpha = 1; }
 }
@@ -128,5 +131,5 @@ function zoneListHtml() {
   const zs = W.feats.filter(f => f.kind === 'zone'); if (!zs.length) return '';
   if (!mapFound(SAVE, G.stage)) return `<small class="note">${zs.length} zone${zs.length > 1 ? 's' : ''} hide in this level. Find the 🗺️ Map to see where.</small>`;
   return zs.map(f => { const Z = ZONES[f.zone];
-    return `<small style="color:${f.color}">${f.icon} <b>${f.name}</b>: ${f.sealed ? `sealed until ${Z.name} is cleared in Level ${Z.from}` : f.cleared ? 'cleared' : `only ${zoneEffNames(Z.only)} hurt it · ${Math.round((f.dist || 0) / 50)}m`}</small>`; }).join('<br>');
+    return `<small style="color:${f.color}">${f.icon} <b>${f.name}</b>: ${f.sealed ? `sealed until ${Z.name} is cleared in Level ${Z.from}` : f.cleared ? 'cleared' : `only ${zoneEffNames(zoneTypes(Z))} hurt it · ${Math.round((f.dist || 0) / 50)}m`}</small>`; }).join('<br>');
 }

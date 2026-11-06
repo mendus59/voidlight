@@ -556,6 +556,12 @@ const SHRINES = {
 // materials for a challenge.
 const SHRINE_RULES = { run: { buffs: 4, challenges: 2, channel: 2, buffTime: 60, radius: 320, spawn: 3, grace: 3, chestMin: 3, mats: 3 } };
 
+// ======================= ENDGAME =======================
+// gateFrom: from this level on, opening a level also needs a zone cleared (its Warden defeated) in the level before.
+// strictFrom: from this level on, zone enemies are hurt only by the zone's first damage type. hardFrom / hard: from this level
+// on, challenge shrines ask hard × as much (Hold time, Cull kills).
+const ENDGAME = { run: { gateFrom: 10, strictFrom: 9, hardFrom: 9, hard: 1.5 } };
+
 // ======================= AUGMENTS (augments.js) =======================
 // Permanent tweaks to one item, bought outside a run with gold and materials, one per augment slot. They add up through fusion:
 // the item that remains carries every augment of every item fused into it (Power is capped on the total). mats: material ids, plus

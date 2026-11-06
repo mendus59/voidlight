@@ -117,7 +117,7 @@ function briefingHtml(n) {
   const zs = Object.entries(ZONES).filter(([, Z]) => Z.from <= n), rifts = Object.entries(ZONES).filter(([, Z]) => Z.from > n && Z.from <= n + 2);
   const known = z => Object.keys(ZONE_FOES).some(k => foeMastered(SAVE, zoneFoeId(z, k)));
   const zoneRow = ([z, Z], rift) => { const E = EFFECTS[Z.element], c = zoneClears(SAVE, n, z);
-    return `<span class="chip" style="--c:${E.color}">${E.icon} ${Z.name}${rift ? ` rift${zoneOpened(SAVE, z) ? '' : ' 🔒'}` : ''} · hurt only by ${known(z) ? Z.only.map(k => EFFECTS[k].icon + ' ' + EFFECTS[k].name).join(' + ') : '?'}${c ? ` · cleared ${c}×` : ''}</span>`; };
+    return `<span class="chip" style="--c:${E.color}">${E.icon} ${Z.name}${rift ? ` rift${zoneOpened(SAVE, z) ? '' : ' 🔒'}` : ''} · hurt only by ${known(z) ? zoneTypes(Z, n).map(k => EFFECTS[k].icon + ' ' + EFFECTS[k].name).join(' + ') : '?'}${c ? ` · cleared ${c}×` : ''}</span>`; };
   const foes = [...new Set(SPAWN_TABLE.map(r => levelFoeOf(n, r[0])))].map(id => { const T = ENEMY_TYPES[id]; if (!T) return '';
     const m = foeMastered(SAVE, id), tr = m ? [...(T.weak || []).map(k => '▲' + EFFECTS[k].icon), ...(T.resist || []).map(k => '▼' + EFFECTS[k].icon)].join(' ') : '?';
     return `<span class="chip" style="--c:${T.color}">${T.name} ${tr}</span>`; }).join('');
@@ -129,3 +129,28 @@ function briefingHtml(n) {
 }
 // the enemy type a level really spawns for a base type (its STAGES[].swap)
 const levelFoeOf = (n, type) => { const sw = stageDef(n).swap; return sw && sw[type] && ENEMY_TYPES[sw[type]] ? sw[type] : type; };
+
+// ---------- the cross-level web (Achievements page) ----------
+// For every level: what beating it, clearing its zones and its challenges opens, across the game.
+function levelWebRows() {
+  const rows = [];
+  for (let n = 1; n <= stageCount(); n++) {
+    const out = [], S = stageDef(n);
+    if (n < stageCount()) out.push(`🗺 Level ${n + 1}${n + 1 >= ENDGAME.run.gateFrom ? ' (also clear a zone here)' : ''} and a Forge socket`);
+    for (const k of TIER_KEYS) { const l = FUSION[k].lock; if (l && lockStage(l) === n) out.push(`✦ ${FUSION[k].name} fusion`); }
+    ATTUNE.ranks.forEach((A, r) => { if (A.gate === n) out.push(`🎯 Attunement rank ${r + 1}`); });
+    for (let k = 1; k <= CAP_RULES.run.steps; k++) if (CAP_RULES.run['gate' + k] === n) out.push(`⬆ Forge rank caps, step ${k}`);
+    const nx = NEXUS.filter(x => nexusOk(x) && x.lock && lockStage(x.lock) === n);
+    if (nx.length) out.push(`📜 Forging ${nx.map(x => x.icon + ' ' + x.name).join(', ')}` + (nx.some(x => x.tier !== 'fused') ? ` (Super/Mega also need Level ${n}'s feats)` : ''));
+    const zs = Object.values(ZONES).filter(Z => Z.from === n);
+    if (zs.length) out.push(`🌀 Clearing ${zs.map(Z => EFFECTS[Z.element].icon + ' ' + Z.name).join(', ')} here opens ${zs.length > 1 ? 'their' : 'its'} sealed rift${zs.length > 1 ? 's' : ''} in Level${n > 2 ? `s ${Math.max(1, n - 2)}–${n - 1}` : ` ${Math.max(1, n - 1)}`}`);
+    const items = ITEMS.filter(d => !d.disabled && d.lock && lockStage(d.lock) === n).length, heroes = CHARACTERS.filter(c => lockStage(charLock(c)) === n).length;
+    if (items || heroes) out.push(`🔓 ${items ? `${items} item${items > 1 ? 's' : ''}` : ''}${items && heroes ? ' and ' : ''}${heroes ? `${heroes} hero${heroes > 1 ? 'es' : ''}` : ''} ask for something in Level ${n}`);
+    rows.push({ n, S, out });
+  }
+  return rows;
+}
+function levelWebHtml() {
+  return `<div class="achSec web"><h3>🕸 What opens what</h3><p class="note">Every level opens things across the game. Later levels need you to go back: rifts in early levels open from later zones, recipes ask for feats in their level, and from Level ${ENDGAME.run.gateFrom} on each level needs a zone cleared in the one before.</p>` +
+    levelWebRows().map(r => `<details${stageUnlocked(SAVE, r.n) ? '' : ' class="dim"'}><summary style="color:${r.S.color}">${stageUnlocked(SAVE, r.n) ? '' : '🔒 '}Level ${r.n}: ${r.S.name}</summary>${r.out.map(x => `<small>${x}</small>`).join('')}</details>`).join('') + '</div>';
+}

@@ -1,7 +1,8 @@
 # Voidlight Roadmap: maps, zones, augments and the expanded Forge
 
-Status: **proposal.** Patrick answered every open question on 2026-11-06 (see *Decisions* below).
-Nothing here is built yet. Written 2026-11-06 against v0.22.0.
+Status: **built, first pass.** Patrick answered every open question on 2026-11-06 (see *Decisions* below). All eight phases shipped
+on 2026-11-06 as v0.23.0 to v0.30.0 (PRs #28 to #35). Numbers are first-pass and admin-tunable; hand playtests should drive the next
+round (augment slot counts, material income, zone and Warden HP, Levels 9 to 14).
 
 ## Decisions (Patrick, 2026-11-06)
 

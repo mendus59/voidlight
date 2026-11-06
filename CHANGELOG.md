@@ -6,6 +6,14 @@ Voidlight is in beta, so versions are `0.MINOR.PATCH`. The version lives in one 
 - Bump **PATCH** (0.11.0 → 0.11.1) for a bug fix or balance tweak.
 - Add a line here in the same PR.
 
+## 0.30.0 (2026-11-06)
+- **Wardens gate the endgame:** from Level 10 on, opening a level also needs a zone cleared in the level before it. Levels you have already played stay open.
+- **Stricter zones from Level 9:** zone enemies there are hurt only by the zone's first damage type, so a build has to bring it (a Hit augment is the usual answer). The level briefing, zone banners and labels say which.
+- **Harder challenges from Level 9:** Holding lasts 30 s and Culling asks for 90 kills.
+- **What opens what:** the Achievements page starts with a per-level map of everything each level opens across the game: the next level, fusion tiers, Attunement ranks, Forge rank caps, Nexus recipes, the rifts its zones open in earlier levels, and the items and heroes that ask for it.
+- The roadmap is marked built. All of its numbers are a first pass, tunable from the admin page.
+- Admin: the endgame values are `ENDGAME` in items.js.
+
 ## 0.29.0 (2026-11-06)
 - **The Forge has three tabs:** Upgrades, Attunement and Recipes.
 - **Rank caps:** a maxed upgrade (Might, Vitality, Haste, Luck and the rest; not sockets, Multishot or Second Wind) can be raised up to 3 ranks further. Each step costs its attribute material and gold, and needs Level 3, 6 or 9 beaten.

@@ -6,7 +6,9 @@
 // Hold (stay inside the circle) or Cull (defeat enemies inside the circle); success drops a big chest and slot materials,
 // failure closes the shrine. Shrines show on the minimap once seen. Loaded after materials.js and before main.js.
 
-const shrineDef = f => SHRINES[f.shrine] || {};
+// late levels ask more of a challenge (ENDGAME in items.js)
+const shrineDef = f => { const S = SHRINES[f.shrine] || {}, E = ENDGAME.run; if (S.kind === 'buff' || !G || G.stage < E.hardFrom) return S;
+  return Object.assign({}, S, { time: S.kind === 'hold' ? Math.round(S.time * E.hard) : S.time, kills: S.kills ? Math.round(S.kills * E.hard) : S.kills }); };
 function shrinesInit(g, W) {
   g.buffs = [];
   const R = SHRINE_RULES.run, ids = Object.keys(SHRINES), buffs = ids.filter(k => SHRINES[k].kind === 'buff'), chal = ids.filter(k => SHRINES[k].kind !== 'buff');
