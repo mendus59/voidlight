@@ -6,6 +6,14 @@ Voidlight is in beta, so versions are `0.MINOR.PATCH`. The version lives in one 
 - Bump **PATCH** (0.11.0 → 0.11.1) for a bug fix or balance tweak.
 - Add a line here in the same PR.
 
+## 0.29.0 (2026-11-06)
+- **The Forge has three tabs:** Upgrades, Attunement and Recipes.
+- **Rank caps:** a maxed upgrade (Might, Vitality, Haste, Luck and the rest; not sockets, Multishot or Second Wind) can be raised up to 3 ranks further. Each step costs its attribute material and gold, and needs Level 3, 6 or 9 beaten.
+- **Attunement** (expensive, ranked): pick up to 1/2/3 items before a run; they are offered 3× as often in level-ups, and at rank 3 one is offered in your first level-up. Ranks need Levels 3/6/9 beaten, thousands to tens of thousands of gold, slot materials and Catalysts.
+- **Nexus recipes are now forged, not handed out.** Each Nexus achievement now lets you forge that recipe in the Forge, for gold, slot materials of its parts, the Essences of its effects and Effect Catalysts. Super recipes also need that level's *Warden-breaker* feat, Mega recipes the *Challenger* feat too. Forging teaches the recipe; you still form the Nexus in a run. **Every recipe your save had already learned stays learned** (save v5).
+- **Level briefing** on the level select: the zones that can appear there (and sealed rifts), what hurts them once you've mastered their enemies in the Bestiary (? until then), the level's wandering enemies with their weaknesses and resistances, whether you've found its Map, and what you have attuned.
+- Admin: Forge upgrades has Rank caps and Nexus recipe costs.
+
 ## 0.28.0 (2026-11-06)
 - **Item augments.** Every item has fixed augment slots (Weapons 4, Spells and Orbitals 5, Deployables and Relics 6, passives 3) that open by using it: 100 kills with it, mastering it, 1,000 kills, fusing it, 5,000 kills, a Super fusion, 20,000 kills. Fill a slot from the item's Armory page (Codex, between runs) with gold and materials:
   - **Power** (+6% damage; all Power on one item, fused ones included, caps at +30%),

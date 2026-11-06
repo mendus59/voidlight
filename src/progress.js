@@ -3,7 +3,7 @@
 // Shared by the game (main.js) and the admin panel's progress simulator (admin.js), so both apply the same rules.
 // Everything here is a pure function of a save object `s`; nothing reads or writes storage.
 // Loaded after items.js and content.js.
-const SAVE_VERSION = 4;
+const SAVE_VERSION = 5;
 // Default fusion lock of every item: fusing it opens up once you reach `level` with it in `runs` different runs.
 // An item's own `fuseLock` overrides parts of it; runs: 0 means it can always fuse.
 const FUSE_LOCK = { level: 5, runs: 1 };
@@ -17,7 +17,7 @@ const emptyStage = () => ({ kills: 0, best: 0, wins: 0, bosses: 0, runs: 0, zone
 
 function defaultSave() {
   return { ver: SAVE_VERSION, gold: 0, upg: {}, unlockedItems: [], unlockedCats: [], unlockedChars: ['kael', 'mira', 'volt'], itemRuns: {}, fuseLog: {}, nexusMade: {}, stages: {}, charStages: {}, lastStage: 1,
-    itemKills: {}, bestiary: {}, materials: {}, augments: {}, mapsFound: [], forged: [], attuned: [], zonesCleared: {},
+    itemKills: {}, bestiary: {}, materials: {}, augments: {}, mapsFound: [], forged: [], attuned: [], zonesCleared: {}, upgCap: {}, attuneRank: 0,
     stats: { totalKills: 0, bestTime: 0, bossKills: 0, evolves: 0, supers: 0, megas: 0, nexus: 0, wins: 0, runs: 0, maxLevel: 0, totalGold: 0 }, settings: { numbers: true }, lastChar: 'kael' };
 }
 const strList = v => (Array.isArray(v) ? v.filter(x => typeof x === 'string') : []);
@@ -117,6 +117,9 @@ function normalizeSave(s) {
   // zonesCleared['level:zone'] = times that zone's Warden fell in that level (zones.js); the first clear pays a bonus
   out.zonesCleared = {}; for (const [k, n] of Object.entries(s.zonesCleared || {})) if (/^\d+:\w+$/.test(k) && cnt(n)) out.zonesCleared[k] = cnt(n);
   out.attuned = strList(s.attuned).slice(0, 3);
+  // v5 (forge.js): extra Forge ranks bought past each upgrade's max, and the Attunement rank
+  out.upgCap = {}; for (const [id, n] of Object.entries(s.upgCap || {})) if (cnt(n)) out.upgCap[id] = Math.min(10, cnt(n));
+  out.attuneRank = Math.min(3, cnt(s.attuneRank));
   if (ver < 2) {
     // v1 had no item categories. Anything a player bought with gold stays usable, so its categories open up.
     for (const id of out.unlockedItems) {
@@ -129,6 +132,10 @@ function normalizeSave(s) {
     // Items and heroes already unlocked (bought or earned) stay owned.
     const st = s.stats || {};
     out.stages['1'] = { kills: cnt(st.totalKills), best: cnt(st.bestTime), wins: cnt(st.wins), bosses: cnt(st.bossKills), runs: cnt(st.runs) };
+  }
+  if (ver < 5) {
+    // v5: Nexus recipes are learned by forging them. Every recipe an older save had learned through its achievement stays learned.
+    for (const nx of NEXUS) if (!nx.disabled && (!nx.lock || lockMet(nx.lock, out)) && !out.forged.includes(nx.id)) out.forged.push(nx.id);
   }
   out.ver = SAVE_VERSION;
   return out;
@@ -172,6 +179,8 @@ function mergeSaves(a, b) {
   m.mapsFound = [...new Set([...a.mapsFound, ...b.mapsFound])];
   m.forged = [...new Set([...a.forged, ...b.forged])];
   m.zonesCleared = addMap(a.zonesCleared, b.zonesCleared);
+  m.upgCap = {}; for (const id of new Set([...Object.keys(a.upgCap), ...Object.keys(b.upgCap)])) m.upgCap[id] = Math.max(a.upgCap[id] || 0, b.upgCap[id] || 0);
+  m.attuneRank = Math.max(a.attuneRank, b.attuneRank);
   m.attuned = (b.attuned.length ? b.attuned : a.attuned).slice();
   return m;
 }
@@ -322,7 +331,7 @@ function progressDiff(a, b) {
   const out = [];
   for (let n = a.stages + 1; n <= b.stages; n++) out.push(`🗺 Level ${n}: ${stageDef(n).name} is open. The Forge has another socket for sale.`);
   for (const k of b.tiers) if (!a.tiers.includes(k)) out.push(`✦ ${FUSION[k].name} fusion: ${FUSION[k].need} level 5 ${FUSION[TIER_KEYS[TIER_KEYS.indexOf(k) - 1]].name.toLowerCase()} items that share an effect become one.`);
-  for (const id of b.nexus || []) if (!(a.nexus || []).includes(id)) { const nx = NEXUS.find(n => n.id === id); out.push(`✴ Nexus recipe: ${nx.icon} ${nx.name} = ${nx.recipe.map(r => ITEM[r] ? ITEM[r].name : r).join(' → ')} (${FUSION[nx.tier].name} fusion, keep ${ITEM[nx.recipe[0]] ? ITEM[nx.recipe[0]].name : nx.recipe[0]})`); }
+  for (const id of b.nexus || []) if (!(a.nexus || []).includes(id)) { const nx = NEXUS.find(n => n.id === id); out.push(`✴ Can forge the Nexus recipe (in the Forge): ${nx.icon} ${nx.name} = ${nx.recipe.map(r => ITEM[r] ? ITEM[r].name : r).join(' → ')} (${FUSION[nx.tier].name} fusion, keep ${ITEM[nx.recipe[0]] ? ITEM[nx.recipe[0]].name : nx.recipe[0]})`); }
   for (const id of b.buy) if (!a.buy.includes(id)) {
     if (id[0] === 'i') { const d = ITEM[id.slice(2)]; out.push(`🛒 ${d.icon} ${d.name} can be bought in the Codex for ● ${lockCost(d.lock)}`); }
     else { const c = CHARACTERS.find(x => x.id === id.slice(2)); out.push(`🛒 ${c.name} can be hired on the hero screen for ● ${lockCost(c.lock)}`); }
@@ -344,7 +353,7 @@ function achievementList(s) {
     add('feats', '⛩', `Level ${n}: Challenger`, c, 'A feat that Forge recipes ask for', lockMet(c, s));
   }
   for (const k of TIER_KEYS) { const l = FUSION[k].lock; if (l) add('tiers', '✦', `${FUSION[k].name} fusion`, l, `${FUSION[k].name} fusion (${FUSION[k].need} items → 1)`, tierUnlocked(s, k)); }
-  for (const nx of NEXUS) if (!nx.disabled && hasReq(nx.lock)) add('nexus', nx.icon, `Nexus: ${nx.name}`, nx.lock, `${nx.name} recipe (${FUSION[nx.tier].name} Nexus)`, lockMet(nx.lock, s));
+  for (const nx of NEXUS) if (!nx.disabled && hasReq(nx.lock)) add('nexus', nx.icon, `Nexus: ${nx.name}`, nx.lock, `Forging the ${nx.name} recipe (${FUSION[nx.tier].name} Nexus) in the Forge`, lockMet(nx.lock, s));
   for (const k of EFFECT_KEYS) { const l = catLock(k); if (l) add('cats', EFFECTS[k].icon, `${EFFECTS[k].name} awakened`, l, `${EFFECTS[k].name} items`, catUnlocked(s, k)); }
   for (const d of ITEMS) if (!d.disabled) { const f = fuseLockOf(d); if (f.runs > 0) add('mastery', d.icon, `${d.name} mastery`, { item: d.id, level: f.level, runs: f.runs }, `Fusing ${d.name}`, fuseUnlocked(s, d)); }
   for (const d of ITEMS) if (!d.disabled && hasReq(d.lock)) add('unlocks', d.icon, d.name, d.lock, d.name, lockMet(d.lock, s), itemOwned(s, d));

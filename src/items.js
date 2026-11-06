@@ -611,3 +611,22 @@ const UPGRADES = [
   { id: 'sock_relic',  name: 'Relic Socket',      icon: '💠', max: 2, cost: 400, per: 1, desc: '+1 Relic socket', socket: 'relic' },
 ];
 function upgradeCost(u, rank) { return Math.round(u.cost * Math.pow(1.6, rank)); }
+
+// ======================= FORGE EXPANSION (forge.js) =======================
+// Rank caps: a maxed Forge upgrade can be raised CAP_RULES.steps more ranks, one step at a time. Step k needs Level gate1/2/3
+// beaten, mats + matStep × k of the upgrade's attribute material (FORGE_CAPS) and gold × the rank's normal price.
+const FORGE_CAPS = { might: 'might_ore', hp: 'ever_wax', armor: 'might_ore', regen: 'ever_wax', speed: 'swift_quill', area: 'reach_silk', cd: 'haste_sand',
+  projSpd: 'swift_quill', duration: 'ever_wax', magnet: 'reach_silk', luck: 'keen_lens', growth: 'twin_seed', greed: 'keen_lens', reroll: 'twin_seed' };
+const CAP_RULES = { run: { steps: 3, mats: 4, matStep: 4, gold: 2, gate1: 3, gate2: 6, gate3: 9 } };
+// Attunement: pick items before a run; they are offered `weight` × as often. Rank 1 / 2 / 3 attune 1 / 2 / 3 items, and at rank 3
+// one of them is offered in the first level-up. Each rank needs its level beaten, gold and materials (`slot`: that many of every
+// slot material).
+const ATTUNE = { weight: 3, ranks: [
+  { gate: 3, gold: 3000,  mats: { slot: 5,  cat_stat: 1 } },
+  { gate: 6, gold: 10000, mats: { slot: 10, cat_stat: 2, cat_effect: 1 } },
+  { gate: 9, gold: 25000, mats: { slot: 20, cat_stat: 3, cat_effect: 2, cat_hit: 1 } },
+] };
+// Forge recipes: a Nexus recipe is learned only by forging it, once its achievement (its lock) is met. Super recipes also need
+// the Warden-breaker feat of that level, Mega ones the Challenger feat too. Cost by tier: gold, `slot` of each part's slot
+// material, `ess` of the Essence of every effect its parts have, and `cat` Effect Catalysts.
+const RECIPE_COSTS = { fused: { gold: 600, slot: 3, ess: 3, cat: 1 }, super: { gold: 2500, slot: 6, ess: 5, cat: 2 }, mega: { gold: 8000, slot: 10, ess: 8, cat: 3 } };

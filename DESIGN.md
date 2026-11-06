@@ -430,6 +430,16 @@ material, `ess` = the effect's Essence). Passives take only Effect and Form. Re-
 materials and costs `fee` gold more. In a run `inst.augs` / `inst.aug` hold them; a fusion adds the absorbed items' augments to
 the item that remains. The slot defaults are a first guess (weak/niche kinds get more slots) to be tuned with play data.
 
+### Forge expansion (forge.js)
+**Rank caps:** each upgrade in `FORGE_CAPS` (its attribute material) can go `CAP_RULES.steps` (3) ranks past its max; step k needs
+Level `gate1..3` (3/6/9) beaten, `mats + matStep·k` of its material and `gold ×` that rank's normal price (`SAVE.upgCap`).
+**Attunement** (`ATTUNE`, `SAVE.attuneRank`, `SAVE.attuned`): ranks 1-3 (Levels 3/6/9; 3k/10k/25k gold plus every slot material and
+Catalysts) attune 1-3 items, offered `weight` (3)× as often; rank 3 offers one in the first level-up. **Recipes:** a Nexus is
+learned only by forging (`SAVE.forged`), allowed once its lock (achievement) is met, plus the level's Warden-breaker feat for Super
+and Challenger for Mega; cost `RECIPE_COSTS` by tier. Saves older than v5 keep every recipe they had learned. The **level briefing**
+on level select lists the level's zones and rifts (immunities shown once their enemies are mastered), wandering enemies and their
+traits (once mastered), the Map, and attuned items.
+
 ### Damage types and the Bestiary
 Every hit has a **type**: the effect of the item that fired it, plus its fusion riders (`hitTypes` in core.js). The shared pool
 never changes a hit's type, so holding one Burn item doesn't make every bullet Burn damage. Burn and poison ticks are Burn and
