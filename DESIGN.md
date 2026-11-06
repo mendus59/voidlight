@@ -245,6 +245,39 @@ that requirement is added automatically and shows on the hero card. Per-hero lev
 | Vesper, Nightblood | Blood Lance | Lance hits heal 2% of damage | Beat Level 8 with Orrin, master Seeker Swarm (+ Vampiric) | ● 2500 |
 | Morrow, Tidecaller | Crimson Tide | +1 HP/s, +15% duration | Beat Level 9 with Vesper, master Blood Lance (+ Vampiric) | ● 3000 |
 
+### Archetypes
+
+On top of their perk, every hero has an **archetype** (`arch` in `CHARACTERS`): passive bonuses that reward a build style
+without forcing it. Three kinds, all editable on the admin Characters tab:
+
+* **Effect strength** (`eff`): +x to every stack of that effect on every hit. 0.3 means 10 Burn stacks act like 13:
+  more Burn damage, a deeper Chill slow, more Shock arcs, more crit chance and crit damage, more Pierce/Ricochet,
+  and so on. It only boosts effects you already carry, so it pays off once you lean in.
+* **Combos** (`combo`, `'a+b'`): +x damage on every hit that carries both effects (from the pool, or from one item's own
+  effects and fusion riders). The stats panel shows each combo as off, on some items, or on all bullets.
+* **Slot damage** (`slot`): +x damage for items in that slot.
+
+Level-up offers lean slightly toward new items with an archetype effect or slot (+0.5 weight, against 1 for any item and
++1 for one that shares an effect with something held), and their cards carry a ◆ archetype badge.
+
+| Hero | Archetype | Effect strength | Combo (+20% damage) | Slot damage |
+|---|---|---|---|---|
+| Kael | Pyromancer | Burn +30% | Burn + Poison | |
+| Mira | Cryomancer | Chill +30% | Chill + Burn | |
+| Volt | Conduit | Shock +30% | Shock + Chill | |
+| Briar | Plaguebearer | Poison +30% | Poison + Shock | |
+| Corvin | Bulwark | Chill +20%, Force +20% | Chill + Force | |
+| Grim | Bruiser | Force +30% | Force + Split | Deployables +10% |
+| Sable | Skirmisher | Pierce +30% | Pierce + Homing | |
+| Tamsin | Tempest | Shock +25% | Shock + Burn | Orbitals +15% |
+| Lyra | Sharpshooter | Critical +30% | Critical + Shock | |
+| Juno | Trickshot | Ricochet +30% | Ricochet + Critical | Weapons +10% |
+| Orrin | Tinker | Homing +25% | | Orbitals +15%, Deployables +15% |
+| Nyx | Fractalist | Split +30% | Split + Ricochet | |
+| Wren | Artificer | Split +20%, Critical +20% | Split + Critical | |
+| Vesper | Hemomancer | Vampiric +30% | Vampiric + Pierce | |
+| Morrow | Bloodmage | Vampiric +25%, Poison +15% | | Spells +15% |
+
 ## 7. Permanent upgrades (the Forge)
 
 Bought with Void Gold, cost rises per rank: Might, Vitality (max HP), Armor, Recovery (regen), Swiftness

@@ -6,6 +6,12 @@ Voidlight is in beta, so versions are `0.MINOR.PATCH`. The version lives in one 
 - Bump **PATCH** (0.11.0 → 0.11.1) for a bug fix or balance tweak.
 - Add a line here in the same PR.
 
+## 0.17.0 (2026-11-06)
+- Hero archetypes: every hero now has an archetype (Pyromancer, Tinker, Sharpshooter...) with passive bonuses on top of their perk: stronger effects of their element, +20% damage on hits that carry their effect combo (e.g. Burn + Poison for Kael), and for some, extra damage for one or two item slots.
+- Level-up offers lean a little toward items that fit your hero's archetype, and those cards carry a ◆ archetype badge.
+- The stats panel (level-up and pause) shows your archetype bonuses and whether each combo is off, on some items, or on all bullets.
+- Admin Characters tab: edit each hero's archetype name, effect strengths, slot damage and combos.
+
 ## 0.16.0 (2026-11-06)
 - Menus fill large screens: the level/hero picker, Forge, Codex & Armory and Achievements now use the full browser width, so more tiles fit per row and tiles grow a little on wide monitors. The level-up screen is wider too. Phones are unchanged.
 

@@ -303,7 +303,8 @@ function buildChoices() {
     // an item fused into something else can be offered again (a fresh copy); only items held right now are left out
     const cands = ITEMS.filter(d => d.slot === s && available(d) && !G.inv.some(i => i.def === d));
     // items that share an effect with something held are offered more often, so a build can be steered toward a fusion
-    const w = d => 1 + (G.inv.some(i => instEffects(i).some(k => effectsOf(d).includes(k))) ? 1 : 0), tw = cands.reduce((n, d) => n + w(d), 0);
+    // and, a little, toward the hero's archetype (archLeans)
+    const w = d => 1 + (G.inv.some(i => instEffects(i).some(k => effectsOf(d).includes(k))) ? 1 : 0) + (archLeans(d) ? 0.5 : 0), tw = cands.reduce((n, d) => n + w(d), 0);
     for (const d of cands) opts.push({ type: 'new', def: d, w: 2.4 * w(d) / tw });
   }
   const k = 3 + (Math.random() < 0.15 + G.player.luck * 2 ? 1 : 0);
@@ -318,6 +319,8 @@ function buildChoices() {
   if (!out.length) out.push({ type: 'heal' }, { type: 'gold' });
   return out;
 }
+// does this item fit the hero's archetype (one of its effects or its slot)?
+const archLeans = d => !!(G && G.arch && (effectsOf(d).some(k => G.arch.leans.includes(k)) || G.arch.slots.includes(d.slot)));
 function applyChoice(o) {
   if (o.type === 'new') addItem(o.def);
   else if (o.type === 'up') levelItem(o.inst);
@@ -414,7 +417,7 @@ function freshRun(ch, stage = 1) {
   const g = { time: 0, char: ch, player: null, cam: { x: 0, y: 0 }, enemies: [], bullets: [], ebullets: [], fx: [], texts: [], pickups: [], deploys: [], sched: [], inv: [], pool: {},
     kills: 0, level: 1, xp: 0, xpNext: xpFor(1), gold: 0, pendingLevels: 0, paused: false, over: false, nextId: 1, spawnAcc: 0, nextRing: 90, nextElite: 60, bossSpawned: {},
     stats: { evolves: 0, supers: 0, megas: 0, bossKills: 0, crits: 0, healed: 0, damage: 0 }, settings: SAVE.settings, banners: [], shake: 0, reached: {}, fuseQueue: [], runners: [],
-    stage, stageDef: stageDef(stage), bonus: {} };
+    stage, stageDef: stageDef(stage), bonus: {}, arch: archOf(ch) };
   g.player = buildPlayer(ch);
   G = g; recomputePool();
   return g;
@@ -722,7 +725,7 @@ function renderChars() {
     el.style.setProperty('--c', c.color);
     // owned, but the starting weapon's category is still locked: the category requirement is what is left
     const shut = un && !ok ? `<div class="req">🔒 Needs:${charCats(c).filter(k => !catUnlocked(SAVE, k)).map(k => partHtml({ cat: k }) + `<span class="part">${EFFECTS[k].icon} ${lockLabel(catLock(k))}</span>`).join('')}</div>` : '';
-    el.innerHTML = `<div class="avatar">${ok ? '◆' : '🔒'}</div><b>${c.name}</b><small>${c.title}</small><div class="wpn">${w.icon} ${w.name}</div><div class="perk">${c.perk}</div>` + lockHtml(L, un) + shut;
+    el.innerHTML = `<div class="avatar">${ok ? '◆' : '🔒'}</div><b>${c.name}</b><small>${c.title}</small><div class="wpn">${w.icon} ${w.name}</div><div class="perk">${c.perk}</div>${archCard(c)}` + lockHtml(L, un) + shut;
     el.onclick = () => {
       if (!un) { buy(L, SAVE.unlockedChars, c.id, c.name); renderChars(); return; }
       if (!ok) { toast(`${c.name} needs ${charCats(c).filter(k => !catUnlocked(SAVE, k)).map(k => EFFECTS[k].name).join(' and ')} items unlocked first`); return; }
@@ -875,9 +878,14 @@ function masteryBadge(d, tier) {
   const prog = f.runs > 1 ? ` · ${have + (now ? 1 : 0)}/${f.runs} runs` : '';
   return `<div class="mast" title="${tip}">☆ Not mastered (reach Lv ${f.level}${prog})</div>`;
 }
+// level-up card badge for an item that fits the hero's archetype
+function archBadge(d) {
+  if (!d || !archLeans(d) || !G.arch.name) return '';
+  return `<div class="mast arch" style="--a:${G.char.color}" title="${G.char.name}'s archetype bonuses apply to this item">◆ ${G.arch.name}</div>`;
+}
 function describeChoice(o) {
   if (o.type === 'new') { const d = o.def, effs = effectsOf(d), L = arrivalLevel();
-    return { icon: d.icon, title: d.name, tag: 'NEW' + (L > 1 ? ' · Lv ' + L : ''), slot: d.slot, effs, mast: masteryBadge(d, 0),
+    return { icon: d.icon, title: d.name, tag: 'NEW' + (L > 1 ? ' · Lv ' + L : ''), slot: d.slot, effs, mast: archBadge(d) + masteryBadge(d, 0),
       text: isPassive(d) ? `Passive: ${statText(d.passive)} per level. No attack; its two effects let it fuse with items of either.` : d.pattern }; }
   if (o.type === 'up') { const i = o.inst, d = i.def, effs = instEffects(i);
     return { icon: d.icon, title: itemName(i), tag: 'Lv ' + i.level + ' → ' + (i.level + 1), slot: d.slot, effs, mast: masteryBadge(d, i.tier),
@@ -992,7 +1000,7 @@ const STAT_ROWS = [
   ['Pickup range', P => P.magnet / 90 - 1, pctOf], ['XP', P => P.growth - 1, pctOf], ['Gold', P => P.greed - 1, pctOf],
 ];
 // damage of one hit of an attacking item (before crits and effects)
-const hitDmg = (i, P) => (i && !isPassive(i.def) ? baseDmg(i) * (1 + 0.3 * (i.level - 1)) * P.might : 0);
+const hitDmg = (i, P) => (i && !isPassive(i.def) ? baseDmg(i) * (1 + 0.3 * (i.level - 1)) * P.might * archSlotMul(i.def) : 0);
 // The stats panel. o: a level-up choice to preview (null = just the current stats). With a choice, changed rows show now → after.
 function statsPanel(o, preview) {
   const now = statsOf(G.inv), P = G.player;
@@ -1010,7 +1018,21 @@ function statsPanel(o, preview) {
   if (v && v.hit) { const [a, b] = v.hit; if (!isPassive(b.def)) rows.push(cell(`${b.def.icon} ${b.def.name} hit`, hitDmg(a, now.P), hitDmg(b, aft.P), x => (x ? String(Math.round(x)) : '—'), ' wide')); }
   const pool = EFFECT_KEYS.filter(k => now.pool[k] || (aft && aft.pool[k])).map(k => cell(`${EFFECTS[k].icon} ${EFFECTS[k].name}`, now.pool[k], aft ? aft.pool[k] : null, x => '×' + x)).join('');
   const head = preview ? (o ? (o.type === 'skip' ? 'If you skip: heal 15, +gold' : o.type === 'fuse' && o.keeps.length > 1 ? `Stats if ${o.keeps[0].def.name} remains` : 'Stats with this choice') : 'Your stats (pick an option to see what changes)') : 'Your stats';
-  return `<div class="statsHead">${head}</div><div class="statGrid">${rows.join('')}</div><div class="statsHead">Effect pool <small>(on every bullet)</small></div><div class="statGrid">${pool || '<div class="st"><span>none yet</span></div>'}</div>`;
+  return `<div class="statsHead">${head}</div><div class="statGrid">${rows.join('')}</div><div class="statsHead">Effect pool <small>(on every bullet)</small></div><div class="statGrid">${pool || '<div class="st"><span>none yet</span></div>'}</div>` + archPanel(now.pool, aft && aft.pool, v ? v.inv : null);
+}
+// The archetype part of the stats panel: each bonus, and whether each combo is on (both effects in the pool = every
+// bullet; both on one item, from fusion riders = that item's bullets). pool2/inv2: the same after a previewed choice.
+function archPanel(pool, pool2, inv2) {
+  const A = G.arch; if (!A || !A.name) return '';
+  const st = (p, inv) => c => (p[c[0]] && p[c[1]] ? 2 : inv.some(i => !isPassive(i.def) && instEffects(i).includes(c[0]) && instEffects(i).includes(c[1]) && effOpen(c[0]) && effOpen(c[1])) ? 1 : 0);
+  const word = n => ['off', 'some items', 'all bullets'][n];
+  const rows = [
+    ...Object.entries(A.eff).map(([k, x]) => `<div class="st"><span>${EFFECTS[k].icon} ${EFFECTS[k].name} strength</span><b>+${Math.round(x * 100)}%</b></div>`),
+    ...Object.entries(A.slot).map(([k, x]) => `<div class="st"><span>${SLOTS[k].icon} ${SLOTS[k].name} damage</span><b>+${Math.round(x * 100)}%</b></div>`),
+    ...A.combo.map(c => { const a = st(pool, G.inv)(c), b = pool2 ? st(pool2, inv2)(c) : a;
+      return `<div class="st wide${b !== a ? (b > a ? ' up' : ' down') : ''}"><span>${EFFECTS[c[0]].icon}${EFFECTS[c[1]].icon} ${EFFECTS[c[0]].name} + ${EFFECTS[c[1]].name}: +${Math.round(c[2] * 100)}% damage</span><b>${word(a)}${b !== a ? ` <i>→ ${word(b)}</i>` : ''}</b></div>`; }),
+  ];
+  return `<div class="statsHead">◆ ${A.name} <small>(${G.char.name}'s archetype)</small></div><div class="statGrid">${rows.join('')}</div>`;
 }
 const fusedOf = i => (i.gone.length ? ` <small>+ ${i.gone.length} fused in</small>` : '');
 function showGameOver(won, earned, bonus, fresh) {
@@ -1020,6 +1042,10 @@ function showGameOver(won, earned, bonus, fresh) {
   $('#goBody').innerHTML = `<div class="row"><div><small>Time</small><b>${fmtTime(G.time)}</b></div><div><small>Level ${G.stage}</small><b>${STAGE().name}</b></div><div><small>Character level</small><b>${G.level}</b></div><div><small>Kills</small><b>${G.kills}</b></div><div><small>Gold earned</small><b class="gold">● ${earned}</b></div></div>
     <small>Includes ● ${bonus} survival bonus.</small><div class="chips">${inv}</div>` + (fresh.length ? `<div class="unlocks"><b>Unlocked!</b><br>${fresh.join('<br>')}</div>` : '');
   showScreen('gameover');
+}
+function archCard(c) {
+  const A = archOf(c), L = archLines(c); if (!A.name && !L.length) return '';
+  return `<div class="archBox"><b>◆ ${A.name || 'Archetype'}</b>${L.map(x => `<span>${x}</span>`).join('')}</div>`;
 }
 function togglePause() {
   if (!G || G.sandbox || G.over || currentScreen === 'levelup') return;
@@ -1111,7 +1137,7 @@ function sandboxSlots() {
 }
 function sandboxStart() {
   const def = ITEM[SB.item] || ITEMS[0];
-  const ch = Object.assign({}, CHARACTERS.find(c => c.weapon === def.id) || CHARACTERS[0], { mods: {} }); // neutral stats
+  const ch = Object.assign({}, CHARACTERS.find(c => c.weapon === def.id) || CHARACTERS[0], { mods: {}, arch: null }); // neutral stats, no archetype
   freshRun(ch);
   Object.assign(G, { sandbox: true, seen: new Set(), sbTargets: [], sbWait: [], sbLog: [], sbDps: 0, sbPost: 0 });
   const inst = addItem(def), partners = sbPartners(def);
