@@ -176,6 +176,7 @@ function shoot(o) {
   }
   if (b.hitCd) b.hitMap = new Map(); else b.hit = new Set();
   G.bullets.push(b);
+  chainAttach(b); // fusion chains (chain.js): links ride on, or fire from, the bullets of the item that absorbed them
   return b;
 }
 
@@ -183,7 +184,7 @@ function shoot(o) {
 function strike(x, y, r, dmg, effect, o = {}) {
   const P = G.player; if (!o.raw) r *= Math.sqrt(P.area);
   if (!o.noFx) fxRing(x, y, r, o.color || (effect ? EFFECTS[effect].color : '#fff'), 0.3, 3);
-  const pseudo = { dmg, effect, vx: 0, vy: 0, x, y, kb: o.kb || 0, owner: o.owner };
+  const pseudo = { dmg, effect, vx: 0, vy: 0, x, y, kb: o.kb || 0, owner: o.owner, link: o.link };
   for (const e of enemiesNear(x, y, r)) hitEnemy(e, pseudo);
 }
 
@@ -210,8 +211,8 @@ function updateBullet(b, dt) {
   const P = G.player;
   b.t += dt;
   if (b.orbit) {
-    const o = b.orbit; o.a += o.w * dt;
-    const c = o.center || P;
+    const o = b.orbit; o.a += o.w * dt; if (o.grow) o.r += o.grow * dt;
+    const c = o.center || P; if (c.dead) b.dead = true; // satellites die with the bullet they circle
     const rr = o.r * Math.sqrt(P.area) * (o.pulse ? (1 + 0.35 * Math.sin(b.t * o.pulse + o.a)) : 1);
     if (o.fig8) { b.x = c.x + Math.sin(o.a) * rr; b.y = c.y + Math.sin(2 * o.a) * rr * 0.5; }
     else { b.x = c.x + Math.cos(o.a) * rr; b.y = c.y + Math.sin(o.a) * rr * (o.ry || 1); }
@@ -255,7 +256,8 @@ function updateBullet(b, dt) {
   }
   if (b.beam && b.beam.follow) { b.x = P.x; b.y = P.y; }
   if (b.trail) { b.trail.push(b.x, b.y); if (b.trail.length > 16) b.trail.splice(0, 2); }
-  if (b.t >= b.life) { b.dead = true; if (b.onExpire && !b.expired) { b.expired = true; b.onExpire(b); } }
+  if (b.travel) chainTravel(b, dt);
+  if (b.t >= b.life) { b.dead = true; if (b.onExpire && !b.expired) { b.expired = true; b.onExpire(b); } chainExpire(b); }
 }
 
 function segDist2(px, py, x1, y1, x2, y2) {
@@ -326,6 +328,7 @@ function hitEnemy(e, b) {
   if ((s = S('vampiric')) > 0 && Math.random() < 0.012 * s) heal(1);
   if (b.lifesteal) heal(dmg * b.lifesteal);
   damageEnemy(e, dmg, crit ? '#ffe14d' : (b.effect ? EFFECTS[b.effect].color : '#ffffff'), crit);
+  if (hitDepth < 3) chainHit(b, e); // fusion chains (chain.js)
   if (crit && hitDepth < 3 && !b.noTrig) trigger('crit', e); // noTrig: bullets made by a crit trigger, so crits cannot chain forever
   // shock arcs
   if (!b.noChain && hitDepth < 3 && (s = S('shock')) > 0 && Math.random() < 0.06 * s) {
@@ -360,12 +363,17 @@ function trigger(name, arg) {
 }
 
 // ---------- item instance ctx ----------
-// inst.base is the item's base damage: its own, plus 50% of the base of everything fused into it (set in main.js fuse()).
-// The fusion tier (FUSION in items.js) multiplies it; each tier also adds +1 projectile and its cooldown factor.
+// inst.base is the item's own base damage. The fusion tier (FUSION in items.js) multiplies it and it grows 30% per level;
+// each tier also adds +1 projectile and its cooldown factor. inst.carry is flat damage a fusion carried over: 100% of what
+// the kept item hit for when it fused, plus 50% of what each item it absorbed hit for (absorb() in chain.js), so a fusion
+// never makes an item weaker, even though it starts its new tier at the level's start level.
 function baseDmg(inst) { return (inst.base ?? inst.def.dmg) * tierOf(inst).mul; }
+const lvlF = L => 1 + 0.3 * (L - 1);
+// damage of one hit before the player's damage bonus (passives: 0)
+function itemPower(inst) { return inst.def.dmg || inst.carry ? baseDmg(inst) * lvlF(inst.level) + (inst.carry || 0) : 0; }
 function ctxOf(inst) {
   const P = G.player, L = inst.level, T = inst.tier || 0, E = T ? 1 : 0, def = inst.def, e2 = def.effect2 || (inst.riders && inst.riders[0]) || def.effect;
-  return { L, E, T, P, x: P.x, y: P.y, d: baseDmg(inst) * (1 + 0.3 * (L - 1)) * P.might * archSlotMul(def), n: P.amount + T, aim: aimAngle(), face: P.face,
+  return { L, E, T, P, x: P.x, y: P.y, d: itemPower(inst) * P.might * archSlotMul(def), n: P.amount + T, aim: aimAngle(), face: P.face,
     col: def.color || EFFECTS[def.effect].color, col2: EFFECTS[e2].color, eff: def.effect, eff2: e2, inst };
 }
 function itemName(inst) {
