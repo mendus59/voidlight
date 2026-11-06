@@ -43,6 +43,7 @@
   .card.up .cost { color: var(--gold); font-weight: 700; }
   .card.up.maxed { opacity: 0.6; } .card.up.poor .cost { color: #a66; }
   .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .tabs.show { margin-top: -6px; } .tabs.show .tab { font-size: 12px; padding: 4px 10px; }
   .tab.sel { border-color: var(--accent); background: rgba(165, 92, 255, 0.2); }
   .card.item { flex-direction: row; gap: 10px; border-left: 3px solid var(--c); }
   .card.item .body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
@@ -186,6 +187,7 @@
 <div class="screen" id="codex"><div class="panel wide">
   <div class="head"><button data-back class="backBtn">← Back</button><h2>📖 Codex &amp; Armory</h2><div class="gold-line"></div></div>
   <div class="tabs" id="codexTabs"></div>
+  <div class="tabs show" id="codexShow"></div>
   <div class="grid" id="codexGrid"></div>
 </div></div>
 
@@ -196,6 +198,7 @@
 
 <div class="screen" id="achievements"><div class="panel wide">
   <div class="head"><button data-back class="backBtn">← Back</button><h2>🏆 Achievements</h2><div class="gold-line"></div></div>
+  <div class="tabs show" id="achShow"></div>
   <div id="achBody"></div>
 </div></div>
 

@@ -6,6 +6,9 @@ Voidlight is in beta, so versions are `0.MINOR.PATCH`. The version lives in one 
 - Bump **PATCH** (0.11.0 → 0.11.1) for a bug fix or balance tweak.
 - Add a line here in the same PR.
 
+## 0.20.0 (2026-11-06)
+- Codex & Armory and Achievements have an All / 🔓 Unlocked / 🔒 Locked filter (a second row of tabs, with counts). In the Codex it works with every tab, including ✴ Nexus (unlocked = recipe known) and This run; an item counts as unlocked once it and its categories are unlocked.
+
 ## 0.19.0 (2026-11-06)
 - Nexus items: 20 named recipes (11 Fused, 6 Super, 3 Mega) made by fusing specific items and keeping the recipe's first item (the core). Nothing is halved: every part keeps 100% of its damage, attack and stats at the new tier, all in one socket. A Nexus can't fuse further.
 - Nexus threat: while you hold Nexus items, enemies get more HP, damage and spawns (Fused 1, Super 2, Mega 4 threat points), and forming one calls a ring of elites. The HUD shows your threat.
