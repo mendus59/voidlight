@@ -1,6 +1,6 @@
 # Voidlight Roadmap: maps, zones, augments and the expanded Forge
 
-Status: **proposal.** Patrick answered most of the open questions on 2026-11-06 (see *Decisions* below); one is still open (Part 3).
+Status: **proposal.** Patrick answered every open question on 2026-11-06 (see *Decisions* below).
 Nothing here is built yet. Written 2026-11-06 against v0.22.0.
 
 ## Decisions (Patrick, 2026-11-06)
@@ -24,6 +24,9 @@ These override the recommendations in Part 1 wherever they differ.
 6. **Augments add up through fusion.** Augments permanently modify an item for the player, so when items fuse, the item that remains
    carries every augment of every item in the fusion, added together (not halved like damage). Augments are meant as subtle tweaks to
    how an item plays, so their values are sized for that.
+7. **Forge recipes unlock items, never hand them out.** A forged recipe makes an item or Nexus available in runs. **Nexus recipes move
+   from achievements to forging.** Achievements may still be needed to open the components, materials and effects that the recipe's
+   materials come from.
 
 ---
 
@@ -239,7 +242,15 @@ work is built. Each phase lists what it still needs from Part 3.
   * Proposed cost: gold in the thousands to tens of thousands plus slot materials and catalysts, gated by beating Levels 3 / 6 / 9.
 * **Rank caps**: each Forge upgrade can be raised past its current max with attribute materials (Might 5 → 8, etc.), each step gated
   by a level.
-* **Forge recipes** (see Part 3, question 1).
+* **Forge recipes** (Decision 7): spend materials (Essences, slot materials, catalysts) and gold to **unlock** an item or a Nexus recipe,
+  so it can then appear in runs. Nothing is handed out at the start of a run.
+  * **Nexus recipes are learned only by forging.** The current "Nexus recipes" achievements stop teaching recipes. A Nexus recipe
+    costs the Essences of its parts' effects, slot materials for its parts' slots and a catalyst, scaled by tier (Fused < Super <
+    Mega), and Super and Mega recipes still need their component recipes forged first.
+  * Achievements gate the *inputs*: a material only drops once its effect category, level or zone is open, so a recipe can't be
+    forged before the game has led you to its pieces.
+  * **Existing saves keep every Nexus recipe already learned** through achievements.
+  * Later, other locked items can also get a Forge recipe as an alternative to their achievement price.
 * **Level briefing** on the level select screen: the level's zones and Wardens and what the Codex says about their immunities and
   weaknesses (unknown = "?"), so a build can be planned and attuned before the run.
 
@@ -257,12 +268,11 @@ work is built. Each phase lists what it still needs from Part 3.
 | 4 Zones + materials | large | 2, 3 |
 | 5 Shrines | medium | 3 (4 for material rewards) |
 | 6 Augments | large | 4 |
-| 7 Forge + Attunement | medium | 4, 6, Part 3 Q1 |
+| 7 Forge + Attunement + recipes | medium | 4, 6 |
 | 8 Endgame retune | medium, mostly tuning | all |
 
 ---
 
-## Part 3. Still open
+## Part 3. Open questions
 
-1. **Forge recipes.** Do recipes *unlock* items and Nexus recipes (so they then show up in runs), rather than handing you the item at
-   the start of a run? *(Recommended: unlock. A Nexus at 0:00 would skip the whole build.)*
+None. All of Patrick's answers are in *Decisions* above.
