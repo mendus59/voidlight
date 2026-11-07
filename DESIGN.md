@@ -369,6 +369,13 @@ Bought with Void Gold, cost rises per rank: Might, Vitality (max HP), Armor, Rec
 Multishot (+1 projectile), Magnetism, Luck (crit + 4th card chance), Growth (XP), Greed (gold), Second
 Wind (revive), Reroll.
 
+**Pricing and diminishing returns (v0.31, `FORGE_RULES` in items.js, admin Forge tab > Forge pricing).** Rank n (from 0) costs
+base × 1.75ⁿ, times (1 + 3% × every Forge rank you already own, sockets included), so every purchase makes every later one dearer.
+Rank n adds the upgrade's first-rank bonus × 0.85ⁿ, so Might's ranks give +5%, +4.3%, +3.6%… (Multishot, Second Wind, Reroll and
+sockets add a full step every rank). **Levels open more ranks:** beating Level 2, 4, 6, 8, 10 and 12 adds one rank to every upgrade,
+up to its `grow` (Might, Vitality and Greed 6; Multishot and Second Wind 0). Material-bought rank caps (v0.29) stack on top.
+Refund all returns the gold actually spent (`upgSpent` in the save; older saves are credited at the old 1.6ⁿ prices).
+
 **Extra sockets.** Each slot can buy up to 2 more sockets (● 400 each, rising per rank). Every unlocked level after the first allows one
 more socket bought in total, so 9 extra sockets (19 in all) once Level 10 is open.
 

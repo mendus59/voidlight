@@ -421,7 +421,7 @@ function closeChest() { if (currentScreen !== 'chest') return; showScreen(null);
 const keys = {};
 const touch = { active: false, ox: 0, oy: 0, x: 0, y: 0 };
 // Player stats come from one sum of modifiers (STAT_INFO keys): Forge ranks + hero perk, plus passive items during the run.
-function forgeMods() { const m = {}; for (const u of UPGRADES) { const r = SAVE.upg[u.id] || 0; if (r && !u.socket && STAT_INFO[u.id]) m[u.id] = u.per * r; } return m; }
+function forgeMods() { const m = {}; for (const u of UPGRADES) { const r = SAVE.upg[u.id] || 0; if (r && !u.socket && STAT_INFO[u.id]) m[u.id] = upgValue(u, r); } return m; }
 function applyStats(P, m) {
   const g = k => m[k] || 0, oldMax = P.maxHp;
   P.might = 1 + g('might'); P.maxHp = Math.max(1, Math.round(100 * (1 + g('hp')))); P.armor = g('armor'); P.regen = g('regen');
@@ -432,7 +432,7 @@ function applyStats(P, m) {
 }
 function buildPlayer(ch) {
   const base = forgeMods(); for (const [k, v] of Object.entries(ch.mods || {})) if (STAT_INFO[k]) base[k] = (base[k] || 0) + v;
-  const U = id => { const u = UPGRADES.find(x => x.id === id); return u ? u.per * (SAVE.upg[id] || 0) : 0; };
+  const U = id => { const u = UPGRADES.find(x => x.id === id); return u ? upgValue(u, SAVE.upg[id] || 0) : 0; };
   const P = { x: 0, y: 0, r: 7, face: 0, moveAng: 0, moving: false, stillT: 0, inv: 1, dashT: 0, dashCd: 0, dashA: 0, hurtFlash: 0, baseMods: base, revives: U('revive'), rerolls: U('reroll') + 1 };
   applyStats(P, base); return P;
 }
@@ -917,20 +917,20 @@ function renderForge() {
   wrap.style.display = forgeTab === 'upgrades' ? '' : 'none'; $('#forgeSockets').style.display = forgeTab === 'upgrades' ? '' : 'none';
   wireForgeExtras($('#forge'), renderForge);
   if (forgeTab === 'upgrades') for (const u of UPGRADES) {
-    const max = upgMax(u), rank = SAVE.upg[u.id] || 0, maxed = rank >= max, cost = upgradeCost(u, rank), capped = u.socket && !maxed && bought >= cap;
+    const max = upgMax(u), rank = SAVE.upg[u.id] || 0, maxed = rank >= max, cost = upgradeCost(u, rank, SAVE), capped = u.socket && !maxed && bought >= cap;
     const el = document.createElement('button'); el.className = 'card up' + (maxed ? ' maxed' : '') + (u.socket ? ' sock' : '') + (capped ? ' poor' : !maxed && SAVE.gold < cost ? ' poor' : '');
-    el.innerHTML = `<div class="ico">${u.icon}</div><b>${u.name}</b><small>${u.desc}</small><div class="pips">${'■'.repeat(rank)}${'□'.repeat(Math.max(0, max - rank))}</div><div class="cost">${maxed ? 'MAX' : capped ? '🔒 Open a new level' : '● ' + cost}</div>${capLine(u, rank)}`;
+    el.innerHTML = `<div class="ico">${u.icon}</div><b>${u.name}</b><small>${upgEffectText(u, rank)}</small><div class="pips">${'■'.repeat(rank)}${'□'.repeat(Math.max(0, max - rank))}</div><div class="cost">${maxed ? 'MAX' : capped ? '🔒 Open a new level' : '● ' + cost}</div>${capLine(u, rank)}${rankLine(u)}`;
     el.onclick = () => {
       if (maxed) { if (capStep(u)) { buyCap(u); renderForge(); } return; }
       if (capped) { toast(cap >= stageCount() - 1 ? 'Every socket slot is in use.' : `Sockets bought: ${bought}/${cap}. Each level you open adds one more.`); return; }
-      if (SAVE.gold < cost) { toast('Not enough gold'); return; } SAVE.gold -= cost; SAVE.upg[u.id] = rank + 1; writeSave(); renderForge();
+      if (SAVE.gold < cost) { toast('Not enough gold'); return; } SAVE.gold -= cost; SAVE.upgSpent = (SAVE.upgSpent || 0) + cost; SAVE.upg[u.id] = rank + 1; writeSave(); renderForge();
     };
     wrap.appendChild(el);
   }
   $('#forgeSockets').innerHTML = `Extra sockets: <b>${bought}</b> bought of <b>${cap}</b> available. Each level you open (beyond Level 1) lets you buy one more, up to ${stageCount() - 1}.`;
   $('#forge .gold-line').innerHTML = goldPill() + (forgeTab === 'upgrades' ? ` <button class="link" id="refund">Refund all</button>` : '');
   if (forgeTab !== 'upgrades') return;
-  $('#refund').onclick = () => { let back = 0; for (const u of UPGRADES) for (let r = 0; r < (SAVE.upg[u.id] || 0); r++) back += upgradeCost(u, r); SAVE.gold += back; SAVE.upg = {}; writeSave(); renderForge(); toast('Refunded ● ' + back); };
+  $('#refund').onclick = () => { const back = SAVE.upgSpent || 0; SAVE.gold += back; SAVE.upg = {}; SAVE.upgSpent = 0; writeSave(); renderForge(); toast('Refunded ● ' + back); };
 }
 const effTags = d => effectsOf(d).map(k => `<span style="color:${EFFECTS[k].color}">${EFFECTS[k].icon} ${EFFECTS[k].name}</span>`).join(' + ');
 const passiveText = d => `Per level: ${statText(d.passive)}.`;

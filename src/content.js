@@ -20,6 +20,7 @@ const VOIDLIGHT_CONTENT = (() => {
   const TABLES = {
     items:    { get: () => ITEM, fields: ['name', 'icon', 'effect', 'effect2', 'passive', 'dmg', 'cd', 'pattern', 'trig', 'lock', 'fuseLock', 'color', 'vis', 'disabled', 'chain', 'augSlots'] },
     augments: { get: () => AUGMENTS, fields: ['name', 'gold'] },
+    forgerules: { get: () => FORGE_RULES, fields: ['growth', 'tax', 'decay', 'from', 'every'] },
     caprules: { get: () => CAP_RULES, fields: ['steps', 'mats', 'matStep', 'gold', 'gate1', 'gate2', 'gate3'] },
     recipes:  { get: () => RECIPE_COSTS, fields: ['gold', 'slot', 'ess', 'cat'] },
     augrules: { get: () => AUG_RULES, fields: ['powerCap', 'refund', 'fee', 'weapon', 'spell', 'orbit', 'trap', 'relic', 'passive'] },
@@ -29,7 +30,7 @@ const VOIDLIGHT_CONTENT = (() => {
     tiers:    { get: () => FUSION, fields: ['name', 'need', 'mul', 'cdMul', 'own', 'pool', 'statMul', 'hist', 'lock'] },
     difficulty: { get: () => DIFFICULTY, fields: ['hpGrowth', 'hpCurve', 'spawnBase', 'spawnGrowth', 'spawnCurve', 'dmgGrowth', 'eliteEvery', 'eliteHp', 'ringEvery', 'bossHp', 'xpStep', 'xpCurve', 'overtimeAt', 'overtimeDmg', 'overtimeHp', 'overtimeSpawn'] },
     chars:    { get: () => byId(CHARACTERS), fields: ['name', 'title', 'color', 'weapon', 'perk', 'mods', 'arch', 'lock'] },
-    upgrades: { get: () => byId(UPGRADES), fields: ['name', 'icon', 'desc', 'max', 'cost', 'per'] },
+    upgrades: { get: () => byId(UPGRADES), fields: ['name', 'icon', 'desc', 'max', 'cost', 'per', 'grow'] },
     enemies:  { get: () => ENEMY_TYPES, fields: ['name', 'hp', 'spd', 'r', 'dmg', 'xp', 'color', 'shape', 'weak', 'resist', 'only'] },
     bosses:   { get: () => BOSSES, fields: ['name', 'hp', 'spd', 'r', 'dmg', 'xp', 'color', 'weak', 'resist', 'only'] },
     codex:    { get: () => CODEX_COSTS, fields: ['study', 'master', 'kills'] },
@@ -115,6 +116,8 @@ const VOIDLIGHT_CONTENT = (() => {
     if (table === 'shrines' && (f === 'time' || f === 'kills')) return num(v) && v >= 1 && v <= 1000;
     if (table === 'shrinerules') return num(v) && v >= 0 && (f === 'buffs' || f === 'challenges' ? v <= 20 : f === 'radius' ? v >= 100 && v <= 2000 : f === 'chestMin' ? v <= 5 : v <= 600);
     if (table === 'items' && f === 'augSlots') return v === null || (num(v) && v >= 1 && v <= 7 && Math.round(v) === v);
+    if (table === 'forgerules') return num(v) && (f === 'growth' ? v >= 1 && v <= 5 : f === 'tax' ? v >= 0 && v <= 1 : f === 'decay' ? v > 0 && v <= 1 : v >= 1 && v <= STAGES.length && Math.round(v) === v);
+    if (table === 'upgrades' && f === 'grow') return num(v) && v >= 0 && v <= 20 && Math.round(v) === v;
     if (table === 'caprules') return num(v) && v >= 0 && (f.startsWith('gate') ? v >= 1 && v <= STAGES.length && Math.round(v) === v : f === 'steps' ? v <= 10 && Math.round(v) === v : v <= 1000);
     if (table === 'recipes') return num(v) && v >= 0 && v <= (f === 'gold' ? 1e6 : 100);
     if (table === 'augments' && f === 'gold') return num(v) && v >= 0 && v <= 1e6;

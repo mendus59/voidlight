@@ -6,6 +6,13 @@ Voidlight is in beta, so versions are `0.MINOR.PATCH`. The version lives in one 
 - Bump **PATCH** (0.11.0 → 0.11.1) for a bug fix or balance tweak.
 - Add a line here in the same PR.
 
+## 0.31.0 (2026-11-07)
+- **Forge upgrades cost more as you buy more.** Each rank of an upgrade now costs 1.75× the last (was 1.6×), and every Forge rank you own adds 3% to the price of all further ranks.
+- **Diminishing returns:** each rank gives 85% of the one before it (Might: +5%, +4.3%, +3.6%…). Upgrade cards show your current total and what the next rank adds. Multishot, Second Wind, Reroll and sockets are unchanged.
+- **More tiers from beating levels:** Levels 2, 4, 6, 8, 10 and 12 each open one more rank on every upgrade (up to 6 for Might, Vitality and Greed, fewer for the rest; none for Multishot and Second Wind). Cards show which level opens the next rank, and the Achievements level web lists them. Material-bought rank caps still stack on top.
+- **Refund all** gives back exactly the gold you spent. Ranks bought before this version refund at what they cost then.
+- Admin: Forge tab has a new **Forge pricing** table (cost growth, tax per rank owned, gain decay, first level and spacing for level ranks) and a "+ ranks from levels" column per upgrade.
+
 ## 0.30.0 (2026-11-06)
 - **Wardens gate the endgame:** from Level 10 on, opening a level also needs a zone cleared in the level before it. Levels you have already played stay open.
 - **Stricter zones from Level 9:** zone enemies there are hurt only by the zone's first damage type, so a build has to bring it (a Hit augment is the usual answer). The level briefing, zone banners and labels say which.
