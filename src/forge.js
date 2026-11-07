@@ -9,12 +9,12 @@ const payMats = (gold, mats) => { SAVE.gold -= gold; for (const [m, n] of Object
 const beaten = n => stageStats(SAVE, n).wins > 0;
 
 // ---------- rank caps ----------
-const upgMax = u => u.max + (FORGE_CAPS[u.id] && !u.socket ? (SAVE.upgCap || {})[u.id] || 0 : 0);
+const upgMax = u => upgMaxFor(SAVE, u);
 // the next cap step of upgrade u: { k, gate, gold, mats } or null when there is none
 function capStep(u) {
   const mat = FORGE_CAPS[u.id], R = CAP_RULES.run; if (!mat || u.socket) return null;
   const k = (SAVE.upgCap || {})[u.id] || 0; if (k >= R.steps) return null;
-  return { k, gate: R['gate' + (k + 1)] || stageCount(), gold: Math.round(upgradeCost(u, u.max + k) * R.gold), mats: { [mat]: R.mats + R.matStep * k } };
+  return { k, gate: R['gate' + (k + 1)] || stageCount(), gold: Math.round(upgradeCost(u, upgMax(u), SAVE) * R.gold), mats: { [mat]: R.mats + R.matStep * k } };
 }
 function buyCap(u) {
   const st = capStep(u); if (!st) return;
@@ -103,6 +103,14 @@ function capLine(u, rank) {
   const st = capStep(u); if (!st || rank < upgMax(u)) return '';
   return beaten(st.gate) ? `<div class="capUp">⬆ Raise cap to ${upgMax(u) + 1}: ${matsHtml(st.gold, st.mats)}</div>` : `<div class="capUp off">🔒 Beat Level ${st.gate} to raise its cap</div>`;
 }
+// the next rank a level opens, for an upgrade card
+function rankLine(u) { const n = nextRankGate(SAVE, u); return n ? `<div class="capUp off">🔒 Beat Level ${n}: +1 rank</div>` : ''; }
+// what the card says the upgrade does: the total so far and the next rank's gain (diminishing), or its description
+function upgEffectText(u, rank) {
+  if (u.whole || u.socket || !STAT_INFO[u.id]) return u.desc;
+  const now = upgValue(u, rank), next = upgValue(u, rank + 1) - now;
+  return `${rank ? statText({ [u.id]: now }) : 'Nothing yet'}<br>Next rank: ${statText({ [u.id]: next })}`;
+}
 function wireForgeExtras(box, rerender) {
   box.querySelectorAll('[data-ftab]').forEach(b => b.onclick = () => { forgeTab = b.dataset.ftab; rerender(); });
   const q = s => box.querySelector(s) || document.querySelector(s);
@@ -140,6 +148,8 @@ function levelWebRows() {
     for (const k of TIER_KEYS) { const l = FUSION[k].lock; if (l && lockStage(l) === n) out.push(`✦ ${FUSION[k].name} fusion`); }
     ATTUNE.ranks.forEach((A, r) => { if (A.gate === n) out.push(`🎯 Attunement rank ${r + 1}`); });
     for (let k = 1; k <= CAP_RULES.run.steps; k++) if (CAP_RULES.run['gate' + k] === n) out.push(`⬆ Forge rank caps, step ${k}`);
+    const ups = UPGRADES.filter(u => !u.socket && [...Array(u.grow || 0).keys()].some(k => upgRankGate(k + 1) === n));
+    if (ups.length) out.push(`⬆ +1 Forge rank on ${ups.length === UPGRADES.filter(u => !u.socket && u.grow).length ? 'every upgrade' : ups.map(u => u.icon + ' ' + u.name).join(', ')}`);
     const nx = NEXUS.filter(x => nexusOk(x) && x.lock && lockStage(x.lock) === n);
     if (nx.length) out.push(`📜 Forging ${nx.map(x => x.icon + ' ' + x.name).join(', ')}` + (nx.some(x => x.tier !== 'fused') ? ` (Super/Mega also need Level ${n}'s feats)` : ''));
     const zs = Object.values(ZONES).filter(Z => Z.from === n);

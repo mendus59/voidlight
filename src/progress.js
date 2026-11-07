@@ -17,7 +17,7 @@ const emptyStage = () => ({ kills: 0, best: 0, wins: 0, bosses: 0, runs: 0, zone
 
 function defaultSave() {
   return { ver: SAVE_VERSION, gold: 0, upg: {}, unlockedItems: [], unlockedCats: [], unlockedChars: ['kael', 'mira', 'volt'], itemRuns: {}, fuseLog: {}, nexusMade: {}, stages: {}, charStages: {}, lastStage: 1,
-    itemKills: {}, bestiary: {}, materials: {}, augments: {}, mapsFound: [], forged: [], attuned: [], zonesCleared: {}, upgCap: {}, attuneRank: 0,
+    itemKills: {}, bestiary: {}, materials: {}, augments: {}, mapsFound: [], forged: [], attuned: [], zonesCleared: {}, upgCap: {}, attuneRank: 0, upgSpent: 0,
     stats: { totalKills: 0, bestTime: 0, bossKills: 0, evolves: 0, supers: 0, megas: 0, nexus: 0, wins: 0, runs: 0, maxLevel: 0, totalGold: 0 }, settings: { numbers: true }, lastChar: 'kael' };
 }
 const strList = v => (Array.isArray(v) ? v.filter(x => typeof x === 'string') : []);
@@ -120,6 +120,10 @@ function normalizeSave(s) {
   // v5 (forge.js): extra Forge ranks bought past each upgrade's max, and the Attunement rank
   out.upgCap = {}; for (const [id, n] of Object.entries(s.upgCap || {})) if (cnt(n)) out.upgCap[id] = Math.min(10, cnt(n));
   out.attuneRank = Math.min(3, cnt(s.attuneRank));
+  // gold spent on Forge ranks, which is what Refund all gives back. Saves from before 0.31 bought their ranks at the old price
+  // (cost × 1.6ⁿ, no tax), so that is what they get back.
+  out.upgSpent = s.upgSpent !== undefined && isFinite(+s.upgSpent) ? cnt(s.upgSpent)
+    : UPGRADES.reduce((n, u) => { for (let r = 0; r < cnt(out.upg[u.id]); r++) n += Math.round(u.cost * Math.pow(1.6, r)); return n; }, 0);
   if (ver < 2) {
     // v1 had no item categories. Anything a player bought with gold stays usable, so its categories open up.
     for (const id of out.unlockedItems) {
@@ -181,6 +185,7 @@ function mergeSaves(a, b) {
   m.zonesCleared = addMap(a.zonesCleared, b.zonesCleared);
   m.upgCap = {}; for (const id of new Set([...Object.keys(a.upgCap), ...Object.keys(b.upgCap)])) m.upgCap[id] = Math.max(a.upgCap[id] || 0, b.upgCap[id] || 0);
   m.attuneRank = Math.max(a.attuneRank, b.attuneRank);
+  m.upgSpent = Math.max(a.upgSpent, b.upgSpent); // ranks merge by max, so the refund does too
   m.attuned = (b.attuned.length ? b.attuned : a.attuned).slice();
   return m;
 }
@@ -200,6 +205,10 @@ const stageUnlocked = (s, n) => n <= 1 || (n <= stageCount() && (lockMet(stageLo
 const stagesUnlocked = s => { let n = 1; while (n < stageCount() && stageUnlocked(s, n + 1)) n++; return n; };
 // Extra sockets: one can be bought in the Forge for every level unlocked beyond the first.
 const socketCap = s => stagesUnlocked(s) - 1;
+// Forge: extra ranks of u that beaten levels have opened (FORGE_RULES in items.js), and the level that opens the next one (0: none left)
+function levelRanks(s, u) { if (u.socket) return 0; let k = 0; while (k < (u.grow || 0) && stageStats(s, upgRankGate(k + 1)).wins > 0) k++; return k; }
+function nextRankGate(s, u) { const k = levelRanks(s, u); return u.socket || k >= (u.grow || 0) || upgRankGate(k + 1) > stageCount() ? 0 : upgRankGate(k + 1); }
+const upgMaxFor = (s, u) => u.max + levelRanks(s, u) + (FORGE_CAPS[u.id] && !u.socket ? (s.upgCap || {})[u.id] || 0 : 0);
 const socketsBought = s => UPGRADES.filter(u => u.socket).reduce((n, u) => n + (s.upg[u.id] || 0), 0);
 const slotSockets = (s, slot) => SLOTS[slot].sockets + ((UPGRADES.find(u => u.socket === slot) && s.upg['sock_' + slot]) || 0);
 

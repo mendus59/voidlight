@@ -593,22 +593,22 @@ const AUG_OPEN = [{ kills: 100 }, { mastery: 1 }, { kills: 1000 }, { fuse: 'fuse
 
 // ======================= FORGE (meta upgrades) =======================
 const UPGRADES = [
-  { id: 'might',    name: 'Might',       icon: '⚔️', max: 5, cost: 60,  per: 0.05, desc: '+5% damage' },
-  { id: 'hp',       name: 'Vitality',    icon: '❤️', max: 5, cost: 50,  per: 0.10, desc: '+10% max HP' },
-  { id: 'armor',    name: 'Armor',       icon: '🛡️', max: 3, cost: 80,  per: 1,    desc: '−1 damage taken' },
-  { id: 'regen',    name: 'Recovery',    icon: '💚', max: 3, cost: 70,  per: 0.2,  desc: '+0.2 HP/s' },
-  { id: 'speed',    name: 'Swiftness',   icon: '👟', max: 3, cost: 60,  per: 0.05, desc: '+5% move speed' },
-  { id: 'area',     name: 'Reach',       icon: '⭕', max: 3, cost: 90,  per: 0.05, desc: '+5% area' },
-  { id: 'cd',       name: 'Haste',       icon: '⏱️', max: 3, cost: 120, per: 0.03, desc: '−3% cooldowns' },
-  { id: 'projSpd',  name: 'Velocity',    icon: '💨', max: 2, cost: 50,  per: 0.08, desc: '+8% projectile speed' },
-  { id: 'duration', name: 'Persistence', icon: '⌛', max: 2, cost: 70,  per: 0.08, desc: '+8% duration' },
-  { id: 'amount',   name: 'Multishot',   icon: '➕', max: 1, cost: 1200, per: 1,   desc: '+1 projectile on everything' },
-  { id: 'magnet',   name: 'Magnetism',   icon: '🧲', max: 3, cost: 40,  per: 0.2,  desc: '+20% pickup range' },
-  { id: 'luck',     name: 'Luck',        icon: '🍀', max: 3, cost: 80,  per: 0.05, desc: '+5% luck (crits, 4th card, drops)' },
-  { id: 'growth',   name: 'Growth',      icon: '📈', max: 5, cost: 70,  per: 0.05, desc: '+5% XP' },
-  { id: 'greed',    name: 'Greed',       icon: '💰', max: 5, cost: 50,  per: 0.10, desc: '+10% gold' },
-  { id: 'revive',   name: 'Second Wind', icon: '🕊️', max: 1, cost: 900, per: 1,    desc: 'Revive once per run at 50% HP' },
-  { id: 'reroll',   name: 'Reroll',      icon: '🎲', max: 3, cost: 100, per: 1,    desc: '+1 level-up reroll per run' },
+  { id: 'might',    name: 'Might',       icon: '⚔️', max: 5, cost: 60,  per: 0.05, grow: 6, desc: '+5% damage' },
+  { id: 'hp',       name: 'Vitality',    icon: '❤️', max: 5, cost: 50,  per: 0.10, grow: 6, desc: '+10% max HP' },
+  { id: 'armor',    name: 'Armor',       icon: '🛡️', max: 3, cost: 80,  per: 1, grow: 3,    desc: '−1 damage taken' },
+  { id: 'regen',    name: 'Recovery',    icon: '💚', max: 3, cost: 70,  per: 0.2, grow: 4,  desc: '+0.2 HP/s' },
+  { id: 'speed',    name: 'Swiftness',   icon: '👟', max: 3, cost: 60,  per: 0.05, grow: 4, desc: '+5% move speed' },
+  { id: 'area',     name: 'Reach',       icon: '⭕', max: 3, cost: 90,  per: 0.05, grow: 4, desc: '+5% area' },
+  { id: 'cd',       name: 'Haste',       icon: '⏱️', max: 3, cost: 120, per: 0.03, grow: 4, desc: '−3% cooldowns' },
+  { id: 'projSpd',  name: 'Velocity',    icon: '💨', max: 2, cost: 50,  per: 0.08, grow: 3, desc: '+8% projectile speed' },
+  { id: 'duration', name: 'Persistence', icon: '⌛', max: 2, cost: 70,  per: 0.08, grow: 3, desc: '+8% duration' },
+  { id: 'amount',   name: 'Multishot',   icon: '➕', max: 1, cost: 1200, per: 1, grow: 0, whole: true,   desc: '+1 projectile on everything' },
+  { id: 'magnet',   name: 'Magnetism',   icon: '🧲', max: 3, cost: 40,  per: 0.2, grow: 3,  desc: '+20% pickup range' },
+  { id: 'luck',     name: 'Luck',        icon: '🍀', max: 3, cost: 80,  per: 0.05, grow: 4, desc: '+5% luck (crits, 4th card, drops)' },
+  { id: 'growth',   name: 'Growth',      icon: '📈', max: 5, cost: 70,  per: 0.05, grow: 5, desc: '+5% XP' },
+  { id: 'greed',    name: 'Greed',       icon: '💰', max: 5, cost: 50,  per: 0.10, grow: 6, desc: '+10% gold' },
+  { id: 'revive',   name: 'Second Wind', icon: '🕊️', max: 1, cost: 900, per: 1, grow: 0, whole: true,    desc: 'Revive once per run at 50% HP' },
+  { id: 'reroll',   name: 'Reroll',      icon: '🎲', max: 3, cost: 100, per: 1, grow: 2, whole: true,    desc: '+1 level-up reroll per run' },
   // extra sockets: one more can be bought for every level unlocked beyond the first (see socketCap in progress.js)
   { id: 'sock_weapon', name: 'Weapon Socket',     icon: '🔫', max: 2, cost: 400, per: 1, desc: '+1 Weapon socket', socket: 'weapon' },
   { id: 'sock_spell',  name: 'Spell Socket',      icon: '🔮', max: 2, cost: 400, per: 1, desc: '+1 Spell socket', socket: 'spell' },
@@ -616,7 +616,20 @@ const UPGRADES = [
   { id: 'sock_trap',   name: 'Deployable Socket', icon: '🛠️', max: 2, cost: 400, per: 1, desc: '+1 Deployable socket', socket: 'trap' },
   { id: 'sock_relic',  name: 'Relic Socket',      icon: '💠', max: 2, cost: 400, per: 1, desc: '+1 Relic socket', socket: 'relic' },
 ];
-function upgradeCost(u, rank) { return Math.round(u.cost * Math.pow(1.6, rank)); }
+// Pricing and power (FORGE_RULES, editable in the admin Forge tab):
+// - rank n (from 0) of an upgrade costs cost × growth^n, times (1 + tax × every Forge rank you own), so each buy makes the next dearer
+// - rank n adds per × decay^n (diminishing returns); `whole` upgrades (Multishot, Second Wind, Reroll, sockets) add per every rank
+// - beating levels opens extra ranks: Level from, from + every, from + 2 × every… each add one rank to every upgrade, up to its `grow`
+const FORGE_RULES = { run: { growth: 1.75, tax: 0.03, decay: 0.85, from: 2, every: 2 } };
+const forgeRanks = s => Object.values((s && s.upg) || {}).reduce((n, r) => n + (+r || 0), 0);
+function upgradeCost(u, rank, s) { const F = FORGE_RULES.run; return Math.round(u.cost * Math.pow(F.growth, rank) * (1 + F.tax * forgeRanks(s))); }
+// what `rank` ranks of u add up to
+function upgValue(u, rank) {
+  const d = FORGE_RULES.run.decay; if (!rank) return 0;
+  return u.whole || u.socket || d >= 1 ? u.per * rank : u.per * (1 - Math.pow(d, rank)) / (1 - d);
+}
+// the level that opens extra rank k (1-based)
+const upgRankGate = k => FORGE_RULES.run.from + (k - 1) * FORGE_RULES.run.every;
 
 // ======================= FORGE EXPANSION (forge.js) =======================
 // Rank caps: a maxed Forge upgrade can be raised CAP_RULES.steps more ranks, one step at a time. Step k needs Level gate1/2/3

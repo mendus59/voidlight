@@ -33,7 +33,7 @@ let ov = {};                                   // what you are editing
 let live = { ov: {}, updatedAt: 0, by: '' };   // content/live, what players get
 let draft = null;                              // content/draft
 let history = [];
-const TABLE_NAMES = { caprules: 'Forge rank caps', recipes: 'Forge recipe costs', augments: 'Augment', augrules: 'Augment rules', shrines: 'Shrine', shrinerules: 'Shrine rules', zones: 'Zone', zonerules: 'Zone rules', matdrops: 'Material drops', world: 'World', codex: 'Codex prices', dmgtypes: 'Damage types', items: 'Item', chars: 'Character', cats: 'Category', stages: 'Level', tiers: 'Fusion tier', difficulty: 'Difficulty', upgrades: 'Forge upgrade', enemies: 'Enemy', bosses: 'Boss', drops: 'Pickup', options: 'Game option', chain: 'Fusion chains' };
+const TABLE_NAMES = { forgerules: 'Forge pricing', caprules: 'Forge rank caps', recipes: 'Forge recipe costs', augments: 'Augment', augrules: 'Augment rules', shrines: 'Shrine', shrinerules: 'Shrine rules', zones: 'Zone', zonerules: 'Zone rules', matdrops: 'Material drops', world: 'World', codex: 'Codex prices', dmgtypes: 'Damage types', items: 'Item', chars: 'Character', cats: 'Category', stages: 'Level', tiers: 'Fusion tier', difficulty: 'Difficulty', upgrades: 'Forge upgrade', enemies: 'Enemy', bosses: 'Boss', drops: 'Pickup', options: 'Game option', chain: 'Fusion chains' };
 
 // current value of one entry: items.js default with the overrides on top
 function get(t, id) {
@@ -645,14 +645,16 @@ function shrineView() {
 }
 function upgradeView() {
   return h('div', { style: 'display:grid;gap:16px' }, upgradeTable(),
+    tableView('Forge pricing', 'Rank n (from 0) costs base cost × growthⁿ × (1 + tax × every Forge rank the player owns). Rank n adds "per rank" × decayⁿ (1 = no falloff; Multishot, Second Wind, Reroll and sockets never fall off). Beating Level "from", then every "every" levels after it, opens one more rank on each upgrade, up to its "+ ranks from levels".', 'forgerules', ['run'],
+      [{ f: 'growth', label: 'Cost growth' }, { f: 'tax', label: 'Tax per rank owned' }, { f: 'decay', label: 'Gain decay' }, { f: 'from', label: 'First level', step: 1 }, { f: 'every', label: 'Every n levels', step: 1 }]),
     tableView('Rank caps', 'A maxed upgrade can be raised "Steps" more ranks. Step k (from 0) needs Level gate(k+1) beaten, materials + per step × k of its attribute material, and gold × the rank\'s normal price.', 'caprules', ['run'],
       [{ f: 'steps', label: 'Steps', step: 1 }, { f: 'mats', label: 'Materials', step: 1 }, { f: 'matStep', label: '+ per step', step: 1 }, { f: 'gold', label: 'Gold ×' }, { f: 'gate1', label: 'Gate 1 (level)', step: 1 }, { f: 'gate2', label: 'Gate 2', step: 1 }, { f: 'gate3', label: 'Gate 3', step: 1 }]),
     tableView('Nexus recipe costs', 'Forging a Nexus recipe (once its achievement is met): gold, "Slot" of each part\'s slot material, "Essence" of each of its effects\' Essences, and "Catalysts" Effect Catalysts.', 'recipes', Object.keys(BASE.recipes),
       [{ f: 'gold', label: 'Gold', step: 50 }, { f: 'slot', label: 'Slot', step: 1 }, { f: 'ess', label: 'Essence', step: 1 }, { f: 'cat', label: 'Catalysts', step: 1 }]));
 }
 function upgradeTable() {
-  return tableView('Forge upgrades', 'Rank n costs cost × 1.6ⁿ. "Per rank" is the bonus each rank adds (0.05 = 5%).', 'upgrades', Object.keys(BASE.upgrades), [
-    { f: 'icon', label: 'Icon', kind: 'text' }, { f: 'name', label: 'Name', kind: 'text' }, { f: 'desc', label: 'Description', kind: 'text' }, { f: 'max', label: 'Ranks', step: 1 }, { f: 'cost', label: 'Base cost', step: 5 }, { f: 'per', label: 'Per rank' }]);
+  return tableView('Forge upgrades', '"Per rank" is the first rank\'s bonus (0.05 = 5%); later ranks add less (Forge pricing). "Ranks" are open from the start, "+ ranks from levels" open as levels are beaten.', 'upgrades', Object.keys(BASE.upgrades), [
+    { f: 'icon', label: 'Icon', kind: 'text' }, { f: 'name', label: 'Name', kind: 'text' }, { f: 'desc', label: 'Description', kind: 'text' }, { f: 'max', label: 'Ranks', step: 1 }, { f: 'cost', label: 'Base cost', step: 5 }, { f: 'per', label: 'Per rank' }, { f: 'grow', label: '+ ranks from levels', step: 1 }]);
 }
 
 const DIFF_FIELDS = [['hpGrowth', 'Enemy HP growth', 'per minute'], ['hpCurve', 'Enemy HP curve', 'per minute²'], ['spawnBase', 'Spawns per second at 0:00', ''], ['spawnGrowth', 'Spawn growth', 'per minute'],
@@ -775,7 +777,7 @@ function simulatorCard() {
     x.fuseLog = fakeHistory(x, null, 99, 99);
     for (const S of STAGES) x.stages[String(S.id)] = { kills: 9999, best: 900, wins: 1, bosses: 3, runs: 1 };
     for (const c of CHARACTERS) { x.charStages[c.id] = {}; for (const S of STAGES) x.charStages[c.id][String(S.id)] = { kills: 999, best: 900, wins: 1, bosses: 3, runs: 1 }; }
-    for (const u of UPGRADES) x.upg[u.id] = u.max; x.lastStage = stageCount(); setSim(x, 'Everything unlocked, every level beaten, the Forge maxed.');
+    x.upgCap = {}; for (const u of UPGRADES) if (FORGE_CAPS[u.id] && !u.socket) x.upgCap[u.id] = CAP_RULES.run.steps; for (const u of UPGRADES) x.upg[u.id] = upgMaxFor(x, u); x.lastStage = stageCount(); setSim(x, 'Everything unlocked, every level beaten, the Forge maxed.');
   }
   function play() {
     try { localStorage.setItem('voidlight.testsave', JSON.stringify(s)); localStorage.setItem('voidlight.testcontent', JSON.stringify(ov)); }
