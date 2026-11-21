@@ -6,9 +6,11 @@
      See CLAUDE.md ("Site summary"). -->
 An original survivor-style bullet hell for the browser.
 
-- Survive 15 minutes of escalating swarms and three bosses while your gear fires on its own.
-- 55 items across five slots, each with its own bullet pattern; every item adds its effect to all your bullets, and some effect pairs trigger reactions.
-- Fuse maxed items, unlock 11 characters, and spend gold in the Forge on permanent upgrades, saved in your browser or, if you sign in with Google, in the cloud.
+- Survive 15 minutes of escalating swarms and three bosses on each of 14 levels while your gear fires on its own.
+- 74 items across five slots, each with its own bullet pattern; every item adds its effect to all your bullets, and some effect pairs trigger reactions.
+- Fuse maxed items through four fusion tiers, and forge Nexus items from recipes you earn.
+- Achievements open new levels, item categories and 15 characters; spend gold in the Forge on permanent upgrades and attunements.
+- Progress is saved in your browser or, if you sign in with Google, in the cloud.
 <!-- site-summary:end -->
 
 An original survivor-style bullet hell for the browser. No build step and no dependencies: plain HTML, CSS and JavaScript on a 2D canvas.
