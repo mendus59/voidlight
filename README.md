@@ -13,6 +13,9 @@ An original survivor-style bullet hell for the browser.
 - Progress is saved in your browser or, if you sign in with Google, in the cloud.
 <!-- site-summary:end -->
 
+<!-- site-screenshot: docs/screenshot.jpg -->
+![Screenshot of Voidlight](docs/screenshot.jpg)
+
 An original survivor-style bullet hell for the browser. No build step and no dependencies: plain HTML, CSS and JavaScript on a 2D canvas.
 
 ## Run it
